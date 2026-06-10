@@ -15,7 +15,7 @@
             <div class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $totalOrders }}</div>
         </div>
         <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">ټوله عواید</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">ټولې ترلاسه شوې پیسې</div>
             <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ number_format($totalRevenue) }} افغ</div>
         </div>
     </div>
@@ -28,6 +28,10 @@
         <div class="bg-blue-50 dark:bg-blue-900/30 rounded-xl p-4 shadow-sm border border-blue-200 dark:border-blue-700">
             <div class="text-xs text-blue-700 dark:text-blue-400 mb-1">په پروسس کې</div>
             <div class="text-2xl font-bold text-blue-600 dark:text-blue-300">{{ $processingOrders }}</div>
+        </div>
+        <div class="bg-orange-50 dark:bg-orange-900/30 rounded-xl p-4 shadow-sm border border-orange-200 dark:border-orange-700">
+            <div class="text-xs text-orange-700 dark:text-orange-400 mb-1">پاتې پیسې لري</div>
+            <div class="text-2xl font-bold text-orange-600 dark:text-orange-300">{{ $pendingPayments }}</div>
         </div>
     </div>
 
