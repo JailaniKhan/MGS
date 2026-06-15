@@ -22,12 +22,27 @@
             </div>
 
             <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">د پیسو واحد</label>
+                <div class="flex gap-3">
+                    <label class="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer has-[:checked]:border-[#0d9488] has-[:checked]:bg-teal-50 dark:has-[:checked]:bg-teal-900/20">
+                        <input type="radio" name="currency" value="AFN" {{ old('currency', 'AFN') === 'AFN' ? 'checked' : '' }} class="text-[#0d9488]">
+                        <span class="text-sm">افغاني (افغ)</span>
+                    </label>
+                    <label class="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer has-[:checked]:border-[#0d9488] has-[:checked]:bg-teal-50 dark:has-[:checked]:bg-teal-900/20">
+                        <input type="radio" name="currency" value="USD" {{ old('currency') === 'USD' ? 'checked' : '' }} class="text-[#0d9488]">
+                        <span class="text-sm">ډالر ($)</span>
+                    </label>
+                </div>
+                @error('currency') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+            </div>
+
+            <div class="mb-4">
                 <label class="block text-sm font-medium mb-2">محصولات</label>
                 <div id="products-container">
                     <div class="product-row flex items-center gap-2 mb-2">
                         <select name="products[0][product_id]" required
-                            class="product-select flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-[#f53003] focus:border-transparent">
-                            <option value="">-- محصول --</option>
+                            class="product-select flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-[#0d9488] focus:border-transparent">
+                            <option value=""> محصول </option>
                             @foreach ($products as $product)
                                 <option value="{{ $product->id }}" data-price="{{ $product->price }}" data-stock="{{ $product->stock }}">
                                     {{ $product->name }} (موجودي: {{ $product->stock }})
@@ -35,7 +50,7 @@
                             @endforeach
                         </select>
                         <input type="number" name="products[0][quantity]" min="1" value="1" required
-                            class="product-qty w-20 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm text-center focus:ring-2 focus:ring-[#f53003] focus:border-transparent">
+                            class="product-qty w-20 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm text-center focus:ring-2 focus:ring-[#0d9488] focus:border-transparent">
                         <button type="button" class="remove-product text-red-500 p-1">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
@@ -43,7 +58,7 @@
                         </button>
                     </div>
                 </div>
-                <button type="button" id="add-product" class="text-blue-600 dark:text-blue-400 text-sm mt-2">+ بل محصول</button>
+                <button type="button" id="add-product" class="text-[#0d9488] text-sm mt-2">+ بل محصول</button>
             </div>
 
             <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 mb-4">
@@ -53,7 +68,7 @@
                 </div>
             </div>
 
-            <button type="submit" class="w-full bg-[#f53003] text-white py-3 rounded-lg font-medium">امر جوړول</button>
+            <button type="submit" class="w-full bg-[#0d9488] text-white py-3 rounded-lg font-medium">امر جوړول</button>
         </form>
     </div>
 @endsection
@@ -62,8 +77,13 @@
 <script>
     let productIndex = 1;
 
+    function getCurrencySymbol() {
+        return document.querySelector('input[name="currency"]:checked')?.value === 'USD' ? '$' : 'افغ';
+    }
+
     function updateTotal() {
         let total = 0;
+        const symbol = getCurrencySymbol();
         document.querySelectorAll('.product-row').forEach(row => {
             const select = row.querySelector('.product-select');
             const qty = row.querySelector('.product-qty');
@@ -72,8 +92,12 @@
                 total += parseFloat(price) * parseInt(qty.value);
             }
         });
-        document.getElementById('total-amount').textContent = total.toLocaleString() + ' افغ';
+        document.getElementById('total-amount').textContent = total.toLocaleString() + ' ' + symbol;
     }
+
+    document.querySelectorAll('input[name="currency"]').forEach(radio => {
+        radio.addEventListener('change', updateTotal);
+    });
 
     document.getElementById('add-product').addEventListener('click', function() {
         const container = document.getElementById('products-container');

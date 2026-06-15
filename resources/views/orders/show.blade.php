@@ -27,7 +27,12 @@
 
         <div class="text-sm mb-3">
             <span class="text-gray-500 dark:text-gray-400">ګیراک: </span>
-            <a href="{{ route('customers.show', $order->customer) }}" class="font-medium text-blue-600 dark:text-blue-400">{{ $order->customer->name }}</a>
+            <a href="{{ route('customers.show', $order->customer) }}" class="font-medium text-[#0d9488] dark:text-teal-400">{{ $order->customer->name }}</a>
+        </div>
+
+        <div class="text-sm mb-1">
+            <span class="text-gray-500 dark:text-gray-400">د پیسو واحد: </span>
+            <span class="font-medium">{{ $order->currency === 'USD' ? 'ډالر ($)' : 'افغاني (افغ)' }}</span>
         </div>
 
         @if ($order->customer->phone)
@@ -47,15 +52,15 @@
                 <div>
                     <div class="text-sm font-medium">{{ $item->product->name }}</div>
                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {{ $item->quantity }} x {{ number_format($item->unit_price) }} افغ
+                        {{ $item->quantity }} x {{ number_format($item->unit_price) }} {{ $order->currency === 'USD' ? '$' : 'افغ' }}
                     </div>
                 </div>
-                <div class="text-sm font-semibold">{{ number_format($item->subtotal) }} افغ</div>
+                <div class="text-sm font-semibold">{{ number_format($item->subtotal) }} {{ $order->currency === 'USD' ? '$' : 'افغ' }}</div>
             </div>
         @endforeach
         <div class="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700 font-bold">
             <span>ټوله</span>
-            <span>{{ number_format($order->total_amount) }} افغ</span>
+            <span>{{ number_format($order->total_amount) }} {{ $order->currency === 'USD' ? '$' : 'افغ' }}</span>
         </div>
     </div>
 
@@ -65,16 +70,16 @@
         <div class="space-y-2 text-sm mb-3">
             <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">ټوله بیه:</span>
-                <span class="font-medium">{{ number_format($order->total_amount) }} افغ</span>
+                <span class="font-medium">{{ number_format($order->total_amount) }} {{ $order->currency === 'USD' ? '$' : 'افغ' }}</span>
             </div>
             <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">ورکړل شوي:</span>
-                <span class="font-medium text-green-600 dark:text-green-400">{{ number_format($order->paid_amount) }} افغ</span>
+                <span class="font-medium text-green-600 dark:text-green-400">{{ number_format($order->paid_amount) }} {{ $order->currency === 'USD' ? '$' : 'افغ' }}</span>
             </div>
             <div class="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-2">
                 <span class="font-semibold">پاتې پیسې:</span>
-                <span class="font-bold {{ $order->is_fully_paid ? 'text-green-600 dark:text-green-400' : 'text-[#f53003]' }}">
-                    {{ $order->is_fully_paid ? 'بشپړ شوی' : number_format($order->remaining_amount) . ' افغ' }}
+                <span class="font-bold {{ $order->is_fully_paid ? 'text-green-600 dark:text-green-400' : 'text-[#0d9488]' }}">
+                    {{ $order->is_fully_paid ? 'بشپړ شوی' : number_format($order->remaining_amount) . ' ' . ($order->currency === 'USD' ? '$' : 'افغ') }}
                 </span>
             </div>
         </div>
@@ -90,7 +95,7 @@
                                 <span class="text-xs text-gray-400 dark:text-gray-500 mr-1">({{ $payment->notes }})</span>
                             @endif
                         </div>
-                        <span class="text-sm font-medium text-green-600 dark:text-green-400">{{ number_format($payment->amount) }} افغ</span>
+                        <span class="text-sm font-medium text-green-600 dark:text-green-400">{{ number_format($payment->amount) }} {{ $payment->currency === 'USD' ? '$' : 'افغ' }}</span>
                     </div>
                 @endforeach
             </div>
@@ -98,7 +103,7 @@
 
         @if (!$order->is_fully_paid && $order->status !== 'cancelled')
             <a href="{{ route('payments.create') }}?order_id={{ $order->id }}" 
-               class="block w-full text-center bg-green-600 text-white py-2 rounded-lg text-sm font-medium">
+               class="block w-full text-center bg-[#0d9488] text-white py-2 rounded-lg text-sm font-medium">
                 + پیسې ورکول
             </a>
         @endif

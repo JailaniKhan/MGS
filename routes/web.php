@@ -23,5 +23,6 @@ Route::get('/orders/product-price/{product}', [OrderController::class, 'getProdu
 Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
 Route::get('/payments/create', [PaymentController::class, 'create'])->name('payments.create');
 Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
+Route::get('/payments/customers', [PaymentController::class, 'customerPaymentsPage'])->name('payments.customers');
 Route::get('/payments/order/{order}', [PaymentController::class, 'show'])->name('payments.show');
 Route::delete('/payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');

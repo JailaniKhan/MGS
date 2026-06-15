@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
-    protected $fillable = ['customer_id', 'status', 'total_amount'];
+    protected $fillable = ['customer_id', 'status', 'total_amount', 'currency'];
 
     protected $casts = [
         'total_amount' => 'decimal:2',
@@ -40,5 +40,10 @@ class Order extends Model
     public function getIsFullyPaidAttribute()
     {
         return $this->remaining_amount <= 0;
+    }
+
+    public function getCurrencySymbolAttribute()
+    {
+        return $this->currency === 'USD' ? '$' : 'افغ';
     }
 }

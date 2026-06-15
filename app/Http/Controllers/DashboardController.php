@@ -15,6 +15,8 @@ class DashboardController extends Controller
             'totalCustomers' => Customer::count(),
             'totalProducts' => Product::count(),
             'totalOrders' => Order::count(),
+            'totalRevenueAFN' => Payment::where('currency', 'AFN')->sum('amount'),
+            'totalRevenueUSD' => Payment::where('currency', 'USD')->sum('amount'),
             'totalRevenue' => Payment::sum('amount'),
             'pendingOrders' => Order::where('status', 'pending')->count(),
             'processingOrders' => Order::where('status', 'processing')->count(),

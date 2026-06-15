@@ -26,6 +26,7 @@ class OrderController extends Controller
     {
         $validated = $request->validate([
             'customer_id' => 'required|exists:customers,id',
+            'currency' => 'required|in:AFN,USD',
             'products' => 'required|array|min:1',
             'products.*.product_id' => 'required|exists:products,id',
             'products.*.quantity' => 'required|integer|min:1',
@@ -58,6 +59,7 @@ class OrderController extends Controller
             'customer_id' => $validated['customer_id'],
             'status' => 'pending',
             'total_amount' => $totalAmount,
+            'currency' => $validated['currency'],
         ]);
 
         $order->orderItems()->createMany($orderItems);
