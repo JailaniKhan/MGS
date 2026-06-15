@@ -26,6 +26,17 @@
                 </select>
                 @error('category_id') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
             </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">واحد</label>
+                <select name="unit_id"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-[#f53003] focus:border-transparent">
+                    <option value="">-- انتخاب --</option>
+                    @foreach ($units as $unit)
+                        <option value="{{ $unit->id }}" {{ old('unit_id', $product->unit_id) == $unit->id ? 'selected' : '' }}>{{ $unit->name }} @if($unit->short_name)({{ $unit->short_name }})@endif</option>
+                    @endforeach
+                </select>
+                @error('unit_id') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+            </div>
             <div class="grid grid-cols-2 gap-3 mb-4">
                 <div>
                     <label class="block text-sm font-medium mb-1">قیمت (افغ)</label>

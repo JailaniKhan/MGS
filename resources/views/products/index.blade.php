@@ -32,6 +32,9 @@
                         @else
                             <strong>{{ $product->stock }}</strong>
                         @endif
+                        @if ($product->unit)
+                            {{ $product->unit->short_name ?? $product->unit->name }}
+                        @endif
                     </span>
                 </div>
             </div>

@@ -4,20 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\Unit;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::with('category')->orderBy('name')->get();
+        $products = Product::with('category', 'unit')->orderBy('name')->get();
         return view('products.index', compact('products'));
     }
 
     public function create()
     {
         $categories = Category::orderBy('name')->get();
-        return view('products.create', compact('categories'));
+        $units = Unit::orderBy('name')->get();
+        return view('products.create', compact('categories', 'units'));
     }
 
     public function store(Request $request)
@@ -25,6 +27,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category_id' => 'required|exists:categories,id',
+            'unit_id' => 'nullable|exists:units,id',
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
             'description' => 'nullable|string',
@@ -38,7 +41,8 @@ class ProductController extends Controller
     public function edit(Product $product)
     {
         $categories = Category::orderBy('name')->get();
-        return view('products.edit', compact('product', 'categories'));
+        $units = Unit::orderBy('name')->get();
+        return view('products.edit', compact('product', 'categories', 'units'));
     }
 
     public function update(Request $request, Product $product)
@@ -46,6 +50,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category_id' => 'required|exists:categories,id',
+            'unit_id' => 'nullable|exists:units,id',
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
             'description' => 'nullable|string',

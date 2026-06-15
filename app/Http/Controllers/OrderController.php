@@ -18,7 +18,7 @@ class OrderController extends Controller
     public function create()
     {
         $customers = Customer::orderBy('name')->get();
-        $products = Product::with('category')->where('stock', '>', 0)->orderBy('name')->get();
+        $products = Product::with('category', 'unit')->where('stock', '>', 0)->orderBy('name')->get();
         return view('orders.create', compact('customers', 'products'));
     }
 
@@ -69,7 +69,7 @@ class OrderController extends Controller
 
     public function show(Order $order)
     {
-        $order->load('customer', 'orderItems.product', 'payments');
+        $order->load('customer', 'orderItems.product.unit', 'payments');
         return view('orders.show', compact('order'));
     }
 

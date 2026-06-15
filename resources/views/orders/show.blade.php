@@ -52,7 +52,7 @@
                 <div>
                     <div class="text-sm font-medium">{{ $item->product->name }}</div>
                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {{ $item->quantity }} x {{ number_format($item->unit_price) }} {{ $order->currency === 'USD' ? '$' : 'افغ' }}
+                        {{ $item->quantity }}@if($item->product->unit) {{ $item->product->unit->short_name ?? $item->product->unit->name }}@endif x {{ number_format($item->unit_price) }} {{ $order->currency === 'USD' ? '$' : 'افغ' }}
                     </div>
                 </div>
                 <div class="text-sm font-semibold">{{ number_format($item->subtotal) }} {{ $order->currency === 'USD' ? '$' : 'افغ' }}</div>

@@ -7,12 +7,14 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\UnitController;
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
 Route::resource('customers', CustomerController::class);
 Route::resource('categories', CategoryController::class);
 Route::resource('products', ProductController::class);
+Route::resource('units', UnitController::class);
 Route::resource('orders', OrderController::class)->except(['show']);
 
 Route::get('/orders/{order}/show', [OrderController::class, 'show'])->name('orders.show');

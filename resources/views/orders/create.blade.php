@@ -45,7 +45,7 @@
                             <option value=""> محصول </option>
                             @foreach ($products as $product)
                                 <option value="{{ $product->id }}" data-price="{{ $product->price }}" data-stock="{{ $product->stock }}">
-                                    {{ $product->name }} (موجودي: {{ $product->stock }})
+                                    {{ $product->name }} (موجودي: {{ $product->stock }}@if($product->unit) {{ $product->unit->short_name ?? $product->unit->name }}@endif)
                                 </option>
                             @endforeach
                         </select>
