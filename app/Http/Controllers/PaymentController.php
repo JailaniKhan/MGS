@@ -4,41 +4,89 @@ namespace App\Http\Controllers;
 
 use App\Models\Payment;
 use App\Models\Order;
+use App\Models\Purchase;
+use App\Models\PurchasePayment;
+use App\Models\LedgerEntry;
 use Illuminate\Http\Request;
 
 class PaymentController extends Controller
 {
     public function index()
     {
-        $payments = Payment::with('order.customer')->orderBy('created_at', 'desc')->get();
+        // Money received from sales (customer payments) - existing + ledger
+        $incomingAFN = Payment::where('currency', 'AFN')->sum('amount')
+            + LedgerEntry::where('currency', 'AFN')->where('type', 'payment_received')->sum('amount');
+        $incomingUSD = Payment::where('currency', 'USD')->sum('amount')
+            + LedgerEntry::where('currency', 'USD')->where('type', 'payment_received')->sum('amount');
 
-        $pendingUnfulfilledTotalAFN = Order::whereIn('status', ['pending', 'processing'])->where('currency', 'AFN')->sum('total_amount');
-        $pendingUnfulfilledTotalUSD = Order::whereIn('status', ['pending', 'processing'])->where('currency', 'USD')->sum('total_amount');
-        $totalReceivedAFN = Payment::where('currency', 'AFN')->sum('amount');
-        $totalReceivedUSD = Payment::where('currency', 'USD')->sum('amount');
-        $outstandingTotalAFN = Order::whereIn('status', ['pending', 'processing', 'completed'])
-            ->where('currency', 'AFN')
-            ->whereHas('payments')
+        // Money paid out for purchases (supplier payments) - existing + ledger
+        $outgoingAFN = PurchasePayment::where('currency', 'AFN')->sum('amount')
+            + LedgerEntry::where('currency', 'AFN')->where('type', 'payment_made')->sum('amount');
+        $outgoingUSD = PurchasePayment::where('currency', 'USD')->sum('amount')
+            + LedgerEntry::where('currency', 'USD')->where('type', 'payment_made')->sum('amount');
+
+        // Wallet balance
+        $balanceAFN = $incomingAFN - $outgoingAFN;
+        $balanceUSD = $incomingUSD - $outgoingUSD;
+
+        // Recent transactions (combine incoming and outgoing)
+        $incomingTransactions = Payment::with('order.customer')
             ->get()
-            ->sum(function ($order) {
-                return $order->remaining_amount > 0 ? $order->remaining_amount : 0;
+            ->map(function ($p) {
+                return [
+                    'type' => 'incoming',
+                    'amount' => $p->amount,
+                    'currency' => $p->currency,
+                    'description' => $p->order?->customer?->name . ' - امر #' . $p->order_id,
+                    'notes' => $p->notes,
+                    'date' => $p->created_at,
+                ];
             });
-        $outstandingTotalUSD = Order::whereIn('status', ['pending', 'processing', 'completed'])
-            ->where('currency', 'USD')
-            ->whereHas('payments')
+
+        $outgoingTransactions = PurchasePayment::with('purchase.supplier')
             ->get()
-            ->sum(function ($order) {
-                return $order->remaining_amount > 0 ? $order->remaining_amount : 0;
+            ->map(function ($p) {
+                return [
+                    'type' => 'outgoing',
+                    'amount' => $p->amount,
+                    'currency' => $p->currency,
+                    'description' => $p->purchase?->supplier?->name . ' - خرید #' . $p->purchase_id,
+                    'notes' => $p->notes,
+                    'date' => $p->created_at,
+                ];
             });
+
+        // Ledger transactions
+        $ledgerTransactions = LedgerEntry::with('person')
+            ->get()
+            ->map(function ($entry) {
+                $personName = $entry->person?->name ?? 'نامعلوم';
+                $typeLabel = $entry->type === 'payment_received' ? 'incoming' : 'outgoing';
+                $description = $typeLabel === 'incoming'
+                    ? $personName . ' (روزنامچه)'
+                    : $personName . ' (روزنامچه)';
+                return [
+                    'type' => $typeLabel,
+                    'amount' => $entry->amount,
+                    'currency' => $entry->currency,
+                    'description' => $description,
+                    'notes' => ($entry->notes ? $entry->notes : '') . ' - روزنامچه',
+                    'date' => $entry->created_at,
+                ];
+            });
+
+        $transactions = collect($incomingTransactions)
+            ->concat($outgoingTransactions)
+            ->concat($ledgerTransactions)
+            ->sortByDesc('date')
+            ->values()
+            ->take(50);
 
         return view('payments.index', compact(
-            'payments',
-            'pendingUnfulfilledTotalAFN',
-            'pendingUnfulfilledTotalUSD',
-            'totalReceivedAFN',
-            'totalReceivedUSD',
-            'outstandingTotalAFN',
-            'outstandingTotalUSD'
+            'incomingAFN', 'incomingUSD',
+            'outgoingAFN', 'outgoingUSD',
+            'balanceAFN', 'balanceUSD',
+            'transactions'
         ));
     }
 

@@ -1,0 +1,11 @@
+2026-06-21 11:18:12.199 +04:30 [DBG] Hosting starting
+2026-06-21 11:18:12.263 +04:30 [INF] Config path: C:\ProgramData\Herd\service.json.
+2026-06-21 11:18:12.266 +04:30 [INF] Application started. Press Ctrl+C to shut down.
+2026-06-21 11:18:12.266 +04:30 [INF] Config file with port exists, using port: 5000.
+2026-06-21 11:18:12.268 +04:30 [INF] Hosting environment: Production
+2026-06-21 11:18:12.270 +04:30 [INF] Content root path: D:\Mobile App\MGS
+2026-06-21 11:18:12.270 +04:30 [DBG] Hosting started
+2026-06-21 11:18:12.273 +04:30 [WRN] Port 5000 is already in use. Trying alternative ports.
+2026-06-21 11:18:12.274 +04:30 [INF] Using alternative port: 5001.
+2026-06-21 11:18:12.370 +04:30 [INF] Updated config file with new port: 5001.
+2026-06-21 11:18:12.388 +04:30 [INF] HTTP Server started on http://localhost:5001/.

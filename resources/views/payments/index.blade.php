@@ -2,96 +2,72 @@
 
 @section('content')
     <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">پیسې</h2>
-        <a href="{{ route('payments.create') }}" class="bg-[#0d9488] text-white px-4 py-2 rounded-lg text-sm font-medium">
-            + نوی پیسې
-        </a>
+        <h2 class="text-lg font-semibold">والیټ</h2>
     </div>
 
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden divide-y divide-gray-100 dark:divide-gray-700">
-        <div class="px-4 py-3">
-            <div class="text-sm font-semibold text-gray-700 dark:text-gray-300">د پیسو :</div>
-        </div>
-        <div class="px-4 py-3">
-            <div class="flex items-center justify-between text-sm">
-                <span class="font-medium text-gray-700 dark:text-gray-300">د اونته یا incomplete امرونو :</span>
-                <div class="text-left">
-                    <div class="font-bold text-red-600 dark:text-red-400">{{ number_format($pendingUnfulfilledTotalAFN, 2) }} افغ</div>
-                    @if ($pendingUnfulfilledTotalUSD > 0)
-                        <div class="font-bold text-red-600 dark:text-red-400">{{ number_format($pendingUnfulfilledTotalUSD, 2) }} $</div>
-                    @endif
-                </div>
+    <!-- Balance Cards -->
+    <div class="space-y-3 mb-6">
+        <div class="bg-teal-50 dark:bg-teal-900/30 rounded-xl p-5 shadow-sm border border-teal-200 dark:border-teal-700">
+            <div class="text-xs text-teal-700 dark:text-teal-400 mb-1">ټوله بیلانس</div>
+            <div class="flex items-center gap-4">
+                <div class="text-2xl font-bold text-teal-600 dark:text-teal-300">{{ number_format($balanceAFN, 2) }} افغ</div>
+                <div class="text-xl font-bold text-teal-500 dark:text-teal-400">{{ number_format($balanceUSD, 2) }} $</div>
             </div>
         </div>
-        <div class="px-4 py-3">
-            <div class="flex items-center justify-between text-sm">
-                <span class="font-medium text-gray-700 dark:text-gray-300">د حساب سره ثبت شوي :</span>
-                <div class="text-left">
-                    <div class="font-bold text-green-600 dark:text-green-400">{{ number_format($totalReceivedAFN, 2) }} افغ</div>
-                    @if ($totalReceivedUSD > 0)
-                        <div class="font-bold text-green-600 dark:text-green-400">{{ number_format($totalReceivedUSD, 2) }} $</div>
-                    @endif
-                </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <div class="bg-green-50 dark:bg-green-900/30 rounded-xl p-4 shadow-sm border border-green-200 dark:border-green-700">
+                <div class="text-xs text-green-700 dark:text-green-400 mb-1">راغلې پیسې</div>
+                <div class="text-lg font-bold text-green-600 dark:text-green-300">{{ number_format($incomingAFN, 2) }} افغ</div>
+                <div class="text-base font-semibold text-green-500 dark:text-green-400">{{ number_format($incomingUSD, 2) }} $</div>
             </div>
-        </div>
-        <div class="px-4 py-3">
-            <div class="flex items-center justify-between text-sm">
-                <span class="font-medium text-gray-700 dark:text-gray-300">ساده شوی مگر تر اوسه نه دی :</span>
-                <div class="text-left">
-                    <div class="font-bold text-yellow-600 dark:text-yellow-400">{{ number_format($outstandingTotalAFN, 2) }} افغ</div>
-                    @if ($outstandingTotalUSD > 0)
-                        <div class="font-bold text-yellow-600 dark:text-yellow-400">{{ number_format($outstandingTotalUSD, 2) }} $</div>
-                    @endif
-                </div>
+            <div class="bg-red-50 dark:bg-red-900/30 rounded-xl p-4 shadow-sm border border-red-200 dark:border-red-700">
+                <div class="text-xs text-red-700 dark:text-red-400 mb-1">وتلې پیسې</div>
+                <div class="text-lg font-bold text-red-600 dark:text-red-300">{{ number_format($outgoingAFN, 2) }} افغ</div>
+                <div class="text-base font-semibold text-red-500 dark:text-red-400">{{ number_format($outgoingUSD, 2) }} $</div>
             </div>
         </div>
     </div>
 
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mt-4">
-        @forelse ($payments as $payment)
-            <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-                <div class="flex items-center justify-between">
+    <!-- Recent Transactions -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 font-semibold text-sm">
+            وروستۍ راکړې ورکړې
+        </div>
+        @forelse ($transactions as $tx)
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center {{ $tx['type'] === 'incoming' ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900' }}">
+                        @if ($tx['type'] === 'incoming')
+                            <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                        @else
+                            <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                            </svg>
+                        @endif
+                    </div>
                     <div>
-                        <span class="text-sm font-medium">{{ $payment->order->customer->name }}</span>
-                        <span class="text-xs text-gray-500 dark:text-gray-400 mr-2">امر #{{ $payment->order_id }}</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-sm font-bold text-green-600 dark:text-green-400">{{ number_format($payment->amount, 2) }} {{ $payment->currency === 'USD' ? '$' : 'افغ' }}</span>
-                        <form action="{{ route('payments.destroy', $payment) }}" method="POST" onsubmit="return confirm('آیا ډاډه یاست؟')">
-                            @csrf @method('DELETE')
-                            <button class="text-red-600 dark:text-red-400 text-xs">ړنګول</button>
-                        </form>
+                        <div class="text-sm font-medium">{{ $tx['description'] }}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                            {{ $tx['date']->format('Y/m/d H:i') }}
+                            @if ($tx['notes'])
+                                | {{ $tx['notes'] }}
+                            @endif
+                        </div>
                     </div>
                 </div>
-                <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                    {{ $payment->created_at->format('Y/m/d H:i') }}
-                    @if ($payment->notes)
-                        | {{ $payment->notes }}
-                    @endif
+                <div class="text-left">
+                    <span class="text-sm font-bold {{ $tx['type'] === 'incoming' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
+                        {{ $tx['type'] === 'incoming' ? '+' : '-' }}{{ number_format($tx['amount'], 2) }} {{ $tx['currency'] === 'USD' ? '$' : 'افغ' }}
+                    </span>
                 </div>
             </div>
         @empty
             <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
-                لا تر اوسه پیسې ثبت شوي ندي
+                لا تر اوسه راکړې ورکړې نشته
             </div>
         @endforelse
     </div>
-
-    @php
-        $totalPaymentsAFN = $payments->where('currency', 'AFN')->sum('amount');
-        $totalPaymentsUSD = $payments->where('currency', 'USD')->sum('amount');
-    @endphp
-    @if ($payments->count() > 0)
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mt-4">
-            <div class="flex justify-between text-sm">
-                <span class="font-semibold">ټولې ثبت شوې پیسې:</span>
-                <div class="text-left">
-                    <div class="font-bold text-green-600 dark:text-green-400">{{ number_format($totalPaymentsAFN, 2) }} افغ</div>
-                    @if ($totalPaymentsUSD > 0)
-                        <div class="font-bold text-green-600 dark:text-green-400">{{ number_format($totalPaymentsUSD, 2) }} $</div>
-                    @endif
-                </div>
-            </div>
-        </div>
-    @endif
 @endsection

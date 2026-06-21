@@ -103,7 +103,7 @@
 
         @if (!$order->is_fully_paid && $order->status !== 'cancelled')
             <a href="{{ route('payments.create') }}?order_id={{ $order->id }}" 
-               class="block w-full text-center bg-[#0d9488] text-white py-2 rounded-lg text-sm font-medium">
+               class="block w-full text-center bg-[#0d9488] text-gray-800 py-2 rounded-lg text-sm font-medium">
                 + پیسې ورکول
             </a>
         @endif

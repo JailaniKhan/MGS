@@ -15,8 +15,16 @@
             <div class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $totalOrders }}</div>
         </div>
         <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">ټولې ترلاسه شوې پیسې</div>
-            <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ number_format($totalRevenue) }} افغ</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">ټول خریدنې</div>
+            <div class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $totalPurchases }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">راغلې پیسې (افغ)</div>
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ number_format($totalRevenueAFN) }} افغ</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">راغلې پیسې ($)</div>
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ number_format($totalRevenueUSD) }}$</div>
         </div>
     </div>
 
@@ -33,6 +41,14 @@
             <div class="text-xs text-orange-700 dark:text-orange-400 mb-1">پاتې پیسې لري</div>
             <div class="text-2xl font-bold text-orange-600 dark:text-orange-300">{{ $pendingPayments }}</div>
         </div>
+        <div class="bg-red-50 dark:bg-red-900/30 rounded-xl p-4 shadow-sm border border-red-200 dark:border-red-700">
+            <div class="text-xs text-red-700 dark:text-red-400 mb-1">وتلې پیسې (افغ)</div>
+            <div class="text-2xl font-bold text-red-600 dark:text-red-300">{{ number_format($totalExpenseAFN) }} افغ</div>
+        </div>
+        <div class="bg-red-50 dark:bg-red-900/30 rounded-xl p-4 shadow-sm border border-red-200 dark:border-red-700">
+            <div class="text-xs text-red-700 dark:text-red-400 mb-1">وتلې پیسې ($)</div>
+            <div class="text-2xl font-bold text-red-600 dark:text-red-300">{{ number_format($totalExpenseUSD) }}$</div>
+        </div>
     </div>
 
     @if ($lowStockProducts > 0)
@@ -46,7 +62,7 @@
         </div>
     @endif
 
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-4">
         <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 font-semibold text-sm">
             وروستي امرونه
         </div>
@@ -75,6 +91,39 @@
         @empty
             <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
                 لا تر اوسه امر نشته
+            </div>
+        @endforelse
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-4">
+        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 font-semibold text-sm">
+            وروستي خریدنې
+        </div>
+        @forelse ($recentPurchases as $purchase)
+            <a href="{{ route('purchases.show', $purchase) }}" class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700">
+                <div>
+                    <div class="text-sm font-medium">{{ $purchase->supplier->name }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ $purchase->created_at->format('Y/m/d') }}</div>
+                </div>
+                <div class="text-left">
+                    <div class="text-sm font-semibold">{{ number_format($purchase->total_amount) }} {{ $purchase->currency === 'USD' ? '$' : 'افغ' }}</div>
+                    <span class="inline-block text-xs px-2 py-0.5 rounded-full 
+                        @if($purchase->status === 'completed') bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300
+                        @elseif($purchase->status === 'processing') bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300
+                        @elseif($purchase->status === 'cancelled') bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300
+                        @else bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 @endif">
+                        @switch($purchase->status)
+                            @case('completed') بشپړ @break
+                            @case('processing') پروسس @break
+                            @case('cancelled') لغوه @break
+                            @default پاتې
+                        @endswitch
+                    </span>
+                </div>
+            </a>
+        @empty
+            <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
+                لا تر اوسه خرید نشته
             </div>
         @endforelse
     </div>

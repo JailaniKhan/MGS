@@ -68,7 +68,7 @@
                 @error('notes') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
             </div>
 
-            <button type="submit" class="w-full bg-[#0d9488] text-white py-3 rounded-lg font-medium">پیسې ثبتول</button>
+            <button type="submit" class="w-full bg-[#0d9488] text-gray py-3 rounded-lg font-medium">پیسې ثبتول</button>
         </form>
     </div>
 @endsection
