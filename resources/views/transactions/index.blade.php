@@ -34,7 +34,7 @@
                                 <span class="text-xs text-gray-500 dark:text-gray-400 mr-2">{{ $order->customer->name }}</span>
                             </div>
                             <div class="text-left">
-                                <div class="text-sm font-semibold">{{ number_format($order->total_amount) }} افغ</div>
+                                <div class="text-sm font-semibold">{{ number_format($order->total_amount) }} {{ $order->currency === 'USD' ? '$' : 'افغ' }}</div>
                                 <span class="inline-block text-xs px-2 py-0.5 rounded-full 
                                     @if($order->status === 'completed') bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300
                                     @elseif($order->status === 'processing') bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300

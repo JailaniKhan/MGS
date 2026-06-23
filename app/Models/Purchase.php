@@ -35,10 +35,10 @@ class Purchase extends Model
 
     public function getPaidAmountAttribute()
     {
-        // Sum payments from the purchase payments table
+        // Sum payments directly linked to this purchase
         $purchasePayments = $this->purchasePayments()->sum('amount');
         
-        // Also sum ledger payments made for this purchase's supplier
+        // Also include ledger payments made for this supplier in the same currency
         $ledgerPayments = $this->supplier 
             ? LedgerEntry::where('person_type', 'supplier')
                 ->where('person_id', $this->supplier_id)
@@ -52,7 +52,7 @@ class Purchase extends Model
 
     public function getRemainingAmountAttribute()
     {
-        return $this->total_amount - $this->paid_amount;
+        return max(0, $this->total_amount - $this->paid_amount);
     }
 
     public function getIsFullyPaidAttribute()

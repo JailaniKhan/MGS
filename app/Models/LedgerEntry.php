@@ -21,10 +21,17 @@ class LedgerEntry extends Model
 
     public function person()
     {
+        return $this->belongsTo(Customer::class, 'person_id');
+    }
+
+    public function getPersonNameAttribute()
+    {
         if ($this->person_type === 'customer') {
-            return $this->belongsTo(Customer::class, 'person_id');
+            return optional(Customer::find($this->person_id))->name;
+        } elseif ($this->person_type === 'supplier') {
+            return optional(Supplier::find($this->person_id))->name;
         }
-        return $this->belongsTo(Supplier::class, 'person_id');
+        return null;
     }
 
     public function getCurrencySymbolAttribute()

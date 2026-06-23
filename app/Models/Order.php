@@ -29,10 +29,10 @@ class Order extends Model
 
     public function getPaidAmountAttribute()
     {
-        // Sum payments from the payments table (order payments)
+        // Sum payments directly linked to this order
         $orderPayments = $this->payments()->sum('amount');
         
-        // Also sum ledger payments made for this order's customer
+        // Also include ledger payments made for this customer in the same currency
         $ledgerPayments = $this->customer 
             ? LedgerEntry::where('person_type', 'customer')
                 ->where('person_id', $this->customer_id)
@@ -46,7 +46,7 @@ class Order extends Model
 
     public function getRemainingAmountAttribute()
     {
-        return $this->total_amount - $this->paid_amount;
+        return max(0, $this->total_amount - $this->paid_amount);
     }
 
     public function getIsFullyPaidAttribute()

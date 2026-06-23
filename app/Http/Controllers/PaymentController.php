@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Payment;
 use App\Models\Order;
+use App\Models\Customer;
+use App\Models\Supplier;
 use App\Models\Purchase;
 use App\Models\PurchasePayment;
 use App\Models\LedgerEntry;
@@ -57,23 +59,27 @@ class PaymentController extends Controller
             });
 
         // Ledger transactions
-        $ledgerTransactions = LedgerEntry::with('person')
-            ->get()
-            ->map(function ($entry) {
-                $personName = $entry->person?->name ?? 'نامعلوم';
-                $typeLabel = $entry->type === 'payment_received' ? 'incoming' : 'outgoing';
-                $description = $typeLabel === 'incoming'
-                    ? $personName . ' (روزنامچه)'
-                    : $personName . ' (روزنامچه)';
-                return [
-                    'type' => $typeLabel,
-                    'amount' => $entry->amount,
-                    'currency' => $entry->currency,
-                    'description' => $description,
-                    'notes' => ($entry->notes ? $entry->notes : '') . ' - روزنامچه',
-                    'date' => $entry->created_at,
-                ];
-            });
+        $ledgerEntries = LedgerEntry::get();
+        // Load person names efficiently based on person_type
+        $customerIds = $ledgerEntries->where('person_type', 'customer')->pluck('person_id')->unique();
+        $supplierIds = $ledgerEntries->where('person_type', 'supplier')->pluck('person_id')->unique();
+        $customerNames = Customer::whereIn('id', $customerIds)->pluck('name', 'id');
+        $supplierNames = Supplier::whereIn('id', $supplierIds)->pluck('name', 'id');
+        
+        $ledgerTransactions = $ledgerEntries->map(function ($entry) use ($customerNames, $supplierNames) {
+            $personName = $entry->person_type === 'customer' 
+                ? ($customerNames[$entry->person_id] ?? 'نامعلوم')
+                : ($supplierNames[$entry->person_id] ?? 'نامعلوم');
+            $typeLabel = $entry->type === 'payment_received' ? 'incoming' : 'outgoing';
+            return [
+                'type' => $typeLabel,
+                'amount' => $entry->amount,
+                'currency' => $entry->currency,
+                'description' => $personName . ' (روزنامچه)',
+                'notes' => ($entry->notes ? $entry->notes : '') . ' - روزنامچه',
+                'date' => $entry->created_at,
+            ];
+        });
 
         $transactions = collect($incomingTransactions)
             ->concat($outgoingTransactions)
