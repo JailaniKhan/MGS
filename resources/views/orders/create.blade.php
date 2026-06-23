@@ -68,7 +68,7 @@
                 </div>
             </div>
 
-            <button type="submit" class="w-full bg-[#0d9488] text-white py-3 rounded-lg font-medium">امر جوړول</button>
+            <button type="submit" class="w-full bg-[#0d9488] text-black py-3 rounded-lg font-medium">امر جوړول</button>
         </form>
     </div>
 @endsection

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\Payment;
+use App\Models\LedgerEntry;
 use Illuminate\Http\Request;
 
 class CustomerController extends Controller
@@ -34,7 +36,36 @@ class CustomerController extends Controller
     public function show(Customer $customer)
     {
         $customer->load('orders.orderItems.product');
-        return view('customers.show', compact('customer'));
+
+        // Calculate payment data (same logic as LedgerController)
+        $paymentsFromOrdersAFN = Payment::whereHas('order', function ($q) use ($customer) {
+            $q->where('customer_id', $customer->id);
+        })->where('currency', 'AFN')->sum('amount');
+        
+        $paymentsFromOrdersUSD = Payment::whereHas('order', function ($q) use ($customer) {
+            $q->where('customer_id', $customer->id);
+        })->where('currency', 'USD')->sum('amount');
+
+        $ledgerPaymentsAFN = LedgerEntry::where('person_type', 'customer')
+            ->where('person_id', $customer->id)
+            ->where('currency', 'AFN')
+            ->where('type', 'payment_received')
+            ->sum('amount');
+            
+        $ledgerPaymentsUSD = LedgerEntry::where('person_type', 'customer')
+            ->where('person_id', $customer->id)
+            ->where('currency', 'USD')
+            ->where('type', 'payment_received')
+            ->sum('amount');
+
+        $totalAFN = $customer->orders()->where('currency', 'AFN')->sum('total_amount');
+        $totalUSD = $customer->orders()->where('currency', 'USD')->sum('total_amount');
+        $paidAFN = $paymentsFromOrdersAFN + $ledgerPaymentsAFN;
+        $paidUSD = $paymentsFromOrdersUSD + $ledgerPaymentsUSD;
+
+        return view('customers.show', compact(
+            'customer', 'totalAFN', 'totalUSD', 'paidAFN', 'paidUSD'
+        ));
     }
 
     public function edit(Customer $customer)

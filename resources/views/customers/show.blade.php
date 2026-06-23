@@ -15,10 +15,53 @@
         @endif
         <div class="flex gap-2 mt-3">
             <a href="{{ route('customers.edit', $customer) }}" class="text-blue-600 dark:text-blue-400 text-sm">سمول</a>
+            <a href="{{ route('ledger.show', ['customer', $customer->id]) }}" class="text-teal-600 dark:text-teal-400 text-sm">روزنامچه</a>
             <form action="{{ route('customers.destroy', $customer) }}" method="POST" onsubmit="return confirm('آیا ډاډه یاست؟')">
                 @csrf @method('DELETE')
                 <button class="text-red-600 dark:text-red-400 text-sm">ړنګول</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Payment Summary -->
+    <div class="grid grid-cols-2 gap-3 mb-4">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">افغاني (افغ)</div>
+            <div class="space-y-1">
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500 dark:text-gray-400">ټوله:</span>
+                    <span class="font-medium">{{ number_format($totalAFN) }} افغ</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-green-600 dark:text-green-400">ورکړل شوي:</span>
+                    <span class="font-medium text-green-600 dark:text-green-400">{{ number_format($paidAFN) }} افغ</span>
+                </div>
+                <div class="flex justify-between text-sm border-t border-gray-100 dark:border-gray-700 pt-1">
+                    <span class="font-semibold">پاتې:</span>
+                    <span class="font-bold {{ $totalAFN - $paidAFN > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400' }}">
+                        {{ number_format(max(0, $totalAFN - $paidAFN)) }} افغ
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">ډالر ($)</div>
+            <div class="space-y-1">
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500 dark:text-gray-400">ټوله:</span>
+                    <span class="font-medium">{{ number_format($totalUSD) }}$</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-green-600 dark:text-green-400">ورکړل شوي:</span>
+                    <span class="font-medium text-green-600 dark:text-green-400">{{ number_format($paidUSD) }}$</span>
+                </div>
+                <div class="flex justify-between text-sm border-t border-gray-100 dark:border-gray-700 pt-1">
+                    <span class="font-semibold">پاتې:</span>
+                    <span class="font-bold {{ $totalUSD - $paidUSD > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400' }}">
+                        {{ number_format(max(0, $totalUSD - $paidUSD)) }}$
+                    </span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -31,7 +74,7 @@
                     <span class="text-xs text-gray-500 dark:text-gray-400 mr-2">{{ $order->created_at->format('Y/m/d') }}</span>
                 </div>
                 <div class="text-left">
-                    <div class="text-sm font-semibold">{{ number_format($order->total_amount) }} افغ</div>
+                    <div class="text-sm font-semibold">{{ number_format($order->total_amount) }} {{ $order->currency === 'USD' ? '$' : 'افغ' }}</div>
                     <span class="inline-block text-xs px-2 py-0.5 rounded-full 
                         @if($order->status === 'completed') bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300
                         @elseif($order->status === 'processing') bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300

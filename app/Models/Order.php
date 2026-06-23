@@ -29,7 +29,19 @@ class Order extends Model
 
     public function getPaidAmountAttribute()
     {
-        return $this->payments()->sum('amount');
+        // Sum payments from the payments table (order payments)
+        $orderPayments = $this->payments()->sum('amount');
+        
+        // Also sum ledger payments made for this order's customer
+        $ledgerPayments = $this->customer 
+            ? LedgerEntry::where('person_type', 'customer')
+                ->where('person_id', $this->customer_id)
+                ->where('type', 'payment_received')
+                ->where('currency', $this->currency)
+                ->sum('amount')
+            : 0;
+
+        return $orderPayments + $ledgerPayments;
     }
 
     public function getRemainingAmountAttribute()

@@ -62,6 +62,7 @@
     </div>
 
     <!-- Payment Summary -->
+    @if ($purchase->status !== 'cancelled')
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4">
         <h3 class="font-semibold text-sm mb-3">د پیسو ورکړه</h3>
         <div class="space-y-2 text-sm mb-3">
@@ -98,7 +99,7 @@
             </div>
         @endif
 
-        @if (!$purchase->is_fully_paid && $purchase->status !== 'cancelled')
+        @if (!$purchase->is_fully_paid)
             <form action="{{ route('purchases.payment.store') }}" method="POST" class="border-t border-gray-200 dark:border-gray-700 pt-3">
                 @csrf
                 <input type="hidden" name="purchase_id" value="{{ $purchase->id }}">
@@ -119,6 +120,7 @@
             </form>
         @endif
     </div>
+    @endif
 
     @if ($purchase->status !== 'cancelled')
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4">

@@ -65,6 +65,7 @@
     </div>
 
     <!-- Payment Summary -->
+    @if ($order->status !== 'cancelled')
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4">
         <h3 class="font-semibold text-sm mb-3">د پیسو ورکړه</h3>
         <div class="space-y-2 text-sm mb-3">
@@ -101,13 +102,14 @@
             </div>
         @endif
 
-        @if (!$order->is_fully_paid && $order->status !== 'cancelled')
+        @if (!$order->is_fully_paid)
             <a href="{{ route('payments.create') }}?order_id={{ $order->id }}" 
                class="block w-full text-center bg-[#0d9488] text-gray-800 py-2 rounded-lg text-sm font-medium">
                 + پیسې ورکول
             </a>
         @endif
     </div>
+    @endif
 
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
         <h3 class="font-semibold text-sm mb-3">د حالت بدلول</h3>

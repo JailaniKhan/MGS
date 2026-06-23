@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\Supplier;
+use App\Models\Payment;
+use App\Models\PurchasePayment;
 use App\Models\LedgerEntry;
 use Illuminate\Http\Request;
 
@@ -16,16 +18,31 @@ class LedgerController extends Controller
             ->orderBy('name')
             ->get()
             ->map(function ($customer) {
-                $paidAFN = LedgerEntry::where('person_type', 'customer')
+                // Get payments made through the regular payment flow
+                $paymentsFromOrdersAFN = Payment::whereHas('order', function ($q) use ($customer) {
+                    $q->where('customer_id', $customer->id);
+                })->where('currency', 'AFN')->sum('amount');
+                
+                $paymentsFromOrdersUSD = Payment::whereHas('order', function ($q) use ($customer) {
+                    $q->where('customer_id', $customer->id);
+                })->where('currency', 'USD')->sum('amount');
+
+                // Get payments made through the ledger
+                $ledgerPaymentsAFN = LedgerEntry::where('person_type', 'customer')
                     ->where('person_id', $customer->id)
                     ->where('currency', 'AFN')
                     ->where('type', 'payment_received')
                     ->sum('amount');
-                $paidUSD = LedgerEntry::where('person_type', 'customer')
+                    
+                $ledgerPaymentsUSD = LedgerEntry::where('person_type', 'customer')
                     ->where('person_id', $customer->id)
                     ->where('currency', 'USD')
                     ->where('type', 'payment_received')
                     ->sum('amount');
+
+                $paidAFN = $paymentsFromOrdersAFN + $ledgerPaymentsAFN;
+                $paidUSD = $paymentsFromOrdersUSD + $ledgerPaymentsUSD;
+
                 return [
                     'id' => $customer->id,
                     'name' => $customer->name,
@@ -47,16 +64,31 @@ class LedgerController extends Controller
             ->orderBy('name')
             ->get()
             ->map(function ($supplier) {
-                $paidAFN = LedgerEntry::where('person_type', 'supplier')
+                // Get payments made through the regular purchase payment flow
+                $paymentsFromPurchasesAFN = PurchasePayment::whereHas('purchase', function ($q) use ($supplier) {
+                    $q->where('supplier_id', $supplier->id);
+                })->where('currency', 'AFN')->sum('amount');
+                
+                $paymentsFromPurchasesUSD = PurchasePayment::whereHas('purchase', function ($q) use ($supplier) {
+                    $q->where('supplier_id', $supplier->id);
+                })->where('currency', 'USD')->sum('amount');
+
+                // Get payments made through the ledger
+                $ledgerPaymentsAFN = LedgerEntry::where('person_type', 'supplier')
                     ->where('person_id', $supplier->id)
                     ->where('currency', 'AFN')
                     ->where('type', 'payment_made')
                     ->sum('amount');
-                $paidUSD = LedgerEntry::where('person_type', 'supplier')
+                    
+                $ledgerPaymentsUSD = LedgerEntry::where('person_type', 'supplier')
                     ->where('person_id', $supplier->id)
                     ->where('currency', 'USD')
                     ->where('type', 'payment_made')
                     ->sum('amount');
+
+                $paidAFN = $paymentsFromPurchasesAFN + $ledgerPaymentsAFN;
+                $paidUSD = $paymentsFromPurchasesUSD + $ledgerPaymentsUSD;
+
                 return [
                     'id' => $supplier->id,
                     'name' => $supplier->name,
@@ -86,12 +118,62 @@ class LedgerController extends Controller
             $personLabel = 'ګیراک';
             $totalAFN = $person->orders()->where('currency', 'AFN')->sum('total_amount');
             $totalUSD = $person->orders()->where('currency', 'USD')->sum('total_amount');
+            
+            // Get payments from both sources
+            $paymentsFromOrdersAFN = Payment::whereHas('order', function ($q) use ($person) {
+                $q->where('customer_id', $person->id);
+            })->where('currency', 'AFN')->sum('amount');
+            
+            $paymentsFromOrdersUSD = Payment::whereHas('order', function ($q) use ($person) {
+                $q->where('customer_id', $person->id);
+            })->where('currency', 'USD')->sum('amount');
+
+            $ledgerPaymentsAFN = LedgerEntry::where('person_type', 'customer')
+                ->where('person_id', $id)
+                ->where('currency', 'AFN')
+                ->where('type', 'payment_received')
+                ->sum('amount');
+                
+            $ledgerPaymentsUSD = LedgerEntry::where('person_type', 'customer')
+                ->where('person_id', $id)
+                ->where('currency', 'USD')
+                ->where('type', 'payment_received')
+                ->sum('amount');
+
+            $paidAFN = $paymentsFromOrdersAFN + $ledgerPaymentsAFN;
+            $paidUSD = $paymentsFromOrdersUSD + $ledgerPaymentsUSD;
+
         } elseif ($type === 'supplier') {
             $person = Supplier::findOrFail($id);
             $personType = 'supplier';
             $personLabel = 'پلورونکی';
             $totalAFN = $person->purchases()->where('currency', 'AFN')->sum('total_amount');
             $totalUSD = $person->purchases()->where('currency', 'USD')->sum('total_amount');
+            
+            // Get payments from both sources
+            $paymentsFromPurchasesAFN = PurchasePayment::whereHas('purchase', function ($q) use ($person) {
+                $q->where('supplier_id', $person->id);
+            })->where('currency', 'AFN')->sum('amount');
+            
+            $paymentsFromPurchasesUSD = PurchasePayment::whereHas('purchase', function ($q) use ($person) {
+                $q->where('supplier_id', $person->id);
+            })->where('currency', 'USD')->sum('amount');
+
+            $ledgerPaymentsAFN = LedgerEntry::where('person_type', 'supplier')
+                ->where('person_id', $id)
+                ->where('currency', 'AFN')
+                ->where('type', 'payment_made')
+                ->sum('amount');
+                
+            $ledgerPaymentsUSD = LedgerEntry::where('person_type', 'supplier')
+                ->where('person_id', $id)
+                ->where('currency', 'USD')
+                ->where('type', 'payment_made')
+                ->sum('amount');
+
+            $paidAFN = $paymentsFromPurchasesAFN + $ledgerPaymentsAFN;
+            $paidUSD = $paymentsFromPurchasesUSD + $ledgerPaymentsUSD;
+
         } else {
             abort(404);
         }
@@ -100,9 +182,6 @@ class LedgerController extends Controller
             ->where('person_id', $id)
             ->orderBy('created_at', 'desc')
             ->get();
-
-        $paidAFN = $entries->where('currency', 'AFN')->sum('amount');
-        $paidUSD = $entries->where('currency', 'USD')->sum('amount');
 
         return view('ledger.show', compact(
             'person', 'personType', 'personLabel',
