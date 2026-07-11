@@ -272,6 +272,7 @@ return [
     'order_total' => 'د امر ټوله بیه',
     'order_updated' => 'امر په بریالیتوب سره سم شو',
     'orders' => 'امرونه',
+    'documents' => 'اسناد',
     'orders_dash' => 'ټکرونه -',
     'others_dash' => 'نورتي جات -',
     'outgoing_payments' => 'وتلې پیسې',

@@ -183,14 +183,17 @@ class DashboardController extends Controller
                 + PartyPayment::where('currency', 'AFN')->where('type', 'payment_made')->sum('amount'),
             'totalExpenseUSD' => PurchasePayment::where('currency', 'USD')->sum('amount')
                 + PartyPayment::where('currency', 'USD')->where('type', 'payment_made')->sum('amount'),
-            'pendingOrders' => Order::where('status', 'pending')->count(),
+            'pendingOrders' => Order::where('status', '!=', 'cancelled')->get()->filter(function ($order) {
+                return $order->remaining_amount > 0;
+            })->count(),
             'processingOrders' => Order::where('status', 'processing')->count(),
             'recentOrders' => Order::with('customer')->orderBy('created_at', 'desc')->take(5)->get(),
             'recentPurchases' => Purchase::with('supplier')->orderBy('created_at', 'desc')->take(5)->get(),
             'lowStockProducts' => Product::where('stock', '<', 10)->count(),
-            'pendingPayments' => Order::where('status', '!=', 'cancelled')->get()->filter(function ($order) {
-                return $order->remaining_amount > 0;
+            'pendingPayments' => Purchase::where('status', '!=', 'cancelled')->get()->filter(function ($purchase) {
+                return $purchase->remaining_amount > 0;
             })->count(),
+            'rate' => $this->usdToAfn(),
             'weeklyRevenue' => $weeklyRevenue,
             'weeklyExpenses' => $weeklyExpenses,
             'topProducts' => $topProducts,

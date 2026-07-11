@@ -272,6 +272,7 @@ return [
     'order_total' => 'Order Total',
     'order_updated' => 'Order updated successfully.',
     'orders' => 'Orders',
+    'documents' => 'Documents',
     'orders_dash' => 'Orders -',
     'others_dash' => 'Others -',
     'outgoing_payments' => 'Outgoing Payments',

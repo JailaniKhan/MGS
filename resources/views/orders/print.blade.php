@@ -210,7 +210,8 @@
                 <p>
                     <span>{{ __('messages.order_number') }}: </span><strong>{{ $order->id }}</strong><br>
                     <span>{{ __('messages.status') }}: </span>
-                    @switch($order->status)
+                    @switch($order->display_status)
+                        @case('paid') {{ __('messages.paid') }} @break
                         @case('completed') {{ __('messages.completed') }} @break
                         @case('processing') {{ __('messages.processing') }} @break
                         @case('cancelled') {{ __('messages.cancelled') }} @break

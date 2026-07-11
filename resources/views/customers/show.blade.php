@@ -155,17 +155,18 @@
                     <div class="text-right flex-shrink-0 ml-3">
                         <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ number_format($order->total_amount) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</div>
                         <span class="inline-flex items-center gap-1 badge mt-1
-                            @if($order->status === 'completed') badge-success
-                            @elseif($order->status === 'processing') badge-info
-                            @elseif($order->status === 'cancelled') badge-danger
+                            @if($order->display_status === 'paid' || $order->display_status === 'completed') badge-success
+                            @elseif($order->display_status === 'processing') badge-info
+                            @elseif($order->display_status === 'cancelled') badge-danger
                             @else badge-warning @endif">
                             <span class="status-dot
-                                @if($order->status === 'completed') bg-primary-500
-                                @elseif($order->status === 'processing') bg-secondary-500
-                                @elseif($order->status === 'cancelled') bg-red-500
+                                @if($order->display_status === 'paid' || $order->display_status === 'completed') bg-primary-500
+                                @elseif($order->display_status === 'processing') bg-secondary-500
+                                @elseif($order->display_status === 'cancelled') bg-red-500
                                 @else bg-amber-500 @endif">
                             </span>
-                            @switch($order->status)
+                            @switch($order->display_status)
+                                @case('paid') {{ __('messages.paid') }} @break
                                 @case('completed') {{ __('messages.completed') }} @break
                                 @case('processing') {{ __('messages.processing') }} @break
                                 @case('cancelled') {{ __('messages.cancelled') }} @break

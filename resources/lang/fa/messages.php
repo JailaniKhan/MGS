@@ -272,6 +272,7 @@ return [
     'order_total' => 'مجموع سفارش',
     'order_updated' => 'سفارش با موفقیت بروزرسانی شد.',
     'orders' => 'سفارشات',
+    'documents' => 'اسناد',
     'orders_dash' => 'سفارشات -',
     'others_dash' => 'سایر -',
     'outgoing_payments' => 'پرداخت‌های پرداختی',

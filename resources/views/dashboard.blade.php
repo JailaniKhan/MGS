@@ -33,18 +33,18 @@
     <div class="grid grid-cols-3 gap-3 mb-6">
         <div class="metric-tile">
             <span class="metric-label">{{ __('messages.revenue') }}</span>
-            <span class="metric-value text-primary-600 dark:text-primary-400">{{ number_format($totalRevenueAFN + $totalRevenueUSD * 80) }}</span>
+            <span class="metric-value text-primary-600 dark:text-primary-400">{{ number_format($totalRevenueAFN + $totalRevenueUSD * $rate) }}</span>
             <span class="text-[9px] text-gray-400">{{ __('messages.afn') }}</span>
         </div>
         <div class="metric-tile">
             <span class="metric-label">{{ __('messages.expenses') }}</span>
-            <span class="metric-value text-red-500">{{ number_format($totalExpenseAFN + $totalExpenseUSD * 80) }}</span>
+            <span class="metric-value text-red-500">{{ number_format($totalExpenseAFN + $totalExpenseUSD * $rate) }}</span>
             <span class="text-[9px] text-gray-400">{{ __('messages.afn') }}</span>
         </div>
         <div class="metric-tile">
             <span class="metric-label">{{ __('messages.pending') }}</span>
             <span class="metric-value text-amber-500">{{ $pendingOrders + $pendingPayments }}</span>
-            <span class="text-[9px] text-gray-400">{{ __('messages.orders') }}</span>
+            <span class="text-[9px] text-gray-400">{{ __('messages.documents') }}</span>
         </div>
     </div>
 
@@ -116,11 +116,12 @@
                     <div class="text-right flex-shrink-0 ml-3">
                         <div class="text-sm font-bold text-gray-900 dark:text-gray-100">{{ number_format($order->total_amount) }}</div>
                         <span class="inline-flex items-center gap-1 badge
-                            @if($order->status === 'completed') badge-success
-                            @elseif($order->status === 'processing') badge-info
-                            @elseif($order->status === 'cancelled') badge-danger
+                            @if($order->display_status === 'paid' || $order->display_status === 'completed') badge-success
+                            @elseif($order->display_status === 'processing') badge-info
+                            @elseif($order->display_status === 'cancelled') badge-danger
                             @else badge-warning @endif">
-                            @switch($order->status)
+                            @switch($order->display_status)
+                                @case('paid') {{ __('messages.paid') }} @break
                                 @case('completed') {{ __('messages.completed') }} @break
                                 @case('processing') {{ __('messages.processing') }} @break
                                 @case('cancelled') {{ __('messages.cancelled') }} @break
@@ -215,11 +216,12 @@
                     <div class="text-right flex-shrink-0 ml-3">
                         <div class="text-sm font-bold text-gray-900 dark:text-gray-100">{{ number_format($purchase->total_amount) }}</div>
                         <span class="inline-flex items-center gap-1 badge
-                            @if($purchase->status === 'completed') badge-success
-                            @elseif($purchase->status === 'processing') badge-info
-                            @elseif($purchase->status === 'cancelled') badge-danger
+                            @if($purchase->display_status === 'paid' || $purchase->display_status === 'completed') badge-success
+                            @elseif($purchase->display_status === 'processing') badge-info
+                            @elseif($purchase->display_status === 'cancelled') badge-danger
                             @else badge-warning @endif">
-                            @switch($purchase->status)
+                            @switch($purchase->display_status)
+                                @case('paid') {{ __('messages.paid') }} @break
                                 @case('completed') {{ __('messages.completed') }} @break
                                 @case('processing') {{ __('messages.processing') }} @break
                                 @case('cancelled') {{ __('messages.cancelled') }} @break

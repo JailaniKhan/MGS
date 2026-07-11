@@ -147,7 +147,7 @@ class CashbookController extends Controller
                 'date' => $order->created_at,
                 'amount' => (float) $order->remaining_amount,
                 'currency' => $order->currency,
-                'notes' => ucfirst($order->status ?? ''),
+                'notes' => ucfirst($order->display_status ?? ''),
             ]);
         }
 
@@ -159,7 +159,7 @@ class CashbookController extends Controller
                 'date' => $purchase->created_at,
                 'amount' => (float) $purchase->remaining_amount,
                 'currency' => $purchase->currency,
-                'notes' => ucfirst($purchase->status ?? ''),
+                'notes' => ucfirst($purchase->display_status ?? ''),
             ]);
         }
 
