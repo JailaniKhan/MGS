@@ -35,4 +35,20 @@ return [
         ],
     ],
 
+    'sms' => [
+        'api_key' => env('SMS_API_KEY'),
+        'sender' => env('SMS_SENDER', 'MGS'),
+        'url' => env('SMS_URL', 'https://api.easysendsms.com/bulksms'),
+    ],
+
+    'whatsapp' => [
+        'token' => env('WHATSAPP_API_KEY'),
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'url' => env('WHATSAPP_URL', 'https://graph.facebook.com/v18.0'),
+    ],
+
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+    ],
+
 ];

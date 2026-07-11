@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
-    protected $fillable = ['customer_id', 'status', 'total_amount', 'currency'];
+    protected $fillable = ['customer_id', 'person_type', 'person_id', 'status', 'total_amount', 'currency', 'tax_rate', 'tax_amount', 'subtotal', 'tax_type'];
 
     protected $casts = [
         'total_amount' => 'decimal:2',
@@ -15,6 +15,20 @@ class Order extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function supplier()
+    {
+        return $this->belongsTo(Supplier::class, 'person_id');
+    }
+
+    public function getPartyAttribute()
+    {
+        if ($this->person_type === 'supplier') {
+            return $this->supplier;
+        }
+
+        return $this->customer;
     }
 
     public function orderItems()
@@ -29,29 +43,38 @@ class Order extends Model
 
     public function getPaidAmountAttribute()
     {
-        // Sum payments directly linked to this order
-        $orderPayments = $this->payments()->sum('amount');
-        
-        // Also include ledger payments made for this customer in the same currency
-        $ledgerPayments = $this->customer 
-            ? LedgerEntry::where('person_type', 'customer')
-                ->where('person_id', $this->customer_id)
-                ->where('type', 'payment_received')
-                ->where('currency', $this->currency)
-                ->sum('amount')
-            : 0;
+        return (float) $this->payments()->sum('amount');
+    }
 
-        return $orderPayments + $ledgerPayments;
+    public function getReturnedAmountAttribute()
+    {
+        return (float) OrderReturn::where('order_id', $this->id)
+            ->where('status', '!=', 'cancelled')
+            ->where('currency', $this->currency)
+            ->sum('total_amount');
     }
 
     public function getRemainingAmountAttribute()
     {
-        return max(0, $this->total_amount - $this->paid_amount);
+        return max(0, $this->total_amount - $this->paid_amount - $this->returned_amount);
     }
 
     public function getIsFullyPaidAttribute()
     {
         return $this->remaining_amount <= 0;
+    }
+
+    public function getDisplayStatusAttribute()
+    {
+        if ($this->status === 'cancelled') {
+            return 'cancelled';
+        }
+
+        if ($this->is_fully_paid) {
+            return 'paid';
+        }
+
+        return $this->status;
     }
 
     public function getCurrencySymbolAttribute()

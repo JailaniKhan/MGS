@@ -1,63 +1,59 @@
 @extends('layouts.app')
 
 @section('content')
-    <div class="mb-4">
-        <a href="{{ route('products.index') }}" class="text-gray-500 dark:text-gray-400 text-sm">&larr; بېرته</a>
+    <div class="mb-4 page-enter">
+        <a href="{{ route('products.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
+        </a>
+        <h2 class="text-lg font-bold text-gray-900 dark:text-white mt-2">{{ __('messages.edit_product') }}</h2>
     </div>
-    <h2 class="text-lg font-semibold mb-4">د محصول سمول</h2>
 
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+    <div class="card p-4 page-enter" style="animation-delay: 0.1s;">
         <form action="{{ route('products.update', $product) }}" method="POST">
             @csrf @method('PUT')
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-1">نوم</label>
-                <input type="text" name="name" value="{{ old('name', $product->name) }}" required
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-[#f53003] focus:border-transparent">
-                @error('name') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                <label class="form-label">{{ __('messages.name') }}</label>
+                <input type="text" name="name" value="{{ old('name', $product->name) }}" required class="form-input">
+                @error('name') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-1">کتګوري</label>
-                <select name="category_id" required
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-[#f53003] focus:border-transparent">
-                    <option value="">-- انتخاب --</option>
+                <label class="form-label">{{ __('messages.category') }}</label>
+                <select name="category_id" required class="form-input">
+                    <option value="">{{ __('messages.select_option') }}</option>
                     @foreach ($categories as $category)
                         <option value="{{ $category->id }}" {{ old('category_id', $product->category_id) == $category->id ? 'selected' : '' }}>{{ $category->name }}</option>
                     @endforeach
                 </select>
-                @error('category_id') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                @error('category_id') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-1">واحد</label>
-                <select name="unit_id"
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-[#f53003] focus:border-transparent">
-                    <option value="">-- انتخاب --</option>
+                <label class="form-label">{{ __('messages.unit') }}</label>
+                <select name="unit_id" class="form-input">
+                    <option value="">{{ __('messages.select_option') }}</option>
                     @foreach ($units as $unit)
                         <option value="{{ $unit->id }}" {{ old('unit_id', $product->unit_id) == $unit->id ? 'selected' : '' }}>{{ $unit->name }} @if($unit->short_name)({{ $unit->short_name }})@endif</option>
                     @endforeach
                 </select>
-                @error('unit_id') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                @error('unit_id') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
             <div class="grid grid-cols-2 gap-3 mb-4">
                 <div>
-                    <label class="block text-sm font-medium mb-1">قیمت (افغ)</label>
-                    <input type="number" name="price" value="{{ old('price', $product->price) }}" step="0.01" min="0" required
-                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-[#f53003] focus:border-transparent">
-                    @error('price') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                    <label class="form-label">{{ __('messages.price_afn') }}</label>
+                    <input type="number" name="price" value="{{ old('price', $product->price) }}" step="0.01" min="0" required class="form-input">
+                    @error('price') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">موجودي</label>
-                    <input type="number" name="stock" value="{{ old('stock', $product->stock) }}" min="0" required
-                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-[#f53003] focus:border-transparent">
-                    @error('stock') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                    <label class="form-label">{{ __('messages.stock') }}</label>
+                    <input type="number" name="stock" value="{{ old('stock', $product->stock) }}" min="0" required class="form-input">
+                    @error('stock') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
                 </div>
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-1">تفصیل</label>
-                <textarea name="description" rows="2"
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-[#f53003] focus:border-transparent">{{ old('description', $product->description) }}</textarea>
-                @error('description') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                <label class="form-label">{{ __('messages.description') }}</label>
+                <textarea name="description" rows="2" class="form-input">{{ old('description', $product->description) }}</textarea>
+                @error('description') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
-            <button type="submit" class="w-full bg-[#f53003] text-white py-3 rounded-lg font-medium">ذخیره کول</button>
+            <button type="submit" class="btn-primary w-full"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>{{ __('messages.save') }}</button>
         </form>
     </div>
 @endsection

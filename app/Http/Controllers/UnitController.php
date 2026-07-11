@@ -27,7 +27,7 @@ class UnitController extends Controller
 
         Unit::create($validated);
 
-        return redirect()->route('units.index')->with('success', 'واحد په بریالیتوب سره اضافه شو!');
+        return redirect()->route('units.index')->with('success', __('messages.unit_created'));
     }
 
     public function edit(Unit $unit)
@@ -44,15 +44,15 @@ class UnitController extends Controller
 
         $unit->update($validated);
 
-        return redirect()->route('units.index')->with('success', 'واحد په بریالیتوب سره سم شو!');
+        return redirect()->route('units.index')->with('success', __('messages.unit_updated'));
     }
 
     public function destroy(Unit $unit)
     {
         if ($unit->products()->count() > 0) {
-            return redirect()->route('units.index')->with('error', 'دې واحد سره محصولات تړلي دي، لومړی هغه ړنګ کړئ!');
+            return redirect()->route('units.index')->with('error', __('messages.unit_has_products'));
         }
         $unit->delete();
-        return redirect()->route('units.index')->with('success', 'واحد په بریالیتوب سره ړنګ شو!');
+        return redirect()->route('units.index')->with('success', __('messages.unit_deleted'));
     }
 }

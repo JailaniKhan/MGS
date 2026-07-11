@@ -1,136 +1,151 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('content')
-    <div class="mb-4">
-        <a href="{{ route('ledger.index') }}" class="text-gray-500 dark:text-gray-400 text-sm">&larr; بېرته</a>
+    <div class="mb-4 page-enter">
+        <a href="{{ route('ledger.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
+        </a>
     </div>
 
-    <!-- Person Info Card -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4">
-        <div class="flex items-center justify-between">
+    <div class="card p-4 mb-4 page-enter" style="animation-delay: 0.05s;">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-brand text-white flex items-center justify-center shadow-sm flex-shrink-0">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+            </div>
+            <div class="flex-1">
+                <div class="flex items-center gap-2">
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white">{{ $person->name }}</h2>
+                    <span class="badge {{ $personType === 'customer' ? 'badge-info' : 'badge-warning' }}">{{ $personLabel }}</span>
+                </div>
+                @if ($person->phone) <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ __('messages.phone') }}: {{ $person->phone }}</p> @endif
+                @if ($person->address) <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('messages.address') }}: {{ $person->address }}</p> @endif
+            </div>
+            <a href="{{ $personType === 'customer' ? route('reminders.customer', $person) : route('reminders.supplier', $person) }}"
+               onclick="event.preventDefault(); document.getElementById('reminder-form-ledger').classList.toggle('hidden')"
+               class="p-2 text-secondary-600 dark:text-secondary-400 hover:bg-secondary-50 dark:hover:bg-secondary-900/20 rounded-xl transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
+            </a>
+        </div>
+    </div>
+
+    <!-- Send Reminder Form (toggled) -->
+    <div id="reminder-form-ledger" class="card p-4 mb-4 hidden page-enter" style="animation-delay: 0.08s;">
+        <div class="flex items-center gap-2 mb-4">
+            <div class="w-1.5 h-5 rounded-full bg-primary-500"></div>
+            <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ __('messages.send_reminder') }}</h3>
+        </div>
+        <form action="{{ $personType === 'customer' ? route('reminders.customer', $person) : route('reminders.supplier', $person) }}" method="POST" class="space-y-3">
+            @csrf
             <div>
-                <div class="flex items-center gap-2 mb-1">
-                    <h2 class="text-lg font-semibold">{{ $person->name }}</h2>
-                    <span class="text-xs px-2 py-0.5 rounded-full 
-                        {{ $personType === 'customer' ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300' }}">
-                        {{ $personLabel }}
-                    </span>
+                <label class="form-label">{{ __('messages.channel') }}</label>
+                <div class="flex gap-3">
+                    <label class="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-all duration-200">
+                        <input type="radio" name="channel" value="sms" checked class="text-secondary-600">
+                        <span class="text-sm text-gray-700 dark:text-gray-300">SMS</span>
+                    </label>
+                    <label class="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-all duration-200">
+                        <input type="radio" name="channel" value="whatsapp" class="text-secondary-600">
+                        <span class="text-sm text-gray-700 dark:text-gray-300">WhatsApp</span>
+                    </label>
                 </div>
-                @if ($person->phone)
-                    <p class="text-sm text-gray-500 dark:text-gray-400">تلیفون: {{ $person->phone }}</p>
-                @endif
-                @if ($person->address)
-                    <p class="text-sm text-gray-500 dark:text-gray-400">پته: {{ $person->address }}</p>
-                @endif
+            </div>
+            <div>
+                <label class="form-label">{{ __('messages.currency_unit') }}</label>
+                <div class="flex gap-3">
+                    <label class="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-all duration-200">
+                        <input type="radio" name="currency" value="AFN" checked class="text-secondary-600">
+                        <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('messages.afn') }}</span>
+                    </label>
+                    <label class="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-all duration-200">
+                        <input type="radio" name="currency" value="USD" class="text-secondary-600">
+                        <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('messages.usd_with_paren') }}$)</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <label class="form-label">{{ __('messages.amount') }}</label>
+                <input type="number" name="amount" step="0.01" min="0" placeholder="{{ __('messages.optional') }}" class="form-input">
+                <p class="text-[10px] text-gray-400 mt-1">{{ __('messages.leave_empty_for_full') }}</p>
+            </div>
+            <button type="submit" class="btn-primary w-full">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>{{ __('messages.send_reminder') }}
+            </button>
+        </form>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 mb-4 page-enter" style="animation-delay: 0.1s;">
+        <div class="metric-tile !p-4">
+            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">{{ __('messages.afn') }}</div>
+            <div class="space-y-1.5 text-sm">
+                <div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">{{ __('messages.total') }}:</span><span class="font-medium">{{ number_format($totalAFN) }} {{ __('messages.afn') }}</span></div>
+                <div class="flex justify-between"><span class="text-primary-600 dark:text-primary-400">{{ __('messages.paid') }}:</span><span class="font-medium text-primary-600 dark:text-primary-400">{{ number_format($paidAFN) }} {{ __('messages.afn') }}</span></div>
+                <div class="flex justify-between border-t border-gray-100 dark:border-gray-700/30 pt-1.5"><span class="font-semibold text-gray-700 dark:text-gray-300">{{ __('messages.pending') }}:</span><span class="font-bold {{ $totalAFN - $paidAFN > 0 ? 'text-red-600 dark:text-red-400' : 'text-primary-600 dark:text-primary-400' }}">{{ number_format(max(0, $totalAFN - $paidAFN)) }} {{ __('messages.afn') }}</span></div>
+            </div>
+        </div>
+        <div class="metric-tile !p-4">
+            <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">{{ __('messages.usd_with_paren') }}$)</div>
+            <div class="space-y-1.5 text-sm">
+                <div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">{{ __('messages.total') }}:</span><span class="font-medium">{{ number_format($totalUSD) }}$</span></div>
+                <div class="flex justify-between"><span class="text-primary-600 dark:text-primary-400">{{ __('messages.paid') }}:</span><span class="font-medium text-primary-600 dark:text-primary-400">{{ number_format($paidUSD) }}$</span></div>
+                <div class="flex justify-between border-t border-gray-100 dark:border-gray-700/30 pt-1.5"><span class="font-semibold text-gray-700 dark:text-gray-300">{{ __('messages.pending') }}:</span><span class="font-bold {{ $totalUSD - $paidUSD > 0 ? 'text-red-600 dark:text-red-400' : 'text-primary-600 dark:text-primary-400' }}">{{ number_format(max(0, $totalUSD - $paidUSD)) }}$</span></div>
             </div>
         </div>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="grid grid-cols-2 gap-3 mb-4">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">افغاني (افغ)</div>
-            <div class="space-y-1">
-                <div class="flex justify-between text-sm">
-                    <span class="text-gray-500 dark:text-gray-400">ټوله:</span>
-                    <span class="font-medium">{{ number_format($totalAFN) }} افغ</span>
-                </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-green-600 dark:text-green-400">ورکړل شوي:</span>
-                    <span class="font-medium text-green-600 dark:text-green-400">{{ number_format($paidAFN) }} افغ</span>
-                </div>
-                <div class="flex justify-between text-sm border-t border-gray-100 dark:border-gray-700 pt-1">
-                    <span class="font-semibold">پاتې:</span>
-                    <span class="font-bold {{ $totalAFN - $paidAFN > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400' }}">
-                        {{ number_format(max(0, $totalAFN - $paidAFN)) }} افغ
-                    </span>
-                </div>
+    <div class="card overflow-hidden mb-4 page-enter" style="animation-delay: 0.15s;">
+        <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700/30">
+            <div class="flex items-center gap-2">
+                <div class="w-1.5 h-5 rounded-full bg-primary-500"></div>
+                <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ __('messages.payment_history') }}</h3>
             </div>
-        </div>
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">ډالر ($)</div>
-            <div class="space-y-1">
-                <div class="flex justify-between text-sm">
-                    <span class="text-gray-500 dark:text-gray-400">ټوله:</span>
-                    <span class="font-medium">{{ number_format($totalUSD) }}$</span>
-                </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-green-600 dark:text-green-400">ورکړل شوي:</span>
-                    <span class="font-medium text-green-600 dark:text-green-400">{{ number_format($paidUSD) }}$</span>
-                </div>
-                <div class="flex justify-between text-sm border-t border-gray-100 dark:border-gray-700 pt-1">
-                    <span class="font-semibold">پاتې:</span>
-                    <span class="font-bold {{ $totalUSD - $paidUSD > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400' }}">
-                        {{ number_format(max(0, $totalUSD - $paidUSD)) }}$
-                    </span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Payment History -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-4">
-        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 font-semibold text-sm">
-            د پیسو تاریخچه
         </div>
         @forelse ($entries as $entry)
-            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700/30 last:border-b-0">
                 <div>
-                    <div class="text-sm font-medium">{{ $entry->created_at->format('Y/m/d H:i') }}</div>
-                    @if ($entry->notes)
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ $entry->notes }}</div>
-                    @endif
+                    <div class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ $entry->created_at->format('Y/m/d H:i') }}</div>
+                    @if ($entry->notes) <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ $entry->notes }}</div> @endif
                 </div>
-                <div class="text-left">
-                    <span class="text-sm font-bold {{ $entry->type === 'payment_received' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
-                        {{ $entry->type === 'payment_received' ? '+' : '-' }}{{ number_format($entry->amount) }} {{ $entry->currency === 'USD' ? '$' : 'افغ' }}
-                    </span>
+                <div class="text-right">
+                    <span class="text-sm font-bold {{ $entry->type === 'payment_received' ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400' }}">{{ $entry->type === 'payment_received' ? '+' : '-' }}{{ number_format($entry->amount) }} {{ $entry->currency === 'USD' ? '$' : __('messages.afn') }}</span>
                 </div>
             </div>
         @empty
-            <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
-                لا تر اوسه پیسې ثبت شوي ندي
-            </div>
+            <div class="empty-state"><p class="text-sm text-gray-500 dark:text-gray-400">{{ __('messages.no_payments_recorded') }}</p></div>
         @endforelse
     </div>
 
-    <!-- Add Payment Form -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-        <h3 class="font-semibold text-sm mb-3">نوې پیسې ثبتول</h3>
+    <div class="card p-4 page-enter" style="animation-delay: 0.2s;">
+        <div class="flex items-center gap-2 mb-4">
+            <div class="w-1.5 h-5 rounded-full bg-primary-500"></div>
+            <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ __('messages.new_payment') }}</h3>
+        </div>
         <form action="{{ route('ledger.payment.store', [$personType, $person->id]) }}" method="POST">
             @csrf
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-1">د پیسو واحد</label>
+                <label class="form-label">{{ __('messages.currency_unit') }}</label>
                 <div class="flex gap-3">
-                    <label class="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer has-[:checked]:border-[#0d9488] has-[:checked]:bg-teal-50 dark:has-[:checked]:bg-teal-900/20">
-                        <input type="radio" name="currency" value="AFN" checked class="text-[#0d9488]">
-                        <span class="text-sm">افغاني (افغ)</span>
+                    <label class="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-all duration-200">
+                        <input type="radio" name="currency" value="AFN" checked class="text-primary-600">
+                        <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('messages.afn') }}</span>
                     </label>
-                    <label class="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer has-[:checked]:border-[#0d9488] has-[:checked]:bg-teal-50 dark:has-[:checked]:bg-teal-900/20">
-                        <input type="radio" name="currency" value="USD" class="text-[#0d9488]">
-                        <span class="text-sm">ډالر ($)</span>
+                    <label class="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-all duration-200">
+                        <input type="radio" name="currency" value="USD" class="text-primary-600">
+                        <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('messages.usd_with_paren') }}$)</span>
                     </label>
                 </div>
-                @error('currency') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                @error('currency') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
-
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-1">د پیسو اندازه</label>
-                <input type="number" name="amount" value="{{ old('amount') }}" step="0.01" min="0.01" required placeholder="مبلغ"
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-[#0d9488] focus:border-transparent">
-                @error('amount') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                <label class="form-label">{{ __('messages.payment_amount') }}</label>
+                <input type="number" name="amount" value="{{ old('amount') }}" step="0.01" min="0.01" required class="form-input">
+                @error('amount') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
-
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-1">یادښت (اختیاري)</label>
-                <input type="text" name="notes" value="{{ old('notes') }}" placeholder="یادښت"
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-[#0d9488] focus:border-transparent">
-                @error('notes') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                <label class="form-label">{{ __('messages.notes_optional') }}</label>
+                <input type="text" name="notes" value="{{ old('notes') }}" class="form-input">
+                @error('notes') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
-
-            <button type="submit" class="w-full bg-[#0d9488] text-gray-800 dark:text-gray-200 py-3 rounded-lg text-sm font-medium">
-                + پیسې ثبتول
-            </button>
+            <button type="submit" class="btn-primary w-full"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>{{ __('messages.record_payment') }}</button>
         </form>
     </div>
 @endsection

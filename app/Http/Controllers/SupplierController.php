@@ -28,7 +28,7 @@ class SupplierController extends Controller
 
         Supplier::create($validated);
 
-        return redirect()->route('suppliers.index')->with('success', 'پلورونکی په بریالیتوب سره اضافه شو!');
+        return redirect()->route('suppliers.index')->with('success', __('messages.supplier_created'));
     }
 
     public function edit(Supplier $supplier)
@@ -46,12 +46,12 @@ class SupplierController extends Controller
 
         $supplier->update($validated);
 
-        return redirect()->route('suppliers.index')->with('success', 'پلورونکی په بریالیتوب سره سم شو!');
+        return redirect()->route('suppliers.index')->with('success', __('messages.supplier_updated'));
     }
 
     public function destroy(Supplier $supplier)
     {
         $supplier->delete();
-        return redirect()->route('suppliers.index')->with('success', 'پلورونکی په بریالیتوب سره ړنګ شو!');
+        return redirect()->route('suppliers.index')->with('success', __('messages.supplier_deleted'));
     }
 }

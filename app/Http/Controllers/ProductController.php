@@ -26,6 +26,7 @@ class ProductController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'barcode' => 'nullable|string|max:255|unique:products,barcode',
             'category_id' => 'required|exists:categories,id',
             'unit_id' => 'nullable|exists:units,id',
             'price' => 'required|numeric|min:0',
@@ -35,7 +36,7 @@ class ProductController extends Controller
 
         Product::create($validated);
 
-        return redirect()->route('products.index')->with('success', 'محصول په بریالیتوب سره اضافه شو!');
+        return redirect()->route('products.index')->with('success', __('messages.product_created'));
     }
 
     public function edit(Product $product)
@@ -49,6 +50,7 @@ class ProductController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'barcode' => 'nullable|string|max:255|unique:products,barcode,' . $product->id,
             'category_id' => 'required|exists:categories,id',
             'unit_id' => 'nullable|exists:units,id',
             'price' => 'required|numeric|min:0',
@@ -58,12 +60,12 @@ class ProductController extends Controller
 
         $product->update($validated);
 
-        return redirect()->route('products.index')->with('success', 'محصول په بریالیتوب سره سم شو!');
+        return redirect()->route('products.index')->with('success', __('messages.product_updated'));
     }
 
     public function destroy(Product $product)
     {
         $product->delete();
-        return redirect()->route('products.index')->with('success', 'محصول په بریالیتوب سره ړنګ شو!');
+        return redirect()->route('products.index')->with('success', __('messages.product_deleted'));
     }
 }

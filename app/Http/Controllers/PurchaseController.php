@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Purchase;
 use App\Models\Supplier;
+use App\Models\Customer;
 use App\Models\Product;
 use App\Models\PurchasePayment;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 
 class PurchaseController extends Controller
@@ -21,42 +23,80 @@ class PurchaseController extends Controller
     public function create()
     {
         $suppliers = Supplier::orderBy('name')->get();
+        $customers = Customer::orderBy('name')->get();
         $products = Product::with('category', 'unit')->orderBy('name')->get();
-        return view('purchases.create', compact('suppliers', 'products'));
+        $defaultTaxRate = Setting::get('default_tax_rate', '0');
+        $defaultTaxType = Setting::get('default_tax_type', 'exclusive');
+        return view('purchases.create', compact('suppliers', 'customers', 'products', 'defaultTaxRate', 'defaultTaxType'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'supplier_id' => 'required|exists:suppliers,id',
+            'person' => ['required', 'string', 'regex:/^(customer|supplier):\d+$/'],
             'currency' => 'required|in:AFN,USD',
+            'tax_rate' => 'nullable|numeric|min:0|max:100',
+            'tax_type' => 'nullable|in:inclusive,exclusive',
             'products' => 'required|array|min:1',
             'products.*.product_id' => 'required|exists:products,id',
             'products.*.quantity' => 'required|integer|min:1',
             'products.*.unit_price' => 'required|numeric|min:0',
+            'products.*.lot_number' => 'nullable|string|max:255',
         ]);
 
-        $totalAmount = 0;
+        [$personType, $personId] = explode(':', $validated['person'], 2);
+        $personId = (int) $personId;
+
+        if ($personType === 'customer') {
+            abort_if(! Customer::where('id', $personId)->exists(), 404);
+        } else {
+            abort_if(! Supplier::where('id', $personId)->exists(), 404);
+        }
+
+        $subtotal = '0.00';
         $purchaseItems = [];
 
         foreach ($validated['products'] as $item) {
             $product = Product::findOrFail($item['product_id']);
-            $subtotal = $item['unit_price'] * $item['quantity'];
-            $totalAmount += $subtotal;
+            $lineTotal = bcmul((string) $item['unit_price'], (string) $item['quantity'], 2);
+            $subtotal = bcadd($subtotal, $lineTotal, 2);
 
             $purchaseItems[] = [
                 'product_id' => $product->id,
                 'quantity' => $item['quantity'],
                 'unit_price' => $item['unit_price'],
-                'subtotal' => $subtotal,
+                'subtotal' => $lineTotal,
+                'lot_number' => $item['lot_number'] ?? null,
             ];
 
             // Increase stock when purchasing
             $product->increment('stock', $item['quantity']);
         }
 
+        $taxRate = $validated['tax_rate'] ?? 0;
+        $taxType = $validated['tax_type'] ?? 'exclusive';
+        $taxAmount = '0.00';
+        $totalAmount = $subtotal;
+
+        if ($taxRate > 0) {
+            if ($taxType === 'exclusive') {
+                $taxAmount = bcmul($subtotal, bcdiv((string) $taxRate, '100', 6), 2);
+                $totalAmount = bcadd($subtotal, $taxAmount, 2);
+            } else {
+                $totalAmount = $subtotal;
+                $taxAmount = bcmul($subtotal, bcdiv((string) $taxRate, bcadd('100', (string) $taxRate, 6), 6), 2);
+                $subtotal = bcsub($totalAmount, $taxAmount, 2);
+            }
+        }
+
         $purchase = Purchase::create([
-            'supplier_id' => $validated['supplier_id'],
+            'person_type' => $personType,
+            'person_id' => $personId,
+            'supplier_id' => $personType === 'supplier' ? $personId : null,
+            'subtotal' => $subtotal,
+            'tax_rate' => $taxRate,
+            'tax_type' => $taxType,
+            'tax_amount' => $taxAmount,
             'total_amount' => $totalAmount,
             'currency' => $validated['currency'],
             'status' => 'pending',
@@ -64,24 +104,40 @@ class PurchaseController extends Controller
 
         $purchase->purchaseItems()->createMany($purchaseItems);
 
-        return redirect()->route('purchases.index')->with('success', 'خرید په بریالیتوب سره ترسره شو!');
+        return redirect()->route('purchases.index')->with('success', __('messages.purchase_created'));
     }
 
     public function show(Purchase $purchase)
     {
         $purchase->load('supplier', 'purchaseItems.product.unit', 'purchasePayments');
-        return view('purchases.show', compact('purchase'));
+        $company = [
+            'name' => Setting::get('company_name', 'My Business'),
+            'address' => Setting::get('company_address', ''),
+            'phone' => Setting::get('company_phone', ''),
+            'tax_id' => Setting::get('tax_id', ''),
+        ];
+        return view('purchases.show', compact('purchase', 'company'));
     }
 
     public function status(Purchase $purchase, $status)
     {
         $allowed = ['pending', 'processing', 'completed', 'cancelled'];
         if (!in_array($status, $allowed)) {
-            return back()->with('error', 'ناقص حالت!');
+            return back()->with('error', __('messages.invalid_status'));
+        }
+
+        if ($purchase->status === 'cancelled' && $status !== 'cancelled') {
+            return back()->with('error', __('messages.invalid_status'));
+        }
+
+        if ($status === 'cancelled' && $purchase->status !== 'cancelled') {
+            foreach ($purchase->purchaseItems as $item) {
+                $item->product->decrement('stock', $item->quantity);
+            }
         }
 
         $purchase->update(['status' => $status]);
-        return redirect()->route('purchases.show', $purchase)->with('success', 'د خرید حالت بدل شو!');
+        return redirect()->route('purchases.show', $purchase)->with('success', __('messages.purchase_status_changed'));
     }
 
     public function paymentStore(Request $request)
@@ -97,7 +153,7 @@ class PurchaseController extends Controller
 
         PurchasePayment::create($validated);
 
-        return redirect()->route('purchases.show', $purchase)->with('success', 'پیسې په بریالیتوب سره ثبت شوې!');
+        return redirect()->route('purchases.show', $purchase)->with('success', __('messages.payment_created'));
     }
 
     public function destroy(Purchase $purchase)
@@ -106,6 +162,6 @@ class PurchaseController extends Controller
             $item->product->decrement('stock', $item->quantity);
         }
         $purchase->delete();
-        return redirect()->route('purchases.index')->with('success', 'خرید په بریالیتوب سره ړنګ شو!');
+        return redirect()->route('purchases.index')->with('success', __('messages.purchase_deleted'));
     }
 }

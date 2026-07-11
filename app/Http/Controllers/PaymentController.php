@@ -8,24 +8,34 @@ use App\Models\Customer;
 use App\Models\Supplier;
 use App\Models\Purchase;
 use App\Models\PurchasePayment;
-use App\Models\LedgerEntry;
+use App\Models\PartyPayment;
 use Illuminate\Http\Request;
 
 class PaymentController extends Controller
 {
     public function index()
     {
-        // Money received from sales (customer payments) - existing + ledger
-        $incomingAFN = Payment::where('currency', 'AFN')->sum('amount')
-            + LedgerEntry::where('currency', 'AFN')->where('type', 'payment_received')->sum('amount');
-        $incomingUSD = Payment::where('currency', 'USD')->sum('amount')
-            + LedgerEntry::where('currency', 'USD')->where('type', 'payment_received')->sum('amount');
+        // Money received from sales (customer payments) via the structured Payment table.
+        $incomingAFN = Payment::where('currency', 'AFN')->sum('amount');
+        $incomingUSD = Payment::where('currency', 'USD')->sum('amount');
 
-        // Money paid out for purchases (supplier payments) - existing + ledger
-        $outgoingAFN = PurchasePayment::where('currency', 'AFN')->sum('amount')
-            + LedgerEntry::where('currency', 'AFN')->where('type', 'payment_made')->sum('amount');
-        $outgoingUSD = PurchasePayment::where('currency', 'USD')->sum('amount')
-            + LedgerEntry::where('currency', 'USD')->where('type', 'payment_made')->sum('amount');
+        // Money paid out for purchases (supplier payments) via the structured PurchasePayment table.
+        $outgoingAFN = PurchasePayment::where('currency', 'AFN')->sum('amount');
+        $outgoingUSD = PurchasePayment::where('currency', 'USD')->sum('amount');
+
+        // Direct party payments recorded via the ledger (not linked to a document) must also be
+        // counted, otherwise the totals ignore payments that are listed in "Recent transactions"
+        // (a payment_received is inflow, a payment_made is outflow). These are disjoint from the
+        // document-linked Payment / PurchasePayment rows in normal use, so no double counting.
+        $ledgerInAFN  = PartyPayment::where('type', 'payment_received')->where('currency', 'AFN')->sum('amount');
+        $ledgerInUSD  = PartyPayment::where('type', 'payment_received')->where('currency', 'USD')->sum('amount');
+        $ledgerOutAFN = PartyPayment::where('type', 'payment_made')->where('currency', 'AFN')->sum('amount');
+        $ledgerOutUSD = PartyPayment::where('type', 'payment_made')->where('currency', 'USD')->sum('amount');
+
+        $incomingAFN += $ledgerInAFN;
+        $incomingUSD += $ledgerInUSD;
+        $outgoingAFN += $ledgerOutAFN;
+        $outgoingUSD += $ledgerOutUSD;
 
         // Wallet balance
         $balanceAFN = $incomingAFN - $outgoingAFN;
@@ -39,7 +49,7 @@ class PaymentController extends Controller
                     'type' => 'incoming',
                     'amount' => $p->amount,
                     'currency' => $p->currency,
-                    'description' => $p->order?->customer?->name . ' - امر #' . $p->order_id,
+                    'description' => ($p->order?->party?->name ?? __('messages.unknown')) . ' - ' . __('messages.order') . ' #' . $p->order_id,
                     'notes' => $p->notes,
                     'date' => $p->created_at,
                 ];
@@ -52,14 +62,14 @@ class PaymentController extends Controller
                     'type' => 'outgoing',
                     'amount' => $p->amount,
                     'currency' => $p->currency,
-                    'description' => $p->purchase?->supplier?->name . ' - خرید #' . $p->purchase_id,
+                    'description' => ($p->purchase?->party?->name ?? __('messages.unknown')) . ' - ' . __('messages.purchase') . ' #' . $p->purchase_id,
                     'notes' => $p->notes,
                     'date' => $p->created_at,
                 ];
             });
 
         // Ledger transactions
-        $ledgerEntries = LedgerEntry::get();
+        $ledgerEntries = PartyPayment::get();
         // Load person names efficiently based on person_type
         $customerIds = $ledgerEntries->where('person_type', 'customer')->pluck('person_id')->unique();
         $supplierIds = $ledgerEntries->where('person_type', 'supplier')->pluck('person_id')->unique();
@@ -68,15 +78,15 @@ class PaymentController extends Controller
         
         $ledgerTransactions = $ledgerEntries->map(function ($entry) use ($customerNames, $supplierNames) {
             $personName = $entry->person_type === 'customer' 
-                ? ($customerNames[$entry->person_id] ?? 'نامعلوم')
-                : ($supplierNames[$entry->person_id] ?? 'نامعلوم');
+                ? ($customerNames[$entry->person_id] ?? __('messages.unknown'))
+                : ($supplierNames[$entry->person_id] ?? __('messages.unknown'));
             $typeLabel = $entry->type === 'payment_received' ? 'incoming' : 'outgoing';
             return [
                 'type' => $typeLabel,
                 'amount' => $entry->amount,
                 'currency' => $entry->currency,
-                'description' => $personName . ' (روزنامچه)',
-                'notes' => ($entry->notes ? $entry->notes : '') . ' - روزنامچه',
+                'description' => $personName . ' (' . __('messages.ledger_close') . ')',
+                'notes' => ($entry->notes ? $entry->notes : '') . ' - ' . __('messages.ledger'),
                 'date' => $entry->created_at,
             ];
         });
@@ -88,11 +98,29 @@ class PaymentController extends Controller
             ->values()
             ->take(50);
 
+        // Outstanding balances: receivables (orders — both customer and supplier) and
+        // payables (purchases). These were previously absent from the payments page, so
+        // supplier-created orders never showed up here.
+        $receivables = Order::with(['customer', 'supplier'])
+            ->where('status', '!=', 'cancelled')
+            ->get()
+            ->filter(fn($o) => $o->remaining_amount > 0)
+            ->sortByDesc('created_at')
+            ->values();
+
+        $payables = Purchase::with('supplier')
+            ->where('status', '!=', 'cancelled')
+            ->get()
+            ->filter(fn($p) => $p->remaining_amount > 0)
+            ->sortByDesc('created_at')
+            ->values();
+
         return view('payments.index', compact(
             'incomingAFN', 'incomingUSD',
             'outgoingAFN', 'outgoingUSD',
             'balanceAFN', 'balanceUSD',
-            'transactions'
+            'transactions',
+            'receivables', 'payables'
         ));
     }
 
@@ -118,13 +146,13 @@ class PaymentController extends Controller
         $order = Order::findOrFail($validated['order_id']);
         
         if ($validated['amount'] > $order->remaining_amount) {
-            $symbol = $order->currency === 'USD' ? '$' : 'افغ';
-            return back()->with('error', 'د پیسو اندازه د پاتې پیسو څخه زیاته ده! (پاتې: ' . number_format($order->remaining_amount) . ' ' . $symbol . ')');
+            $symbol = $order->currency === 'USD' ? '$' : __('messages.afn');
+            return back()->with('error', __('messages.payment_exceeds_balance') . ' (' . __('messages.pending') . ': ' . number_format($order->remaining_amount) . ' ' . $symbol . ')');
         }
 
         Payment::create($validated);
 
-        return redirect()->route('payments.index')->with('success', 'پیسې په بریالیتوب سره ثبت شوې!');
+        return redirect()->route('payments.index')->with('success', __('messages.payment_created'));
     }
 
     public function show(Order $order)
@@ -136,7 +164,7 @@ class PaymentController extends Controller
     public function destroy(Payment $payment)
     {
         $payment->delete();
-        return redirect()->route('payments.index')->with('success', 'د پیسو ثبت ړنګ شو!');
+        return redirect()->route('payments.index')->with('success', __('messages.payment_deleted'));
     }
 
     public function customerPaymentsPage()
@@ -150,7 +178,7 @@ class PaymentController extends Controller
         $paymentsData = $payments->map(function ($payment) {
             return [
                 'id' => $payment->id,
-                'customer_name' => $payment->order->customer ? $payment->order->customer->name : 'Unknown',
+                'customer_name' => $payment->order->party ? $payment->order->party->name : 'Unknown',
                 'order_id' => $payment->order_id,
                 'amount' => $payment->amount,
                 'currency' => $payment->currency,

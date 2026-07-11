@@ -4,6 +4,507 @@
 @source '../../storage/framework/views/*.php';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    /* ============================================
+       TYPOGRAPHY
+       ============================================ */
+    --font-sans: 'Plus Jakarta Sans', 'Vazirmatn', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Plus Jakarta Sans', 'Vazirmatn', ui-sans-serif, system-ui, sans-serif;
+
+    /* ============================================
+       BRAND ACCENT — muted, premium emerald
+       (single restrained accent, not a rainbow)
+       ============================================ */
+    --color-primary-50: #eaf6f1;
+    --color-primary-100: #d2ede2;
+    --color-primary-200: #a6dcc8;
+    --color-primary-300: #6fc3a6;
+    --color-primary-400: #3fae89;
+    --color-primary-500: #0f9d72;
+    --color-primary-600: #0b7d5b;
+    --color-primary-700: #0a6349;
+    --color-primary-800: #0a4f3b;
+    --color-primary-900: #083d2e;
+
+    /* Secondary (indigo) — semantic status only */
+    --color-secondary-50: #eef2ff;
+    --color-secondary-100: #e0e7ff;
+    --color-secondary-200: #c7d2fe;
+    --color-secondary-300: #a5b4fc;
+    --color-secondary-400: #818cf8;
+    --color-secondary-500: #6366f1;
+    --color-secondary-600: #4f46e5;
+    --color-secondary-700: #4338ca;
+    --color-secondary-800: #3730a3;
+    --color-secondary-900: #312e81;
+
+    /* Accent (amber) — semantic status only */
+    --color-accent-50: #fffbeb;
+    --color-accent-100: #fef3c7;
+    --color-accent-200: #fde68a;
+    --color-accent-300: #fcd34d;
+    --color-accent-400: #fbbf24;
+    --color-accent-500: #f59e0b;
+    --color-accent-600: #d97706;
+    --color-accent-700: #b45309;
+    --color-accent-800: #92400e;
+    --color-accent-900: #78350f;
+
+    /* Danger (red) — semantic status only */
+    --color-danger-50: #fef2f2;
+    --color-danger-100: #fee2e2;
+    --color-danger-200: #fecaca;
+    --color-danger-300: #fca5a5;
+    --color-danger-400: #f87171;
+    --color-danger-500: #ef4444;
+    --color-danger-600: #dc2626;
+    --color-danger-700: #b91c1c;
+    --color-danger-800: #991b1b;
+    --color-danger-900: #7f1d1d;
+
+    /* ============================================
+       NEUTRAL "INK" SCALE — the structural backbone
+       ============================================ */
+    --color-ink-50: #fafafb;
+    --color-ink-100: #f4f5f7;
+    --color-ink-200: #e8eaed;
+    --color-ink-300: #d2d6db;
+    --color-ink-400: #9aa1ac;
+    --color-ink-500: #6b7280;
+    --color-ink-600: #4b5563;
+    --color-ink-700: #374151;
+    --color-ink-800: #1f2329;
+    --color-ink-900: #111418;
+
+    /* Brand + surfaces */
+    --color-brand: #0f9d72;
+    --color-brand-hover: #0b7d5b;
+    --color-surface: #f7f8fa;
+    --color-surface-dark: #0b0c0e;
+    --color-surface-raised: #16181c;
+    --color-surface-raised-2: #1e2127;
+
+    /* Motion — calm, premium easing (no overshoot) */
+    --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Elevation — subtle, layered, not glossy */
+    --shadow-card: 0 1px 2px 0 rgb(17 20 24 / 0.04), 0 1px 3px 0 rgb(17 20 24 / 0.06);
+    --shadow-card-hover: 0 4px 12px -2px rgb(17 20 24 / 0.08), 0 2px 6px -2px rgb(17 20 24 / 0.05);
+    --shadow-nav: 0 -1px 0 0 rgb(17 20 24 / 0.04), 0 -4px 16px -4px rgb(17 20 24 / 0.08);
+    --shadow-nav-dark: 0 -1px 0 0 rgb(255 255 255 / 0.04), 0 -8px 24px -8px rgb(0 0 0 / 0.5);
+    --shadow-btn: 0 1px 2px 0 rgb(11 125 91 / 0.18);
+    --shadow-fab: 0 6px 20px -4px rgb(11 125 91 / 0.45);
+}
+
+@layer base {
+    html {
+        scroll-behavior: smooth;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        /* Tabular figures for clean money alignment across the app */
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Consistent, accessible focus ring */
+    :focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--color-surface, #fff), 0 0 0 4px var(--color-brand);
+        border-radius: 0.625rem;
+    }
+
+    @media (max-width: 767px) {
+        a,
+        button,
+        select,
+        input[type='submit'] {
+            min-height: 44px;
+        }
+        a,
+        button {
+            cursor: default;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.001ms !important;
+            transition-duration: 0.001ms !important;
+        }
+    }
+}
+
+/* ============================================
+   CARDS / SURFACES
+   ============================================ */
+
+@utility card {
+    @apply bg-white dark:bg-[#16181c] rounded-2xl border border-ink-100 dark:border-white/[0.06];
+    box-shadow: var(--shadow-card);
+    transition:
+        box-shadow 0.25s var(--ease-smooth),
+        border-color 0.25s var(--ease-smooth),
+        transform 0.25s var(--ease-smooth);
+    /* Visible lift on hover so every .card feels interactive */
+    &:hover {
+        box-shadow: var(--shadow-card-hover);
+        transform: translateY(-2px);
+        @apply border-primary-200 dark:border-primary-400/30;
+    }
+}
+
+@utility card-hover {
+    &:hover {
+        box-shadow: var(--shadow-card-hover);
+        transform: translateY(-2px);
+        @apply border-primary-200 dark:border-primary-400/30;
+    }
+}
+
+@utility card-glass {
+    @apply backdrop-blur-xl bg-white/70 dark:bg-[#16181c]/70 border border-white/40 dark:border-white/[0.06] rounded-2xl;
+    box-shadow: var(--shadow-card);
+}
+
+@utility stat-card {
+    @apply card p-4 relative overflow-hidden;
+}
+
+/* ============================================
+   CARD STYLE VARIATIONS — Minimalist · Glass · Material
+   Defined as plain global CSS (NOT @utility) so Tailwind's tree-shaking
+   never purges them. They use the project's token CSS variables and are
+   safe to apply to any element. Dark mode via prefers-color-scheme.
+   ============================================ */
+
+/* Responsive grid for arranging cards */
+.card-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+}
+
+/* A — MINIMALIST: flat, hairline border, almost no shadow */
+.card-minimal {
+    background: #fff;
+    border-radius: 1rem;
+    border: 1px solid #e8eaed;
+    box-shadow: none;
+    transition:
+        border-color 0.25s var(--ease-smooth),
+        transform 0.25s var(--ease-smooth);
+}
+.card-minimal-hover:hover {
+    border-color: #a6dcc8;
+    transform: translateY(-2px);
+}
+
+/* B — GLASS (richer hover on top of .card-glass) */
+.card-glass-hover:hover {
+    border-color: rgba(255, 255, 255, 0.7);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-card-hover);
+}
+
+/* C — MATERIAL: layered elevation + brand accent bar */
+.card-material {
+    background: #fff;
+    border-radius: 1rem;
+    overflow: hidden;
+    position: relative;
+    box-shadow: var(--shadow-card-hover);
+    transition:
+        box-shadow 0.25s var(--ease-smooth),
+        transform 0.25s var(--ease-smooth);
+}
+.card-material::before {
+    content: '';
+    display: block;
+    height: 4px;
+    width: 100%;
+    background: linear-gradient(90deg, var(--color-brand), var(--color-primary-400));
+}
+.card-material-hover:hover {
+    box-shadow:
+        0 18px 40px -12px rgb(17 20 24 / 0.22),
+        0 8px 16px -8px rgb(17 20 24 / 0.14);
+    transform: translateY(-3px);
+}
+
+@media (prefers-color-scheme: dark) {
+    .card-minimal {
+        background: #16181c;
+        border-color: rgba(255, 255, 255, 0.08);
+    }
+    .card-minimal-hover:hover {
+        border-color: rgba(63, 174, 137, 0.4);
+    }
+    .card-material {
+        background: #1e2127;
+    }
+    .card-material-hover:hover {
+        box-shadow:
+            0 18px 40px -12px rgb(0 0 0 / 0.6),
+            0 8px 16px -8px rgb(0 0 0 / 0.45);
+    }
+}
+
+/* ============================================
+   STATUS BADGES
+   ============================================ */
+
+@utility badge {
+    @apply inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full transition-all duration-200;
+}
+
+@utility badge-success {
+    @apply badge bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700/50;
+}
+
+@utility badge-warning {
+    @apply badge bg-accent-50 dark:bg-accent-900/30 text-accent-700 dark:text-accent-300 border border-accent-200 dark:border-accent-700/50;
+}
+
+@utility badge-danger {
+    @apply badge bg-danger-50 dark:bg-danger-900/30 text-danger-700 dark:text-danger-300 border border-danger-200 dark:border-danger-700/50;
+}
+
+@utility badge-info {
+    @apply badge bg-secondary-50 dark:bg-secondary-900/30 text-secondary-700 dark:text-secondary-300 border border-secondary-200 dark:border-secondary-700/50;
+}
+
+/* ============================================
+   ACTION CARDS — neutralized to a single quiet style
+   (was 6 multicolor variants; now one calm surface)
+   ============================================ */
+
+@utility action-card {
+    @apply flex flex-col items-center justify-center gap-2 p-4 rounded-2xl text-center
+           bg-ink-50 dark:bg-white/[0.03] text-ink-700 dark:text-ink-200
+           border border-ink-200/70 dark:border-white/[0.06]
+           transition-all duration-200 active:scale-[0.97];
+}
+
+/* action-card color variants removed (all identical to .action-card) */
+
+/* ============================================
+   METRIC TILES
+   ============================================ */
+
+@utility metric-tile {
+    @apply flex flex-col gap-1.5 p-4 rounded-xl bg-white dark:bg-[#1e2127]
+           border border-ink-100 dark:border-white/[0.06];
+}
+
+@utility metric-value {
+    @apply text-lg font-bold text-ink-900 dark:text-white tabular-nums;
+}
+
+@utility metric-label {
+    @apply text-[11px] font-medium text-ink-500 dark:text-ink-400 uppercase tracking-wider;
+}
+
+/* ============================================
+   FORM ELEMENTS
+   ============================================ */
+
+@utility form-input {
+    @apply w-full px-4 py-3 rounded-xl text-sm bg-ink-50 dark:bg-white/[0.04]
+           border border-ink-200 dark:border-white/[0.08]
+           text-ink-900 dark:text-ink-100 placeholder-ink-400 dark:placeholder-ink-500
+           focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400
+           transition-all duration-200;
+}
+
+@utility form-label {
+    @apply text-xs font-semibold text-ink-500 dark:text-ink-400 uppercase tracking-wider mb-1.5 block;
+}
+
+@utility form-select {
+    @apply form-input appearance-none cursor-pointer;
+}
+
+/* Solid brand button (no gradient) */
+@utility btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm font-bold text-white
+           bg-brand transition-all duration-200 active:scale-[0.98] hover:bg-brand-hover;
+    box-shadow: var(--shadow-btn);
+}
+
+/* btn-primary-hover removed (unused) */
+
+@utility btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold
+           text-ink-700 dark:text-ink-200 bg-ink-100 dark:bg-white/[0.06]
+           border border-ink-200 dark:border-white/[0.08]
+           transition-all duration-200 active:scale-[0.97] hover:bg-ink-200 dark:hover:bg-white/[0.1];
+}
+
+@utility btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white
+           bg-danger-500 transition-all duration-200 active:scale-[0.97];
+}
+
+@utility btn-sm {
+    @apply px-3 py-2 text-xs rounded-lg;
+}
+
+/* ============================================
+   BOTTOM NAVIGATION
+   ============================================ */
+
+@utility nav-item {
+    @apply flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 text-[10px] font-semibold
+           text-ink-400 dark:text-ink-500 transition-all duration-200 relative;
+}
+
+@utility nav-item-active {
+    @apply text-primary-600 dark:text-primary-400;
+}
+
+/* Single sliding active-nav pill (positioned by app.js) */
+@utility nav-pill {
+    @apply absolute bottom-1.5 left-0 h-0.5 w-[22px] rounded-full bg-primary-500 dark:bg-primary-400;
+    transition: transform 0.35s var(--ease-smooth), opacity 0.3s var(--ease-smooth);
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ============================================
+   TOAST / FLASH
+   ============================================ */
+
+@utility toast {
+    @apply relative w-full max-w-md mx-auto pointer-events-auto;
+    animation: slideDown 0.35s var(--ease-smooth) both;
+}
+
+/* Fixed stack so multiple toasts queue vertically instead of overlapping */
+@utility toast-stack {
+    @apply fixed top-4 left-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none;
+}
+
+/* Exit animation for auto-dismiss */
+.toast-leaving {
+    animation: slideUp 0.3s var(--ease-smooth) both;
+}
+@keyframes slideUp {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(-120%);
+        opacity: 0;
+    }
+}
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* ============================================
+   PAGE / LIST TRANSITIONS — calm ease, no overshoot
+   ============================================ */
+
+@utility page-enter {
+    animation: fadeUp 0.4s var(--ease-smooth) both;
+}
+@keyframes fadeUp {
+    from {
+        transform: translateY(8px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@utility list-item-enter {
+    animation: fadeUp 0.4s var(--ease-smooth) both;
+}
+/* list-item-delay-* removed (unused) */
+
+/* ============================================
+   STATUS INDICATORS / CHARTS / HEADERS
+   ============================================ */
+
+@utility status-dot {
+    @apply w-1.5 h-1.5 rounded-full inline-block;
+}
+
+@utility chart-container {
+    @apply card p-4;
+}
+
+@utility page-header {
+    @apply flex items-center justify-between mb-5;
+}
+
+@utility section-title {
+    @apply text-sm font-bold text-ink-800 dark:text-ink-100 mb-3;
+}
+
+@utility empty-state {
+    @apply flex flex-col items-center justify-center py-10 px-6 text-center;
+}
+
+/* ============================================
+   LIST ROW
+   ============================================ */
+
+@utility list-row {
+    @apply flex items-center justify-between px-4 py-3.5 transition-colors duration-200
+           hover:bg-ink-50 dark:hover:bg-white/[0.03] active:bg-ink-100 dark:active:bg-white/[0.05];
+}
+
+/* ============================================
+   SECTION HEADER WITH ICON
+   ============================================ */
+
+@utility section-header {
+    @apply flex items-center gap-2 px-4 py-3 border-b border-ink-100 dark:border-white/[0.06];
+}
+
+@utility section-header-title {
+    @apply text-xs font-bold text-ink-500 dark:text-ink-400 uppercase tracking-wider;
+}
+
+/* ============================================
+   NEW: SKELETON LOADER (Phase 4)
+   ============================================ */
+
+/* skeleton + shimmer removed (unused) */
+
+/* ============================================
+   NEW: SEGMENTED CONTROL (Phase 4)
+   ============================================ */
+
+/* Segmented control (currency toggle, etc.) */
+@utility segmented {
+    @apply inline-flex w-full p-1 rounded-xl bg-ink-100 dark:bg-white/[0.05]
+           border border-ink-200/70 dark:border-white/[0.06];
+}
+
+@utility segmented-item {
+    @apply flex-1 text-center px-3 py-2 text-xs font-semibold rounded-lg text-ink-500 dark:text-ink-400
+           transition-all duration-200 cursor-pointer;
+}
+
+@utility segmented-item-active {
+    @apply bg-white dark:bg-white/10 text-ink-900 dark:text-white shadow-sm;
 }

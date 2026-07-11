@@ -26,7 +26,7 @@ class CategoryController extends Controller
 
         Category::create($validated);
 
-        return redirect()->route('categories.index')->with('success', 'کتګوري په بریالیتوب سره اضافه شوه!');
+        return redirect()->route('categories.index')->with('success', __('messages.category_created'));
     }
 
     public function edit(Category $category)
@@ -42,15 +42,15 @@ class CategoryController extends Controller
 
         $category->update($validated);
 
-        return redirect()->route('categories.index')->with('success', 'کتګوري په بریالیتوب سره سمه شوه!');
+        return redirect()->route('categories.index')->with('success', __('messages.category_updated'));
     }
 
     public function destroy(Category $category)
     {
         if ($category->products()->count() > 0) {
-            return redirect()->route('categories.index')->with('error', 'دې کتګورۍ سره محصولات تړلي دي، لومړی هغه ړنګ کړئ!');
+            return redirect()->route('categories.index')->with('error', __('messages.category_has_products'));
         }
         $category->delete();
-        return redirect()->route('categories.index')->with('success', 'کتګوري په بریالیتوب سره ړنګه شوه!');
+        return redirect()->route('categories.index')->with('success', __('messages.category_deleted'));
     }
 }

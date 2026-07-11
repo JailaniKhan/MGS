@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\Payment;
-use App\Models\LedgerEntry;
+use App\Models\PartyPayment;
 use Illuminate\Http\Request;
 
 class CustomerController extends Controller
@@ -30,7 +30,7 @@ class CustomerController extends Controller
 
         Customer::create($validated);
 
-        return redirect()->route('customers.index')->with('success', 'ګیراک په بریالیتوب سره اضافه شو!');
+        return redirect()->route('customers.index')->with('success', __('messages.customer_created'));
     }
 
     public function show(Customer $customer)
@@ -46,13 +46,13 @@ class CustomerController extends Controller
             $q->where('customer_id', $customer->id);
         })->where('currency', 'USD')->sum('amount');
 
-        $ledgerPaymentsAFN = LedgerEntry::where('person_type', 'customer')
+        $ledgerPaymentsAFN = PartyPayment::where('person_type', 'customer')
             ->where('person_id', $customer->id)
             ->where('currency', 'AFN')
             ->where('type', 'payment_received')
             ->sum('amount');
             
-        $ledgerPaymentsUSD = LedgerEntry::where('person_type', 'customer')
+        $ledgerPaymentsUSD = PartyPayment::where('person_type', 'customer')
             ->where('person_id', $customer->id)
             ->where('currency', 'USD')
             ->where('type', 'payment_received')
@@ -83,12 +83,12 @@ class CustomerController extends Controller
 
         $customer->update($validated);
 
-        return redirect()->route('customers.index')->with('success', 'ګیراک په بریالیتوب سره سم شو!');
+        return redirect()->route('customers.index')->with('success', __('messages.customer_updated'));
     }
 
     public function destroy(Customer $customer)
     {
         $customer->delete();
-        return redirect()->route('customers.index')->with('success', 'ګیراک په بریالیتوب سره ړنګ شو!');
+        return redirect()->route('customers.index')->with('success', __('messages.customer_deleted'));
     }
 }
