@@ -27,12 +27,10 @@ class AccountController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'type' => 'required|in:customer,supplier,bank,cash,income,expense',
+            'type' => 'required|in:customer,supplier,cash,income,expense',
             'phone' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:500',
             'currency' => 'required|in:AFN,USD',
-            'bank_name' => 'nullable|string|max:255',
-            'account_number' => 'nullable|string|max:100',
         ]);
 
         $account = $chartOfAccounts->createPartyAccount(
@@ -44,19 +42,12 @@ class AccountController extends Controller
             $validated['currency'],
         );
 
-        if ($validated['type'] === 'bank' && ! empty($validated['bank_name'])) {
-            $account->bankDetails()->create([
-                'bank_name' => $validated['bank_name'],
-                'account_number' => $validated['account_number'] ?? null,
-            ]);
-        }
-
-        return new AccountResource($account->load('bankDetails'));
+        return new AccountResource($account);
     }
 
     public function show(Account $account)
     {
-        return new AccountResource($account->load('bankDetails'));
+        return new AccountResource($account);
     }
 
     public function update(Request $request, Account $account)

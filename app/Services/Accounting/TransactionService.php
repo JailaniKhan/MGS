@@ -202,23 +202,6 @@ class TransactionService
         ]));
     }
 
-    public function postBankTransfer(User $user, Account $fromAccount, Account $toAccount, string $amount, array $meta = []): JournalEntry
-    {
-        if ($fromAccount->currency !== $toAccount->currency) {
-            throw new InvalidArgumentException('Transfer accounts must share the same currency.');
-        }
-
-        return $this->post([
-            ['account_id' => $toAccount->id, 'direction' => 'debit', 'amount' => $amount, 'notes' => $meta['notes'] ?? null],
-            ['account_id' => $fromAccount->id, 'direction' => 'credit', 'amount' => $amount],
-        ], array_merge($meta, [
-            'user_id' => $user->id,
-            'currency' => $fromAccount->currency,
-            'source' => 'bank_transfer',
-            'audit_action' => 'bank.transfer',
-        ]));
-    }
-
     /**
      * @param  array<int, array{account_uuid: string, direction: string, amount: string|float, notes?: string|null}>  $lines
      */

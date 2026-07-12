@@ -16,7 +16,6 @@ use App\Http\Controllers\OrderReturnController;
 use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\CashbookController;
-use App\Http\Controllers\BankController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\SalaryController;
 
@@ -106,12 +105,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/cashbook', [CashbookController::class, 'store'])->name('cashbook.store');
     Route::get('/cashbook/{type}/{id}', [CashbookController::class, 'person'])->name('cashbook.person');
 
-    // Banks
-    Route::get('/banks', [BankController::class, 'index'])->name('banks.index');
-    Route::get('/banks/create', [BankController::class, 'create'])->name('banks.create');
-    Route::post('/banks', [BankController::class, 'store'])->name('banks.store');
-    Route::post('/banks/transfer', [BankController::class, 'transfer'])->name('banks.transfer');
-
     // Staff
     Route::resource('staff', StaffController::class);
     Route::post('/staff/{employee}/salary', [SalaryController::class, 'store'])->name('staff.salary.store');
@@ -120,10 +113,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/reminders/customer/{customer}', [App\Http\Controllers\ReminderController::class, 'sendCustomerReminder'])->name('reminders.customer');
     Route::post('/reminders/supplier/{supplier}', [App\Http\Controllers\ReminderController::class, 'sendSupplierReminder'])->name('reminders.supplier');
     Route::get('/reminders', [App\Http\Controllers\ReminderController::class, 'history'])->name('reminders.history');
-
-    // Business Card
-    Route::get('/business-card', [App\Http\Controllers\BusinessCardController::class, 'index'])->name('business-card.index');
-    Route::post('/business-card/share-whatsapp', [App\Http\Controllers\BusinessCardController::class, 'shareWhatsApp'])->name('business-card.share-whatsapp');
 
     // Digital Passbook
     Route::get('/passbook', [App\Http\Controllers\PassbookController::class, 'index'])->name('passbook.index');

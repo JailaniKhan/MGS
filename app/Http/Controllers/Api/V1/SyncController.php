@@ -18,7 +18,7 @@ class SyncController extends Controller
             'accounts' => 'nullable|array',
             'accounts.*.uuid' => 'required|uuid',
             'accounts.*.name' => 'required|string|max:255',
-            'accounts.*.type' => 'required|in:customer,supplier,bank,cash,income,expense',
+             'accounts.*.type' => 'required|in:customer,supplier,cash,income,expense',
             'accounts.*.phone' => 'nullable|string|max:50',
             'accounts.*.address' => 'nullable|string|max:500',
             'accounts.*.currency' => 'required|in:AFN,USD',

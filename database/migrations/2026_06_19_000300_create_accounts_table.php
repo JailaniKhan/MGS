@@ -13,7 +13,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->uuid('uuid')->unique();
             $table->string('name');
-            $table->enum('type', ['customer', 'supplier', 'bank', 'cash', 'income', 'expense']);
+            $table->enum('type', ['customer', 'supplier', 'cash', 'income', 'expense']);
             $table->string('phone')->nullable();
             $table->string('address')->nullable();
             $table->string('currency', 3)->default('AFN');

@@ -17,11 +17,6 @@ class AccountResource extends JsonResource
             'phone' => $this->phone,
             'address' => $this->address,
             'currency' => $this->currency,
-            'bank_details' => $this->whenLoaded('bankDetails', fn () => [
-                'bank_name' => $this->bankDetails?->bank_name,
-                'account_number' => $this->bankDetails?->account_number,
-                'branch' => $this->bankDetails?->branch,
-            ]),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
     }

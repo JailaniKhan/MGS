@@ -36,41 +36,44 @@ class ReportController extends Controller
         $endDate = $request->get('end_date', now()->endOfMonth()->toDateString());
         $currency = $request->get('currency', 'AFN');
 
-        // Total Revenue from completed orders (net of returns)
-        $totalRevenue = Order::where('status', 'completed')
+        $startDateTime = Carbon::parse($startDate)->startOfDay();
+        $endDateTime = Carbon::parse($endDate)->endOfDay();
+
+        // Total Revenue from non-cancelled orders (net of returns)
+        $totalRevenue = Order::where('status', '!=', 'cancelled')
             ->where('currency', $currency)
-            ->whereBetween('created_at', [$startDate, $endDate])
+            ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->sum('total_amount');
         $orderReturns = OrderReturn::where('status', '!=', 'cancelled')
             ->where('currency', $currency)
-            ->whereBetween('return_date', [$startDate, $endDate])
+            ->whereBetween('return_date', [$startDateTime, $endDateTime])
             ->sum('total_amount');
         $totalRevenue = bcsub((string) $totalRevenue, (string) $orderReturns, 2);
 
         // Cost of Goods Sold: cost of inventory actually purchased (net of purchase returns).
         // (Proper per-unit COGS tracking is a future enhancement; this uses purchased cost
         // which is the standard simplification when no sales-level cost is recorded.)
-        $purchasesCost = Purchase::where('status', 'completed')
+        $purchasesCost = Purchase::where('status', '!=', 'cancelled')
             ->where('currency', $currency)
-            ->whereBetween('created_at', [$startDate, $endDate])
+            ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->sum('total_amount');
         $purchaseReturns = PurchaseReturn::where('status', '!=', 'cancelled')
             ->where('currency', $currency)
-            ->whereBetween('return_date', [$startDate, $endDate])
+            ->whereBetween('return_date', [$startDateTime, $endDateTime])
             ->sum('total_amount');
         $totalCOGS = bcsub((string) $purchasesCost, (string) $purchaseReturns, 2);
 
         // Operating expenses
         $cashExpenses = CashbookEntry::where('type', 'out')
             ->where('currency', $currency)
-            ->whereBetween('created_at', [$startDate, $endDate])
+            ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->sum('amount');
         $salaryExpenses = SalaryPayment::where('currency', $currency)
-            ->whereBetween('created_at', [$startDate, $endDate])
+            ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->sum('amount');
         // Include the dedicated Expense table (Fix C4)
         $operatingExpenses = Expense::where('currency', $currency)
-            ->whereBetween('expense_date', [$startDate, $endDate])
+            ->whereBetween('expense_date', [$startDateTime, $endDateTime])
             ->sum('amount');
 
         $totalExpenses = bcadd(bcadd((string) $totalCOGS, (string) $cashExpenses, 2), bcadd((string) $salaryExpenses, (string) $operatingExpenses, 2), 2);
@@ -128,7 +131,7 @@ class ReportController extends Controller
             $avgPurchasePrice = PurchaseItem::where('product_id', $product->id)
                 ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
                 ->where('purchases.currency', $currency)
-                ->where('purchases.status', 'completed')
+                ->where('purchases.status', '!=', 'cancelled')
                 ->avg('purchase_items.unit_price') ?? 0;
             $inventoryValue += $product->stock * $avgPurchasePrice;
         }
@@ -152,6 +155,9 @@ class ReportController extends Controller
         $purchasesCost = Purchase::where('currency', $currency)->where('status', '!=', 'cancelled')->sum('total_amount');
         $purchaseReturns = PurchaseReturn::where('currency', $currency)->where('status', '!=', 'cancelled')->sum('total_amount');
         $cogs = bcsub((string) $purchasesCost, (string) $purchaseReturns, 2);
+        // COGS nets out ending inventory still on hand; otherwise purchases would be counted
+        // both as an expense here and as an asset above (double-counting).
+        $cogs = bcsub($cogs, (string) $inventoryValue, 2);
 
         $operating = bcadd(
             bcadd(
@@ -165,13 +171,22 @@ class ReportController extends Controller
         $totalExpenses = bcadd($cogs, $operating, 2);
         $retainedEarnings = bcsub($totalRevenue, $totalExpenses, 2);
 
-        $totalLiabilitiesEquity = bcadd($payables, $retainedEarnings, 2);
+        // Owner's Capital = net unallocated party payments (cash introduced / withdrawn by the owner).
+        // These are counted in Cash in Hand above but are not operating profit, so they must sit in equity.
+        $ownerCapital = bcsub(
+            (string) PartyPayment::where('currency', $currency)->where('type', 'payment_received')->sum('amount'),
+            (string) PartyPayment::where('currency', $currency)->where('type', 'payment_made')->sum('amount'),
+            2
+        );
+
+        $totalEquity = bcadd($retainedEarnings, $ownerCapital, 2);
+        $totalLiabilitiesEquity = bcadd($payables, $totalEquity, 2);
 
         $selectedCurrency = $currency;
 
         return view('reports.balance_sheet', compact(
             'cashBalance', 'receivables', 'inventoryValue', 'totalAssets',
-            'payables', 'retainedEarnings', 'totalLiabilitiesEquity',
+            'payables', 'retainedEarnings', 'ownerCapital', 'totalLiabilitiesEquity',
             'selectedCurrency'
         ));
     }
@@ -183,17 +198,17 @@ class ReportController extends Controller
 
         $products = Product::with('category')->get();
 
-        $stockData = $products->map(function ($product) use ($currency) {
+        $stockData = $products->map(function ($product) use ($currency, $minStockThreshold) {
             $avgPurchasePrice = PurchaseItem::where('product_id', $product->id)
                 ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
                 ->where('purchases.currency', $currency)
-                ->where('purchases.status', 'completed')
+                ->where('purchases.status', '!=', 'cancelled')
                 ->avg('purchase_items.unit_price') ?? 0;
 
             $avgSalePrice = OrderItem::where('product_id', $product->id)
                 ->join('orders', 'order_items.order_id', '=', 'orders.id')
                 ->where('orders.currency', $currency)
-                ->where('orders.status', 'completed')
+                ->where('orders.status', '!=', 'cancelled')
                 ->avg('order_items.unit_price') ?? 0;
 
             $stockValue = $product->stock * $avgPurchasePrice;
@@ -222,13 +237,14 @@ class ReportController extends Controller
         $startDate = $request->get('start_date', now()->subDays(30)->toDateString());
         $endDate = $request->get('end_date', now()->toDateString());
         $currency = $request->get('currency', 'AFN');
+        $selectedCurrency = $currency;
 
         $transactions = collect();
 
         // Sales (completed orders) — recorded as a non-cash accrual line so they appear in the
         // daybook for reference, but do NOT inflate the cash running balance (Fix M4).
         $sales = Order::with('customer')
-            ->where('status', 'completed')
+            ->where('status', '!=', 'cancelled')
             ->where('currency', $currency)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->get()
@@ -328,10 +344,11 @@ class ReportController extends Controller
         $dailyTotals = collect($dailyTotals)->sortByDesc('date')->values();
 
         $runningBalance = (float) $openingBalance;
-        foreach ($dailyTotals as $index => $day) {
+        $dailyTotals = $dailyTotals->map(function ($day) use (&$runningBalance) {
             $runningBalance += $day['in_total'] - $day['out_total'];
-            $dailyTotals[$index]['running_balance'] = $runningBalance;
-        }
+            $day['running_balance'] = $runningBalance;
+            return $day;
+        });
 
         $totalIn = $transactions->sum('in_amount');
         $totalOut = $transactions->sum('out_amount');
@@ -345,16 +362,22 @@ class ReportController extends Controller
     {
         $currency = $request->get('currency', 'AFN');
 
-        // Customer aging
-        $customerAging = Customer::with(['orders' => function ($q) use ($currency) {
-            $q->where('status', 'completed')
-              ->where('currency', $currency)
-              ->with('payments');
-        }])->get()->map(function ($customer) {
-            $outstandingOrders = $customer->orders->filter(function ($order) {
-                return $order->remaining_amount > 0;
-            })->map(function ($order) {
-                $days = Carbon::parse($order->created_at->toDateString())->diffInDays(now());
+        // Customer aging — based on outstanding orders, grouped by customer.
+        // Orders with no linked customer are grouped as a "Walk-in" customer so they are not dropped.
+        $customerOrders = Order::with(['customer', 'payments'])
+            ->where('status', '!=', 'cancelled')
+            ->where('currency', $currency)
+            ->where('remaining_amount', '>', 0)
+            ->get();
+
+        $customerAging = collect();
+        foreach ($customerOrders->groupBy(fn($o) => $o->customer_id ?? 'walkin') as $key => $orderGroup) {
+            $customer = $key === 'walkin'
+                ? (object) ['name' => __('messages.walk_in_customer')]
+                : ($orderGroup->first()->customer ?? (object) ['name' => __('messages.walk_in_customer')]);
+
+            $mapped = $orderGroup->map(function ($order) {
+                $days = (int) Carbon::parse($order->created_at->toDateString())->diffInDays(now());
                 $bucket = $this->getAgeBucket($days);
 
                 return [
@@ -367,20 +390,18 @@ class ReportController extends Controller
             })->values();
 
             $bucketTotals = ['0-30' => 0, '31-60' => 0, '61-90' => 0, '90+' => 0];
-
-            foreach ($outstandingOrders as $order) {
+            foreach ($mapped as $order) {
                 $bucketTotals[$order['bucket']] += $order['outstanding'];
             }
 
-            $totalOutstanding = array_sum($bucketTotals);
-
-            return [
+            $customerAging->push([
                 'customer' => $customer,
-                'orders' => $outstandingOrders,
+                'orders' => $mapped,
                 'bucket_totals' => $bucketTotals,
-                'total_outstanding' => $totalOutstanding,
-            ];
-        })->filter(fn($item) => $item['total_outstanding'] > 0)->values();
+                'total_outstanding' => array_sum($bucketTotals),
+            ]);
+        }
+        $customerAging = $customerAging->filter(fn($item) => $item['total_outstanding'] > 0)->values();
 
         $customerBucketTotal = [
             '0-30' => $customerAging->sum(fn($c) => $c['bucket_totals']['0-30']),
@@ -389,16 +410,22 @@ class ReportController extends Controller
             '90+' => $customerAging->sum(fn($c) => $c['bucket_totals']['90+']),
         ];
 
-        // Supplier aging
-        $supplierAging = Supplier::with(['purchases' => function ($q) use ($currency) {
-            $q->where('status', 'completed')
-              ->where('currency', $currency)
-              ->with('purchasePayments');
-        }])->get()->map(function ($supplier) {
-            $outstandingPurchases = $supplier->purchases->filter(function ($purchase) {
-                return $purchase->remaining_amount > 0;
-            })->map(function ($purchase) {
-                $days = Carbon::parse($purchase->created_at->toDateString())->diffInDays(now());
+        // Supplier aging — based on outstanding purchases, grouped by supplier.
+        // Purchases with no linked supplier are grouped as a "Walk-in" supplier so they are not dropped.
+        $supplierPurchases = Purchase::with(['supplier', 'purchasePayments'])
+            ->where('status', '!=', 'cancelled')
+            ->where('currency', $currency)
+            ->where('remaining_amount', '>', 0)
+            ->get();
+
+        $supplierAging = collect();
+        foreach ($supplierPurchases->groupBy(fn($p) => $p->supplier_id ?? 'walkin') as $key => $purchaseGroup) {
+            $supplier = $key === 'walkin'
+                ? (object) ['name' => __('messages.walk_in_supplier')]
+                : ($purchaseGroup->first()->supplier ?? (object) ['name' => __('messages.walk_in_supplier')]);
+
+            $mapped = $purchaseGroup->map(function ($purchase) {
+                $days = (int) Carbon::parse($purchase->created_at->toDateString())->diffInDays(now());
                 $bucket = $this->getAgeBucket($days);
 
                 return [
@@ -411,20 +438,18 @@ class ReportController extends Controller
             })->values();
 
             $bucketTotals = ['0-30' => 0, '31-60' => 0, '61-90' => 0, '90+' => 0];
-
-            foreach ($outstandingPurchases as $purchase) {
+            foreach ($mapped as $purchase) {
                 $bucketTotals[$purchase['bucket']] += $purchase['outstanding'];
             }
 
-            $totalOutstanding = array_sum($bucketTotals);
-
-            return [
+            $supplierAging->push([
                 'supplier' => $supplier,
-                'purchases' => $outstandingPurchases,
+                'purchases' => $mapped,
                 'bucket_totals' => $bucketTotals,
-                'total_outstanding' => $totalOutstanding,
-            ];
-        })->filter(fn($item) => $item['total_outstanding'] > 0)->values();
+                'total_outstanding' => array_sum($bucketTotals),
+            ]);
+        }
+        $supplierAging = $supplierAging->filter(fn($item) => $item['total_outstanding'] > 0)->values();
 
         $supplierBucketTotal = [
             '0-30' => $supplierAging->sum(fn($s) => $s['bucket_totals']['0-30']),

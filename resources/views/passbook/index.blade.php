@@ -10,18 +10,18 @@
     <div class="grid grid-cols-2 gap-2 mb-4">
         <div class="stat-card">
             <span class="metric-label">{{ __('messages.total_in') }}</span>
-            <span class="metric-value text-primary-600 dark:text-primary-400">{{ number_format($totalCreditIn) }}</span>
+            <span class="metric-value text-primary-600 dark:text-primary-400">{{ number_format($totalIn) }}</span>
             <span class="text-[9px] text-gray-400">{{ __('messages.afn') }}</span>
-            @if($totalCreditInUSD > 0)
-                <span class="text-[10px] text-primary-500">+ {{ number_format($totalCreditInUSD) }} USD</span>
+            @if($totalInUSD > 0)
+                <span class="text-[10px] text-primary-500">+ {{ number_format($totalInUSD) }} USD</span>
             @endif
         </div>
         <div class="stat-card">
             <span class="metric-label">{{ __('messages.total_out') }}</span>
-            <span class="metric-value text-red-500">{{ number_format($totalCreditOut) }}</span>
+            <span class="metric-value text-red-500">{{ number_format($totalOut) }}</span>
             <span class="text-[9px] text-gray-400">{{ __('messages.afn') }}</span>
-            @if($totalCreditOutUSD > 0)
-                <span class="text-[10px] text-red-400">+ {{ number_format($totalCreditOutUSD) }} USD</span>
+            @if($totalOutUSD > 0)
+                <span class="text-[10px] text-red-400">+ {{ number_format($totalOutUSD) }} USD</span>
             @endif
         </div>
     </div>

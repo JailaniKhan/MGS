@@ -16,7 +16,6 @@ use App\Models\PurchasePayment;
 use App\Models\Expense;
 use App\Models\Employee;
 use App\Models\CashbookEntry;
-use App\Models\BankAccountDetail;
 use App\Models\Category;
 use App\Models\Unit;
 use App\Models\OrderReturn;
@@ -63,16 +62,15 @@ class BackupController extends Controller
             'customers' => Customer::all()->toArray(),
             'suppliers' => Supplier::all()->toArray(),
             'products' => Product::all()->toArray(),
-            'orders' => Order::with('items')->get()->toArray(),
+            'orders' => Order::with('orderItems')->get()->toArray(),
             'order_items' => OrderItem::all()->toArray(),
             'payments' => Payment::all()->toArray(),
-            'purchases' => Purchase::with('items')->get()->toArray(),
+            'purchases' => Purchase::with('purchaseItems')->get()->toArray(),
             'purchase_items' => PurchaseItem::all()->toArray(),
             'purchase_payments' => PurchasePayment::all()->toArray(),
             'expenses' => Expense::all()->toArray(),
             'employees' => Employee::all()->toArray(),
             'cashbook_entries' => CashbookEntry::all()->toArray(),
-            'bank_account_details' => BankAccountDetail::all()->toArray(),
             'categories' => Category::all()->toArray(),
             'units' => Unit::all()->toArray(),
             'order_returns' => OrderReturn::with('items')->get()->toArray(),

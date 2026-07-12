@@ -54,6 +54,7 @@
                 <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ __('messages.capital_with_paren') }}</h3>
             </div>
         </div>
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700/30"><span class="text-sm text-gray-700 dark:text-gray-300">{{ __('messages.owner_capital') }}</span><span class="text-sm font-semibold">{{ number_format($ownerCapital, 2) }} {{ $selectedCurrency === 'USD' ? '$' : __('messages.afn') }}</span></div>
         <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700/30"><span class="text-sm text-gray-700 dark:text-gray-300">{{ __('messages.retained_earnings') }}</span><span class="text-sm font-semibold">{{ number_format($retainedEarnings, 2) }} {{ $selectedCurrency === 'USD' ? '$' : __('messages.afn') }}</span></div>
         <div class="flex items-center justify-between px-4 py-3 bg-primary-100 dark:bg-primary-900/20 font-bold"><span class="text-sm">{{ __('messages.total_equity') }} + {{ __('messages.liabilities') }}</span><span class="text-sm">{{ number_format($totalLiabilitiesEquity, 2) }} {{ $selectedCurrency === 'USD' ? '$' : __('messages.afn') }}</span></div>
     </div>

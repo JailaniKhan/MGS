@@ -6,7 +6,6 @@ use App\Models\Concerns\BelongsToUser;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Account extends Model
@@ -44,11 +43,6 @@ class Account extends Model
         return $this->hasMany(LedgerEntry::class);
     }
 
-    public function bankDetails(): HasOne
-    {
-        return $this->hasOne(BankAccountDetail::class);
-    }
-
     public function scopeOfType($query, string $type)
     {
         return $query->where('type', $type);
@@ -69,7 +63,6 @@ class Account extends Model
         return match ($this->type) {
             'customer' => 'ګیراک',
             'supplier' => 'پلورونکی',
-            'bank' => 'بانک',
             'cash' => 'نغد',
             'income' => 'عاید',
             'expense' => 'لګښت',

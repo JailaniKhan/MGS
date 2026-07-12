@@ -24,7 +24,7 @@ class WhatsAppService
         }
 
         $response = Http::withToken($token)
-            ->post("{$$url}/{$phoneNumberId}/messages", [
+            ->post("{$url}/{$phoneNumberId}/messages", [
                 'messaging_product' => 'whatsapp',
                 'to' => $phone,
                 'type' => 'text',

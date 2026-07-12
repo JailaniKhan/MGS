@@ -28,39 +28,38 @@ class SpendBreakdownController extends Controller
             $dateTo = $now->copy()->endOfDay();
         }
 
-        $expenses = Expense::whereBetween('expense_date', [$dateFrom, $dateTo])->get();
+        $expenses = Expense::whereBetween('expense_date', [$dateFrom, $dateTo])
+            ->get()
+            ->filter(fn ($expense) => $expense->expense_date !== null);
 
-        // Group by category
+        // Group by category - keep AFN and USD separate (no blending)
         $byCategory = $expenses->groupBy('category')->map(function ($items, $category) {
-            $afn = $items->where('currency', 'AFN')->sum('amount');
-            $usd = $items->where('currency', 'USD')->sum('amount');
             return [
                 'category' => $category,
                 'count' => $items->count(),
-                'afn' => $afn,
-                'usd' => $usd,
-                'total' => $afn + $usd * 80,
+                'afn' => $items->where('currency', 'AFN')->sum('amount'),
+                'usd' => $items->where('currency', 'USD')->sum('amount'),
             ];
-        })->sortByDesc('total')->values();
+        })->sortByDesc(function ($category) {
+            return max((float) $category['afn'], (float) $category['usd']);
+        })->values();
 
-        $totalExpenses = $byCategory->sum('total');
-        $totalByCurrencyAFN = $expenses->where('currency', 'AFN')->sum('amount');
-        $totalByCurrencyUSD = $expenses->where('currency', 'USD')->sum('amount');
+        $totalAFN = $expenses->where('currency', 'AFN')->sum('amount');
+        $totalUSD = $expenses->where('currency', 'USD')->sum('amount');
 
-        // Daily trend
+        // Daily trend - per currency, no conversion
         $dailyTrend = $expenses->groupBy(function ($item) {
             return $item->expense_date->format('Y-m-d');
         })->map(function ($items, $date) {
-            $afn = $items->where('currency', 'AFN')->sum('amount');
-            $usd = $items->where('currency', 'USD')->sum('amount');
             return [
                 'date' => $date,
-                'total' => $afn + $usd * 80,
+                'afn' => $items->where('currency', 'AFN')->sum('amount'),
+                'usd' => $items->where('currency', 'USD')->sum('amount'),
             ];
         })->sortBy('date')->values();
 
         return view('spend-breakdown.index', compact(
-            'byCategory', 'totalExpenses', 'totalByCurrencyAFN', 'totalByCurrencyUSD',
+            'byCategory', 'totalAFN', 'totalUSD',
             'dailyTrend', 'period', 'dateFrom', 'dateTo'
         ));
     }

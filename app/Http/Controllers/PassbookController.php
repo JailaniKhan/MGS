@@ -7,7 +7,6 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Purchase;
 use App\Models\PurchasePayment;
-use App\Models\PartyPayment;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -107,12 +106,14 @@ class PassbookController extends Controller
         // Sort by date descending
         $transactions = $query->sortByDesc('date')->values();
 
-        // Calculate totals
-        $totalCreditIn = $query->filter(fn($i) => in_array($i['type'], ['credit_in', 'cash_in']) && $i['currency'] === 'AFN')->sum('amount');
-        $totalCreditInUSD = $query->filter(fn($i) => in_array($i['type'], ['credit_in', 'cash_in']) && $i['currency'] === 'USD')->sum('amount');
-        $totalCreditOut = $query->filter(fn($i) => in_array($i['type'], ['credit_out', 'cash_out', 'expense']) && $i['currency'] === 'AFN')->sum('amount');
-        $totalCreditOutUSD = $query->filter(fn($i) => in_array($i['type'], ['credit_out', 'cash_out', 'expense']) && $i['currency'] === 'USD')->sum('amount');
+        // Totals are cash-basis: actual money received vs paid.
+        // Invoices (credit_in/credit_out) are excluded so they are not
+        // counted twice alongside their settlement payments.
+        $totalIn = $query->filter(fn($i) => $i['type'] === 'cash_in' && $i['currency'] === 'AFN')->sum('amount');
+        $totalInUSD = $query->filter(fn($i) => $i['type'] === 'cash_in' && $i['currency'] === 'USD')->sum('amount');
+        $totalOut = $query->filter(fn($i) => in_array($i['type'], ['cash_out', 'expense'], true) && $i['currency'] === 'AFN')->sum('amount');
+        $totalOutUSD = $query->filter(fn($i) => in_array($i['type'], ['cash_out', 'expense'], true) && $i['currency'] === 'USD')->sum('amount');
 
-        return view('passbook.index', compact('transactions', 'filter', 'dateFrom', 'dateTo', 'totalCreditIn', 'totalCreditInUSD', 'totalCreditOut', 'totalCreditOutUSD'));
+        return view('passbook.index', compact('transactions', 'filter', 'dateFrom', 'dateTo', 'totalIn', 'totalInUSD', 'totalOut', 'totalOutUSD'));
     }
 }

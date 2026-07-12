@@ -20,7 +20,7 @@ class ReminderController extends Controller
         ]);
 
         $currency = $validated['currency'] ?? 'AFN';
-        $totalOrders = $customer->orders()->where('currency', $currency)->sum('total_amount');
+        $totalOrders = $customer->orders()->where('currency', $currency)->where('status', '!=', 'cancelled')->sum('total_amount');
 
         $paidPayments = $customer->orders()
             ->where('currency', $currency)
@@ -70,7 +70,7 @@ class ReminderController extends Controller
         ]);
 
         $currency = $validated['currency'] ?? 'AFN';
-        $totalPurchases = $supplier->purchases()->where('currency', $currency)->sum('total_amount');
+        $totalPurchases = $supplier->purchases()->where('currency', $currency)->where('status', '!=', 'cancelled')->sum('total_amount');
 
         $paidPayments = $supplier->purchases()
             ->where('currency', $currency)
@@ -105,6 +105,7 @@ class ReminderController extends Controller
             amount: (string) $amount,
             currency: $currency,
             channel: $validated['channel'],
+            dueDate: now()->addDays(7)->format('Y-m-d'),
         );
 
         return back()->with('success', __('messages.reminder_sent'));

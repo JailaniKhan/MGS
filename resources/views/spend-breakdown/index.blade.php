@@ -33,13 +33,14 @@
     <!-- Summary -->
     <div class="grid grid-cols-2 gap-2 mb-4">
         <div class="stat-card">
-            <span class="metric-label">{{ __('messages.total_expenses') }}</span>
-            <span class="metric-value text-red-500">{{ number_format($totalExpenses) }}</span>
+            <span class="metric-label">{{ __('messages.total_expenses') }} ({{ __('messages.afn') }})</span>
+            <span class="metric-value text-red-500">{{ number_format($totalAFN) }}</span>
             <span class="text-[9px] text-gray-400">{{ __('messages.afn') }}</span>
         </div>
         <div class="stat-card">
-            <span class="metric-label">{{ __('messages.categories') }}</span>
-            <span class="metric-value">{{ $byCategory->count() }}</span>
+            <span class="metric-label">{{ __('messages.total_expenses') }} ({{ __('messages.usd') }})</span>
+            <span class="metric-value text-red-500">{{ number_format($totalUSD) }}</span>
+            <span class="text-[9px] text-gray-400">{{ __('messages.usd') }}</span>
         </div>
     </div>
 
@@ -64,9 +65,16 @@
                         </div>
                     </div>
                     <div class="text-right flex-shrink-0 ml-3">
-                        <div class="text-sm font-bold text-red-500">{{ number_format($cat['total']) }}</div>
+                        <div class="text-sm font-bold text-red-500">
+                            @if($cat['afn'] > 0) {{ number_format($cat['afn']) }} {{ __('messages.afn') }} @endif
+                            @if($cat['usd'] > 0)@if($cat['afn'] > 0) · @endif {{ number_format($cat['usd']) }} {{ __('messages.usd') }} @endif
+                        </div>
+                        @php
+                            $primary = $cat['afn'] > 0 ? $cat['afn'] : $cat['usd'];
+                            $primaryTotal = $totalAFN > 0 ? $totalAFN : $totalUSD;
+                        @endphp
                         <div class="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 mt-1" style="width: 80px;">
-                            <div class="bg-red-400 h-1.5 rounded-full" style="width: {{ $totalExpenses > 0 ? ($cat['total'] / $totalExpenses * 100) : 0 }}%"></div>
+                            <div class="bg-red-400 h-1.5 rounded-full" style="width: {{ $primaryTotal > 0 ? ($primary / $primaryTotal * 100) : 0 }}%"></div>
                         </div>
                     </div>
                 </div>
@@ -113,19 +121,29 @@ document.addEventListener('DOMContentLoaded', function() {
         type: 'bar',
         data: {
             labels: @json($dailyTrend->pluck('date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('d M'))->values()),
-            datasets: [{
-                label: '{{ __('messages.expenses') }}',
-                data: @json($dailyTrend->pluck('total')->values()),
-                backgroundColor: 'rgba(239, 68, 68, 0.5)',
-                borderColor: '#ef4444',
-                borderWidth: 0,
-                borderRadius: 4
-            }]
+            datasets: [
+                {
+                    label: '{{ __('messages.afn') }}',
+                    data: @json($dailyTrend->pluck('afn')->values()),
+                    backgroundColor: 'rgba(239, 68, 68, 0.5)',
+                    borderColor: '#ef4444',
+                    borderWidth: 0,
+                    borderRadius: 4
+                },
+                {
+                    label: '{{ __('messages.usd') }}',
+                    data: @json($dailyTrend->pluck('usd')->values()),
+                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                    borderColor: '#3b82f6',
+                    borderWidth: 0,
+                    borderRadius: 4
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: { legend: { display: true, labels: { font: { size: 9 } } } },
             scales: {
                 y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 9 } } },
                 x: { grid: { display: false }, ticks: { font: { size: 9 } } }
