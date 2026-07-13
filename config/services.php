@@ -38,7 +38,7 @@ return [
     'sms' => [
         'api_key' => env('SMS_API_KEY'),
         'sender' => env('SMS_SENDER', 'MGS'),
-        'url' => env('SMS_URL', 'https://api.easysendsms.com/bulksms'),
+        'url' => env('SMS_URL', 'https://restapi.easysendsms.app/v1/rest/sms/send'),
     ],
 
     'whatsapp' => [
