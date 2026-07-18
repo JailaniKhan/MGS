@@ -34,7 +34,7 @@
             <div class="w-1.5 h-5 rounded-full bg-primary-500"></div>
             <h3 class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.send_reminder') }}</h3>
         </div>
-        <form action="{{ $personType === 'customer' ? route('reminders.customer', $person) : route('reminders.supplier', $person) }}" method="POST" class="space-y-3">
+        <form onsubmit="return submitLedgerReminder(event, '{{ $personType }}', '{{ $person->id }}', '{{ $person->phone }}')" class="space-y-3">
             @csrf
             <div>
                 <label class="form-label">{{ __('messages.channel') }}</label>
@@ -149,3 +149,51 @@
         </form>
     </div>
 @endsection
+
+@push('scripts')
+<script>
+    const ledgerReminderUrls = {
+        customer: '{{ route('reminders.customer', $person) }}',
+        supplier: '{{ route('reminders.supplier', $person) }}',
+    };
+
+    function submitLedgerReminder(event, type, id, phone) {
+        event.preventDefault();
+        const form = event.target;
+        const channel = form.querySelector('input[name="channel"]:checked').value;
+        const currency = form.querySelector('input[name="currency"]:checked').value;
+        const amount = form.querySelector('input[name="amount"]').value;
+
+        if (channel === 'sms') {
+            const url = ledgerReminderUrls[type];
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                body: JSON.stringify({ channel: 'sms', currency: currency, amount: amount || undefined })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                const p = data.phone.replace(/[^0-9]/g, '');
+                const msg = encodeURIComponent(data.message);
+                openNativeSms(p, msg);
+            })
+            .catch(() => { form.submit(); });
+        } else {
+            form.submit();
+        }
+        return false;
+    }
+
+    function openNativeSms(phone, encodedMsg) {
+        const smsUrl = 'sms:' + phone + '?body=' + encodedMsg;
+        const before = window.location.href;
+        window.location.href = smsUrl;
+        setTimeout(() => {
+            if (window.location.href === before) {
+                prompt('SMS not supported in this browser. Copy the message below to send it manually:', decodeURIComponent(encodedMsg));
+            }
+        }, 600);
+    }
+</script>
+@endpush

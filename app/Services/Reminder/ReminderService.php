@@ -3,7 +3,6 @@
 namespace App\Services\Reminder;
 
 use App\Models\Reminder;
-use App\Services\Sms\SmsGateway;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Support\Facades\Log;
 
@@ -11,10 +10,14 @@ class ReminderService
 {
     public function __construct(
         private AIMessageGenerator $messageGenerator,
-        private SmsGateway $smsGateway,
         private ?WhatsAppService $whatsAppService = null,
     ) {}
 
+    /**
+     * For WhatsApp: generates the message, creates a reminder record, and sends via WhatsApp API.
+     * For SMS: only generates the message — the actual send happens client-side via the
+     * device's native SMS app (sms: URI deep link). The message is returned; no record is stored.
+     */
     public function sendReminder(
         string $remindableType,
         int $remindableId,
@@ -27,48 +30,47 @@ class ReminderService
     ): Reminder {
         $message = $this->messageGenerator->generate($name, $amount, $currency, $dueDate);
 
-        $reminder = Reminder::create([
-            'remindable_type' => $remindableType,
-            'remindable_id' => $remindableId,
-            'amount' => $amount,
-            'currency' => $currency,
-            'channel' => $channel,
-            'message' => $message,
-            'status' => 'pending',
-        ]);
+        if ($channel === 'whatsapp') {
+            $reminder = Reminder::create([
+                'remindable_type' => $remindableType,
+                'remindable_id' => $remindableId,
+                'amount' => $amount,
+                'currency' => $currency,
+                'channel' => $channel,
+                'message' => $message,
+                'status' => 'pending',
+            ]);
 
-        try {
-            $sent = false;
+            try {
+                $sent = $this->whatsAppService?->send($phone, $message) ?? false;
 
-            if ($channel === 'whatsapp' && $this->whatsAppService) {
-                $sent = $this->whatsAppService->send($phone, $message);
-            } else {
-                $sent = $this->smsGateway->send($phone, $message);
-            }
-
-            if ($sent) {
                 $reminder->update([
-                    'status' => 'sent',
-                    'sent_at' => now(),
+                    'status' => $sent ? 'sent' : 'failed',
+                    'sent_at' => $sent ? now() : null,
+                    'error_message' => $sent ? null : 'Provider returned failure',
                 ]);
-            } else {
+            } catch (\Exception $e) {
+                Log::error('WhatsApp send failed', [
+                    'reminder_id' => $reminder->id,
+                    'error' => $e->getMessage(),
+                ]);
+
                 $reminder->update([
                     'status' => 'failed',
-                    'error_message' => 'Provider returned failure',
+                    'error_message' => $e->getMessage(),
                 ]);
             }
-        } catch (\Exception $e) {
-            Log::error('Reminder send failed', [
-                'reminder_id' => $reminder->id,
-                'error' => $e->getMessage(),
-            ]);
 
-            $reminder->update([
-                'status' => 'failed',
-                'error_message' => $e->getMessage(),
-            ]);
+            return $reminder->fresh();
         }
 
-        return $reminder->fresh();
+        // SMS: return a lightweight object with the message & status for the frontend
+        // to open the native SMS app. No API call, no DB record.
+        $reminder = new Reminder();
+        $reminder->message = $message;
+        $reminder->status = 'drafted';
+        $reminder->phone = $phone;
+
+        return $reminder;
     }
 }

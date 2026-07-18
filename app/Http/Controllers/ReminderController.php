@@ -40,11 +40,15 @@ class ReminderController extends Controller
         $amount = $validated['amount'] ?? $pendingAmount;
 
         if (!$customer->phone) {
-            return back()->with('error', __('messages.customer_no_phone'));
+            return $request->expectsJson()
+                ? response()->json(['error' => __('messages.customer_no_phone')], 422)
+                : back()->with('error', __('messages.customer_no_phone'));
         }
 
         if ($amount <= 0) {
-            return back()->with('error', __('messages.no_pending_amount'));
+            return $request->expectsJson()
+                ? response()->json(['error' => __('messages.no_pending_amount')], 422)
+                : back()->with('error', __('messages.no_pending_amount'));
         }
 
         $reminder = $this->reminderService->sendReminder(
@@ -57,6 +61,15 @@ class ReminderController extends Controller
             channel: $validated['channel'],
             dueDate: now()->addDays(7)->format('Y-m-d'),
         );
+
+        // SMS: return the message so the frontend can open the native SMS app
+        if ($validated['channel'] === 'sms') {
+            return response()->json([
+                'phone' => $customer->phone,
+                'message' => $reminder->message,
+                'status' => 'drafted',
+            ]);
+        }
 
         if ($reminder->status === 'sent') {
             return back()->with('success', __('messages.reminder_sent'));
@@ -94,11 +107,15 @@ class ReminderController extends Controller
         $amount = $validated['amount'] ?? $pendingAmount;
 
         if (!$supplier->phone) {
-            return back()->with('error', __('messages.supplier_no_phone'));
+            return $request->expectsJson()
+                ? response()->json(['error' => __('messages.supplier_no_phone')], 422)
+                : back()->with('error', __('messages.supplier_no_phone'));
         }
 
         if ($amount <= 0) {
-            return back()->with('error', __('messages.no_pending_amount'));
+            return $request->expectsJson()
+                ? response()->json(['error' => __('messages.no_pending_amount')], 422)
+                : back()->with('error', __('messages.no_pending_amount'));
         }
 
         $reminder = $this->reminderService->sendReminder(
@@ -111,6 +128,15 @@ class ReminderController extends Controller
             channel: $validated['channel'],
             dueDate: now()->addDays(7)->format('Y-m-d'),
         );
+
+        // SMS: return the message so the frontend can open the native SMS app
+        if ($validated['channel'] === 'sms') {
+            return response()->json([
+                'phone' => $supplier->phone,
+                'message' => $reminder->message,
+                'status' => 'drafted',
+            ]);
+        }
 
         if ($reminder->status === 'sent') {
             return back()->with('success', __('messages.reminder_sent'));

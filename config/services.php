@@ -35,12 +35,6 @@ return [
         ],
     ],
 
-    'sms' => [
-        'api_key' => env('SMS_API_KEY'),
-        'sender' => env('SMS_SENDER', 'MGS'),
-        'url' => env('SMS_URL', 'https://restapi.easysendsms.app/v1/rest/sms/send'),
-    ],
-
     'whatsapp' => [
         'token' => env('WHATSAPP_API_KEY'),
         'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),

@@ -227,6 +227,7 @@ return [
     'no_categories' => 'لا تر اوسه کتګوري نشته',
     'no_customer_payments' => 'تر اوسه د مشتریانو پېسو شتون نلري.',
     'no_customers' => 'لا تر اوسه ګیراک نشته',
+    'no_results' => 'پایله ونه موندل شوه',
     'no_customers_or_suppliers' => 'لا تر اوسه ګیراک یا پلورونکی نشته',
     'no_debt_for_account' => 'د دې حساب پور نشته.',
     'no_debt_found' => 'هیڅ پور نه د پارې ونیول شوی',

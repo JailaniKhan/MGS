@@ -199,7 +199,7 @@
                     {{ __('messages.completed') }}
                 </button>
             </form>
-            <form action="{{ route('purchases.status', [$purchase, 'cancelled']) }}" method="POST" class="contents" onsubmit="return confirm('{{ __('messages.confirm_cancel') }}')">
+            <form action="{{ route('purchases.status', [$purchase, 'cancelled']) }}" method="POST" class="contents" onsubmit="return confirm('{{ __('messages.confirm_cancel') }}')" data-confirm-ok="{{ __('messages.cancel') }}">
                 @csrf
                 <button type="submit" class="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 active:scale-[0.97] {{ $purchase->status === 'cancelled' ? 'bg-danger-500 text-white shadow-sm' : 'bg-danger-50 dark:bg-danger-900/20 text-danger-700 dark:text-danger-300 border border-danger-200 dark:border-danger-700/30' }}">
                     <span class="status-dot {{ $purchase->status === 'cancelled' ? 'bg-white' : 'bg-danger-500' }}"></span>

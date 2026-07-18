@@ -25,10 +25,10 @@
             </a>
         </div>
         <div class="card overflow-hidden">
-            <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
+            <div>
                 @forelse ($customers as $customer)
-                    <div class="list-row">
-                        <a href="{{ route('customers.show', $customer) }}" class="flex items-center gap-3 min-w-0 flex-1">
+                    <div class="swipe-row">
+                        <a href="{{ route('customers.show', $customer) }}" class="swipe-content">
                             <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-secondary-500 to-secondary-700 flex items-center justify-center flex-shrink-0 shadow-sm">
                                 <span class="text-white font-bold text-sm">{{ substr($customer->name, 0, 1) }}</span>
                             </div>
@@ -40,18 +40,18 @@
                                 </div>
                             </div>
                         </a>
-                        <div class="flex items-center gap-1 flex-shrink-0 ml-2">
-                            <a href="{{ route('reminders.customer', $customer) }}" onclick="event.preventDefault(); sendReminder('{{ $customer->id }}', '{{ $customer->name }}', 'customer')" class="p-2 text-ink-400 hover:text-secondary-500 transition-colors" title="{{ __('messages.send_reminder') }}">
+                        <div class="swipe-actions">
+                            <a href="{{ route('reminders.customer', $customer) }}" onclick="event.preventDefault(); sendReminder('{{ $customer->id }}', '{{ $customer->name }}', 'customer')" class="act-edit" title="{{ __('messages.send_reminder') }}">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
                             </a>
-                            <a href="{{ route('customers.edit', $customer) }}" class="p-2 text-ink-400 hover:text-secondary-500 transition-colors">
+                            <a href="{{ route('customers.edit', $customer) }}" class="act-edit" aria-label="{{ __('messages.edit') }}">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/>
                                 </svg>
                             </a>
                             <form action="{{ route('customers.destroy', $customer) }}" method="POST" onsubmit="return confirm('{{ __('messages.confirm_delete') }}')">
                                 @csrf @method('DELETE')
-                                <button class="p-2 text-ink-400 hover:text-danger-500 transition-colors">
+                                <button class="act-danger" aria-label="{{ __('messages.delete') }}">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
                                     </svg>
@@ -84,10 +84,10 @@
             </a>
         </div>
         <div class="card overflow-hidden">
-            <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
+            <div>
                 @forelse ($suppliers as $supplier)
-                    <div class="list-row">
-                        <div class="flex items-center gap-3 min-w-0 flex-1">
+                    <div class="swipe-row">
+                        <div class="swipe-content">
                             <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center flex-shrink-0 shadow-sm">
                                 <span class="text-white font-bold text-sm">{{ substr($supplier->name, 0, 1) }}</span>
                             </div>
@@ -99,18 +99,18 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="flex items-center gap-1 flex-shrink-0 ml-2">
-                            <a href="{{ route('reminders.supplier', $supplier) }}" onclick="event.preventDefault(); sendReminder('{{ $supplier->id }}', '{{ $supplier->name }}', 'supplier')" class="p-2 text-ink-400 hover:text-secondary-500 transition-colors" title="{{ __('messages.send_reminder') }}">
+                        <div class="swipe-actions">
+                            <a href="{{ route('reminders.supplier', $supplier) }}" onclick="event.preventDefault(); sendReminder('{{ $supplier->id }}', '{{ $supplier->name }}', 'supplier')" class="act-edit" title="{{ __('messages.send_reminder') }}">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
                             </a>
-                            <a href="{{ route('suppliers.edit', $supplier) }}" class="p-2 text-ink-400 hover:text-secondary-500 transition-colors">
+                            <a href="{{ route('suppliers.edit', $supplier) }}" class="act-edit" aria-label="{{ __('messages.edit') }}">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/>
                                 </svg>
                             </a>
                             <form action="{{ route('suppliers.destroy', $supplier) }}" method="POST" onsubmit="return confirm('{{ __('messages.confirm_delete') }}')">
                                 @csrf @method('DELETE')
-                                <button class="p-2 text-ink-400 hover:text-danger-500 transition-colors">
+                                <button class="act-danger" aria-label="{{ __('messages.delete') }}">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
                                     </svg>
@@ -164,24 +164,65 @@
     }
 
     function submitReminder(channel) {
+        const url = reminderTarget.type === 'customer'
+            ? '{{ url('reminders/customer') }}/' + reminderTarget.id
+            : '{{ url('reminders/supplier') }}/' + reminderTarget.id;
+
+        if (channel === 'sms') {
+            // Send via backend to generate the message, then open native SMS app
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                body: JSON.stringify({ channel: 'sms' })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                const phone = data.phone.replace(/[^0-9]/g, '');
+                const msg = encodeURIComponent(data.message);
+                openNativeSms(phone, msg);
+                closeReminderModal();
+            })
+            .catch(() => {
+                // Fallback: if fetch fails (non-JSON response), treat as form submit
+                fallbackFormSubmit(url);
+            });
+        } else {
+            fallbackFormSubmit(url, channel);
+        }
+    }
+
+    function fallbackFormSubmit(url, channel) {
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = reminderTarget.type === 'customer'
-            ? '{{ route('reminders.customer', '') }}/' + reminderTarget.id
-            : '{{ route('reminders.supplier', '') }}/' + reminderTarget.id;
+        form.action = url;
         const csrf = document.createElement('input');
         csrf.type = 'hidden';
         csrf.name = '_token';
         csrf.value = '{{ csrf_token() }}';
         form.appendChild(csrf);
-        const ch = document.createElement('input');
-        ch.type = 'hidden';
-        ch.name = 'channel';
-        ch.value = channel;
-        form.appendChild(ch);
+        if (channel) {
+            const ch = document.createElement('input');
+            ch.type = 'hidden';
+            ch.name = 'channel';
+            ch.value = channel;
+            form.appendChild(ch);
+        }
         document.body.appendChild(form);
         form.submit();
     }
+    function openNativeSms(phone, encodedMsg) {
+        const smsUrl = 'sms:' + phone + '?body=' + encodedMsg;
+        const before = window.location.href;
+        window.location.href = smsUrl;
+        // On desktop (no SMS app) the navigation is a no-op; show the message so it's verifiable
+        setTimeout(() => {
+            if (window.location.href === before) {
+                prompt('SMS not supported in this browser. Copy the message below to send it manually:', decodeURIComponent(encodedMsg));
+            }
+        }, 600);
+    }
+
     function switchTab(tab) {
         document.querySelectorAll('.tab-section').forEach(el => el.classList.add('hidden'));
         document.getElementById('section-' + tab).classList.remove('hidden');

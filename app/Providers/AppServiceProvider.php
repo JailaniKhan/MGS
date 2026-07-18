@@ -4,8 +4,6 @@ namespace App\Providers;
 
 use App\Models\Customer;
 use App\Models\Supplier;
-use App\Services\Sms\EasySendSmsDriver;
-use App\Services\Sms\SmsGateway;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\ServiceProvider;
@@ -17,7 +15,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(SmsGateway::class, EasySendSmsDriver::class);
         $this->app->singleton(WhatsAppService::class, fn() => new WhatsAppService());
     }
 

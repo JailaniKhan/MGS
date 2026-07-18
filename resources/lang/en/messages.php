@@ -227,6 +227,7 @@ return [
     'no_categories' => 'No categories yet',
     'no_customer_payments' => 'No customer payments yet.',
     'no_customers' => 'No customers yet',
+    'no_results' => 'No results found',
     'no_customers_or_suppliers' => 'No customers or suppliers yet',
     'no_debt_for_account' => 'No debt for this account.',
     'no_debt_found' => 'No debt found',

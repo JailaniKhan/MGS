@@ -227,6 +227,7 @@ return [
     'no_categories' => 'هنوز دسته‌بندی‌ای نیست',
     'no_customer_payments' => 'هنوز پرداخت مشتری وجود ندارد.',
     'no_customers' => 'هنوز مشتریی نیست',
+    'no_results' => 'نتیجه‌ای یافت نشد',
     'no_customers_or_suppliers' => 'هنوز مشتری یا تأمین‌کننده‌ای نیست',
     'no_debt_for_account' => 'بدهی برای این حساب وجود ندارد.',
     'no_debt_found' => 'بدهی یافت نشد',
