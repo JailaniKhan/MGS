@@ -1,8 +1,8 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('content')
 <div class="page-enter">
-    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">{{ __('messages.settings') }}</h2>
+    <h2 class="text-lg font-bold text-ink-900 dark:text-white mb-4">{{ __('messages.settings') }}</h2>
 
     <div class="card p-4">
         <form action="{{ route('settings.update') }}" method="POST">
@@ -10,7 +10,7 @@
 
             <!-- Company Info -->
             <div class="mb-6">
-                <h4 class="section-header mb-4">{{ __('messages.company_information') }}</h4>
+                <h4 class="section-title mb-4">{{ __('messages.company_information') }}</h4>
                 <div class="space-y-4">
                     <div>
                         <label class="form-label">{{ __('messages.company_name') }}</label>
@@ -38,8 +38,8 @@
             </div>
 
             <!-- Tax Settings -->
-            <div class="mb-6 border-t border-gray-100 dark:border-gray-700/30 pt-5">
-                <h4 class="section-header mb-4">{{ __('messages.tax_settings') }}</h4>
+            <div class="mb-6 border-t border-ink-100 dark:border-ink-700/30 pt-5">
+                <h4 class="section-title mb-4">{{ __('messages.tax_settings') }}</h4>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="form-label">{{ __('messages.default_tax_rate') }}</label>
@@ -56,8 +56,8 @@
             </div>
 
             <!-- Invoice Settings -->
-            <div class="mb-6 border-t border-gray-100 dark:border-gray-700/30 pt-5">
-                <h4 class="section-header mb-4">{{ __('messages.invoice_settings') }}</h4>
+            <div class="mb-6 border-t border-ink-100 dark:border-ink-700/30 pt-5">
+                <h4 class="section-title mb-4">{{ __('messages.invoice_settings') }}</h4>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="form-label">{{ __('messages.invoice_prefix') }}</label>
@@ -74,29 +74,34 @@
             </div>
 
             <!-- Reminder / AI Settings -->
-            <div class="mb-6 border-t border-gray-100 dark:border-gray-700/30 pt-5">
-                <h4 class="section-header mb-4">{{ __('messages.reminder_settings') }}</h4>
+            <div class="mb-6 border-t border-ink-100 dark:border-ink-700/30 pt-5">
+                <h4 class="section-title mb-4">{{ __('messages.reminder_settings') }}</h4>
                 <div class="space-y-4">
                     <div>
                         <label class="form-label">{{ __('messages.whatsapp_api_key') }}</label>
                         <input type="password" name="whatsapp_api_key" value="{{ old('whatsapp_api_key', $settings['whatsapp_api_key']) }}" class="form-input" placeholder="Meta WhatsApp API Token">
-                        <p class="text-[10px] text-gray-400 mt-1">{{ __('messages.whatsapp_api_key_info') }}</p>
+                        <p class="text-[10px] text-ink-400 mt-1">{{ __('messages.whatsapp_api_key_info') }}</p>
                     </div>
                     <div>
                         <label class="form-label">{{ __('messages.whatsapp_phone_number_id') }}</label>
-                        <input type="text" name="whatsapp_phone_number_id" value="{{ old('whatsapp_phone_number_id', $settings['whatsapp_phone_number_id']) }}" class="form-input" placeholder="Phone Number ID">
+                        <input type="text" name="whatsapp_phone_number_id" value="{{ old('whatsapp_phone_number_id', $settings['whatsapp_phone_number_id']) }}" class="form-input" placeholder="WhatsApp Phone Number ID">
+                    </div>
+                    <div>
+                        <label class="form-label">{{ __('messages.sms_sender') }}</label>
+                        <input type="text" name="sms_sender" value="{{ old('sms_sender', $settings['sms_sender']) }}" class="form-input" placeholder="MGS" maxlength="11">
+                        <p class="text-[10px] text-ink-400 mt-1">{{ __('messages.sms_sender_info') }}</p>
                     </div>
                     <div>
                         <label class="form-label">{{ __('messages.anthropic_api_key') }}</label>
                         <input type="password" name="anthropic_api_key" value="{{ old('anthropic_api_key', $settings['anthropic_api_key']) }}" class="form-input" placeholder="Claude API Key">
-                        <p class="text-[10px] text-gray-400 mt-1">{{ __('messages.anthropic_api_key_info') }}</p>
+                        <p class="text-[10px] text-ink-400 mt-1">{{ __('messages.anthropic_api_key_info') }}</p>
                     </div>
                 </div>
             </div>
 
             <!-- Language -->
-            <div class="mb-6 border-t border-gray-100 dark:border-gray-700/30 pt-5">
-                <h4 class="section-header mb-4">{{ __('messages.language') }}</h4>
+            <div class="mb-6 border-t border-ink-100 dark:border-ink-700/30 pt-5">
+                <h4 class="section-title mb-4">{{ __('messages.language') }}</h4>
                 <div>
                     <label class="form-label">{{ __('messages.select_language') }}</label>
                     <select name="language" class="form-input">
@@ -113,7 +118,7 @@
 
     <!-- Quick Links -->
     <div class="mt-4 mb-4">
-        <h4 class="section-header mb-3">{{ __('messages.features') }}</h4>
+        <h4 class="section-title mb-3">{{ __('messages.features') }}</h4>
         <div class="grid grid-cols-2 gap-2">
             <a href="{{ route('payments.index') }}" class="action-card">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
@@ -197,7 +202,7 @@
     </div>
 
     <div class="mt-4 text-center">
-        <a href="{{ route('dashboard') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}</a>
+        <a href="{{ route('dashboard') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}</a>
     </div>
 </div>
 @endsection

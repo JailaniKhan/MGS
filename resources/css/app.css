@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../resources/views/vendor/pagination/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
 @theme {
@@ -507,4 +507,40 @@
 
 @utility segmented-item-active {
     @apply bg-white dark:bg-white/10 text-ink-900 dark:text-white shadow-sm;
+}
+
+/* ============================================
+   NEW: PAGE TITLE / DIVIDER / CHIP / EMPTY / INPUT-ERROR / BRAND GRADIENT
+   (Phase 1 — polish current emerald)
+   ============================================ */
+
+/* Standalone screen heading (replaces misused .section-header on <h*> tags) */
+@utility page-title {
+    @apply text-lg font-extrabold text-ink-900 dark:text-white tracking-tight;
+}
+
+/* Quiet section divider used between form groups / lists */
+@utility divider {
+    @apply border-t border-ink-100 dark:border-white/[0.06];
+}
+
+/* Small neutral meta pill */
+@utility chip {
+    @apply inline-flex items-center gap-1 text-[11px] font-medium text-ink-500 dark:text-ink-400
+           bg-ink-100 dark:bg-white/[0.05] px-2 py-0.5 rounded-full;
+}
+
+/* Larger, branded container for empty-state icons */
+@utility empty-illustration {
+    @apply w-14 h-14 rounded-2xl bg-ink-100 dark:bg-white/[0.04] flex items-center justify-center mb-3;
+}
+
+/* Validation / error state for form inputs (was raw text-red-500) */
+@utility input-error {
+    @apply border-danger-400 focus:outline-none focus:ring-2 focus:ring-danger-500/30 focus:border-danger-400;
+}
+
+/* Emerald brand gradient for FAB / hero accents */
+@utility brand-grad {
+    background-image: linear-gradient(135deg, var(--color-brand) 0%, var(--color-primary-400) 100%);
 }

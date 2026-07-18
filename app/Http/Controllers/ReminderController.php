@@ -47,7 +47,7 @@ class ReminderController extends Controller
             return back()->with('error', __('messages.no_pending_amount'));
         }
 
-        $this->reminderService->sendReminder(
+        $reminder = $this->reminderService->sendReminder(
             remindableType: 'customer',
             remindableId: $customer->id,
             name: $customer->name,
@@ -58,7 +58,11 @@ class ReminderController extends Controller
             dueDate: now()->addDays(7)->format('Y-m-d'),
         );
 
-        return back()->with('success', __('messages.reminder_sent'));
+        if ($reminder->status === 'sent') {
+            return back()->with('success', __('messages.reminder_sent'));
+        }
+
+        return back()->with('error', __('messages.reminder_failed'));
     }
 
     public function sendSupplierReminder(Request $request, Supplier $supplier)
@@ -97,7 +101,7 @@ class ReminderController extends Controller
             return back()->with('error', __('messages.no_pending_amount'));
         }
 
-        $this->reminderService->sendReminder(
+        $reminder = $this->reminderService->sendReminder(
             remindableType: 'supplier',
             remindableId: $supplier->id,
             name: $supplier->name,
@@ -108,7 +112,11 @@ class ReminderController extends Controller
             dueDate: now()->addDays(7)->format('Y-m-d'),
         );
 
-        return back()->with('success', __('messages.reminder_sent'));
+        if ($reminder->status === 'sent') {
+            return back()->with('success', __('messages.reminder_sent'));
+        }
+
+        return back()->with('error', __('messages.reminder_failed'));
     }
 
     public function history()

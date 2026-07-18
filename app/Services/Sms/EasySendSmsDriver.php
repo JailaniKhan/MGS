@@ -10,11 +10,17 @@ class EasySendSmsDriver implements SmsGateway
     public function send(string $phone, string $message): bool
     {
         $apiKey = config('services.sms.api_key');
-        $sender = config('services.sms.sender');
+        $sender = $this->resolveSender();
         $url = config('services.sms.url', 'https://restapi.easysendsms.app/v1/rest/sms/send');
 
         if (empty($apiKey)) {
             Log::info('SMS skipped (no API key configured)', compact('phone', 'message'));
+
+            return false;
+        }
+
+        if (empty($sender)) {
+            Log::error('SMS send failed: no sender ID configured. Set SMS_SENDER in .env or "sms_sender" in Settings (must be an EasySendSMS-approved sender).', compact('phone'));
 
             return false;
         }
@@ -37,10 +43,22 @@ class EasySendSmsDriver implements SmsGateway
         $hasError = !empty($body['error']) || collect($messageIds)->contains(fn ($id) => str_starts_with((string) $id, 'ERR:'));
 
         if ($response->successful() && !$hasError) {
+            // A proper delivery receipt is a UUID ("OK: <uuid>"). A bare numeric id
+            // (e.g. "4015") means the gateway accepted submission but the message may
+            // not be delivered — usually because the sender ID is not approved by the
+            // recipient carrier. Log a warning so the issue is visible.
+            $accepted = collect($messageIds)->contains(fn ($id) => str_starts_with((string) $id, 'OK:'));
+
             Log::info('SMS accepted by provider', [
                 'phone' => $phone,
+                'sender' => $sender,
                 'message_ids' => $messageIds,
+                'delivery_receipt' => $accepted,
             ]);
+
+            if (!$accepted) {
+                Log::warning('SMS accepted but no delivery receipt returned — the sender ID "' . $sender . '" may not be approved by the carrier. The message might not reach the handset. Configure an EasySendSMS-approved sender (Settings -> SMS Sender).', compact('phone'));
+            }
 
             return true;
         }
@@ -51,6 +69,17 @@ class EasySendSmsDriver implements SmsGateway
         ]);
 
         return false;
+    }
+
+    /**
+     * Resolve the sender ID: a Setting (so it can be changed from the UI without
+     * editing .env) takes priority, otherwise fall back to the config value.
+     */
+    protected function resolveSender(): string
+    {
+        $setting = \App\Models\Setting::get('sms_sender');
+
+        return !empty($setting) ? (string) $setting : (string) config('services.sms.sender', '');
     }
 
     /**

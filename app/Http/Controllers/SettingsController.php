@@ -24,6 +24,7 @@ class SettingsController extends Controller
             'whatsapp_api_key' => Setting::get('whatsapp_api_key', ''),
             'whatsapp_phone_number_id' => Setting::get('whatsapp_phone_number_id', ''),
             'anthropic_api_key' => Setting::get('anthropic_api_key', ''),
+            'sms_sender' => Setting::get('sms_sender', config('services.sms.sender', '')),
         ];
 
         return view('settings.index', compact('settings'));
@@ -45,6 +46,7 @@ class SettingsController extends Controller
             'whatsapp_api_key' => 'nullable|string|max:255',
             'whatsapp_phone_number_id' => 'nullable|string|max:255',
             'anthropic_api_key' => 'nullable|string|max:255',
+            'sms_sender' => 'nullable|string|max:11',
         ]);
 
         foreach ($validated as $key => $value) {

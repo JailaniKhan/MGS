@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="{{ app()->getLocale() }}">
 <head>
     <meta charset="utf-8">
@@ -7,7 +7,7 @@
     @vite(['resources/css/app.css'])
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-ink-50 min-h-screen">
     <div class="min-h-screen flex flex-col items-center justify-center px-6 py-10" id="onboarding-app">
         <!-- Step Indicators -->
         <div class="flex gap-2 mb-8" id="step-indicators">
@@ -23,8 +23,8 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/>
                 </svg>
             </div>
-            <h2 class="text-xl font-bold text-center text-gray-900 mb-2">{{ __('messages.welcome_to_mgs') }}</h2>
-            <p class="text-sm text-gray-500 text-center mb-6">{{ __('messages.setup_business_info') }}</p>
+            <h2 class="text-xl font-bold text-center text-ink-900 mb-2">{{ __('messages.welcome_to_mgs') }}</h2>
+            <p class="text-sm text-ink-500 text-center mb-6">{{ __('messages.setup_business_info') }}</p>
 
             <form id="step1-form" class="space-y-4 max-w-sm mx-auto">
                 <div>
@@ -58,8 +58,8 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6z"/>
                 </svg>
             </div>
-            <h2 class="text-xl font-bold text-center text-gray-900 mb-2">{{ __('messages.add_categories') }}</h2>
-            <p class="text-sm text-gray-500 text-center mb-6">{{ __('messages.categories_help_organize') }}</p>
+            <h2 class="text-xl font-bold text-center text-ink-900 mb-2">{{ __('messages.add_categories') }}</h2>
+            <p class="text-sm text-ink-500 text-center mb-6">{{ __('messages.categories_help_organize') }}</p>
 
             <form id="step2-form" class="space-y-4 max-w-sm mx-auto">
                 <div>
@@ -76,20 +76,20 @@
 
         <!-- Step 3: Units -->
         <div class="onboarding-step" id="step-3">
-            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-500/30">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-accent-500/30">
                 <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/>
                 </svg>
             </div>
-            <h2 class="text-xl font-bold text-center text-gray-900 mb-2">{{ __('messages.setup_units') }}</h2>
-            <p class="text-sm text-gray-500 text-center mb-6">{{ __('messages.units_help_measure') }}</p>
+            <h2 class="text-xl font-bold text-center text-ink-900 mb-2">{{ __('messages.setup_units') }}</h2>
+            <p class="text-sm text-ink-500 text-center mb-6">{{ __('messages.units_help_measure') }}</p>
 
             <form id="step3-form" class="space-y-4 max-w-sm mx-auto">
                 <div>
                     <label class="form-label">{{ __('messages.units') }} ({{ __('messages.comma_separated') }})</label>
                     <textarea name="units" rows="3" class="form-input"
                               placeholder="{{ __('messages.units_placeholder') }}"></textarea>
-                    <p class="text-[10px] text-gray-400 mt-1">{{ __('messages.units_format_hint') }}</p>
+                    <p class="text-[10px] text-ink-400 mt-1">{{ __('messages.units_format_hint') }}</p>
                 </div>
                 <div class="flex gap-3">
                     <button type="button" onclick="skipStep()" class="btn-secondary flex-1">{{ __('messages.skip') }}</button>
@@ -106,8 +106,8 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
                     </svg>
                 </div>
-                <h2 class="text-xl font-bold text-gray-900 mb-2">{{ __('messages.all_set') }}</h2>
-                <p class="text-sm text-gray-500 mb-6">{{ __('messages.onboarding_complete_msg') }}</p>
+                <h2 class="text-xl font-bold text-ink-900 mb-2">{{ __('messages.all_set') }}</h2>
+                <p class="text-sm text-ink-500 mb-6">{{ __('messages.onboarding_complete_msg') }}</p>
                 <a href="{{ route('dashboard') }}" class="btn-primary inline-flex">{{ __('messages.go_to_dashboard') }}</a>
             </div>
         </div>

@@ -1,11 +1,11 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('content')
     <div class="mb-4 page-enter">
-        <a href="{{ route('cashbook.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400">
+        <a href="{{ route('cashbook.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
         </a>
-        <h2 class="text-lg font-bold text-gray-900 dark:text-white mt-2">{{ __('messages.new_cashbook_entry') }}</h2>
+        <h2 class="text-lg font-bold text-ink-900 dark:text-white mt-2">{{ __('messages.new_cashbook_entry') }}</h2>
     </div>
 
     <div class="card p-4 page-enter" style="animation-delay: 0.1s;">

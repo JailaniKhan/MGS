@@ -1,7 +1,7 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('content')
-    <a href="{{ route('cashbook.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 mb-4">
+    <a href="{{ route('cashbook.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400 mb-4">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
         </svg>
@@ -13,8 +13,8 @@
             <span class="text-white font-bold text-base">{{ substr($person->name, 0, 1) }}</span>
         </div>
         <div class="min-w-0">
-            <h2 class="text-lg font-bold text-gray-900 dark:text-white truncate">{{ $person->name }}</h2>
-            <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 capitalize">{{ $personType }}</span>
+            <h2 class="text-lg font-bold text-ink-900 dark:text-white truncate">{{ $person->name }}</h2>
+            <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-ink-100 dark:bg-ink-800 text-ink-600 dark:text-ink-300 capitalize">{{ $personType }}</span>
         </div>
     </div>
 
@@ -26,11 +26,11 @@
             </div>
             <div class="metric-tile">
                 <span class="metric-label">{{ __('messages.cashbook_out_total') }}</span>
-                <span class="metric-value text-red-600 dark:text-red-400">{{ number_format($total['out'], 2) }} {{ $currency }}</span>
+                <span class="metric-value text-danger-600 dark:text-danger-400">{{ number_format($total['out'], 2) }} {{ $currency }}</span>
             </div>
             <div class="metric-tile">
                 <span class="metric-label">{{ __('messages.net_balance') }}</span>
-                <span class="metric-value {{ $total['net'] >= 0 ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400' }}">
+                <span class="metric-value {{ $total['net'] >= 0 ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">
                     {{ $total['net'] >= 0 ? '+' : '-' }}{{ number_format(abs($total['net']), 2) }} {{ $currency }}
                 </span>
             </div>
@@ -41,13 +41,13 @@
         @foreach ($orderTotals as $currency => $amount)
             <div class="metric-tile">
                 <span class="metric-label">{{ __('messages.total_orders') }}</span>
-                <span class="metric-value text-gray-900 dark:text-gray-100">{{ number_format($amount, 2) }} {{ $currency }}</span>
+                <span class="metric-value text-ink-900 dark:text-ink-100">{{ number_format($amount, 2) }} {{ $currency }}</span>
             </div>
         @endforeach
         @foreach ($purchaseTotals as $currency => $amount)
             <div class="metric-tile">
                 <span class="metric-label">{{ __('messages.total_purchases') }}</span>
-                <span class="metric-value text-gray-900 dark:text-gray-100">{{ number_format($amount, 2) }} {{ $currency }}</span>
+                <span class="metric-value text-ink-900 dark:text-ink-100">{{ number_format($amount, 2) }} {{ $currency }}</span>
             </div>
         @endforeach
     </div>
@@ -72,29 +72,29 @@
                         </svg>
                     </div>
                     <div class="min-w-0">
-                        <div class="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
+                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">
                             {{ $tx->label }}
                         </div>
-                        <div class="text-[11px] text-gray-500 dark:text-gray-400">
+                        <div class="text-[11px] text-ink-500 dark:text-ink-400">
                             {{ $tx->date->format('d M Y') }} &middot; {{ $tx->notes }}
                         </div>
                     </div>
                 </div>
                 <div class="text-right flex-shrink-0 ml-3">
-                    <div class="text-sm font-bold {{ $tx->direction === 'in' ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400' }}">
+                    <div class="text-sm font-bold {{ $tx->direction === 'in' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">
                         {{ $tx->direction === 'in' ? '+' : '-' }}{{ number_format((float) $tx->amount, 2) }}
                     </div>
-                    <div class="text-[10px] text-gray-400">{{ $tx->currency }}</div>
+                    <div class="text-[10px] text-ink-400">{{ $tx->currency }}</div>
                 </div>
             </div>
         @empty
             <div class="empty-state">
-                <div class="w-12 h-12 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
-                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                    <svg class="w-6 h-6 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
-                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('messages.no_person_transactions') }}</p>
+                <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_person_transactions') }}</p>
             </div>
         @endforelse
     </div>

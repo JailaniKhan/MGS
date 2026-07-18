@@ -2,10 +2,10 @@
 
 @section('content')
     <div class="mb-4 page-enter">
-        <a href="{{ route('expenses.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400">
+        <a href="{{ route('expenses.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
         </a>
-        <h2 class="text-lg font-bold text-gray-900 dark:text-white mt-2">{{ __('messages.edit_expense') }}</h2>
+        <h2 class="text-lg font-bold text-ink-900 dark:text-white mt-2">{{ __('messages.edit_expense') }}</h2>
     </div>
 
     <div class="card p-4 page-enter" style="animation-delay: 0.1s;">
@@ -14,46 +14,46 @@
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.categories') }}</label>
                 <input type="text" name="category" value="{{ old('category', $expense->category) }}" required class="form-input" placeholder="{{ __('messages.expense') }} {{ __('messages.categories') }}">
-                @error('category') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                @error('category') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.currency_unit') }}</label>
                 <div class="flex gap-3">
-                    <label class="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-all duration-200">
+                    <label class="flex items-center gap-2 px-4 py-2.5 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-all duration-200">
                         <input type="radio" name="currency" value="AFN" {{ old('currency', $expense->currency) === 'AFN' ? 'checked' : '' }} class="text-primary-600">
-                        <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('messages.afn') }} ({{ __('messages.afn') }})</span>
+                        <span class="text-sm text-ink-700 dark:text-ink-300">{{ __('messages.afn') }} ({{ __('messages.afn') }})</span>
                     </label>
-                    <label class="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-all duration-200">
+                    <label class="flex items-center gap-2 px-4 py-2.5 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-all duration-200">
                         <input type="radio" name="currency" value="USD" {{ old('currency', $expense->currency) === 'USD' ? 'checked' : '' }} class="text-primary-600">
-                        <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('messages.usd_with_paren') }}$)</span>
+                        <span class="text-sm text-ink-700 dark:text-ink-300">{{ __('messages.usd_with_paren') }}$)</span>
                     </label>
                 </div>
-                @error('currency') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                @error('currency') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.amount') }}</label>
                 <input type="number" step="0.01" min="0.01" name="amount" value="{{ old('amount', $expense->amount) }}" required class="form-input" placeholder="{{ __('messages.amount') }}">
-                @error('amount') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                @error('amount') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.date') }}</label>
                 <input type="date" name="expense_date" value="{{ old('expense_date', $expense->expense_date->format('Y-m-d')) }}" required class="form-input">
-                @error('expense_date') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                @error('expense_date') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.notes_optional') }}</label>
                 <textarea name="notes" rows="2" class="form-input" placeholder="{{ __('messages.notes') }}">{{ old('notes', $expense->notes) }}</textarea>
-                @error('notes') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                @error('notes') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.receipt_optional') }}</label>
                 <input type="text" name="receipt_path" value="{{ old('receipt_path', $expense->receipt_path) }}" class="form-input" placeholder="{{ __('messages.file_attachment') }}">
-                @error('receipt_path') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                @error('receipt_path') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
             <button type="submit" class="btn-primary w-full"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>{{ __('messages.save') }}</button>

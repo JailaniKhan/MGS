@@ -1,8 +1,8 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('content')
 <div class="flex items-center justify-between mb-4 page-enter">
-    <h2 class="text-lg font-bold text-gray-900 dark:text-white">{{ __('messages.staff_book') }}</h2>
+    <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ __('messages.staff_book') }}</h2>
     <a href="{{ route('staff.create') }}" class="btn-primary btn-sm"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>{{ __('messages.staff_member') }}</a>
 </div>
 
@@ -14,22 +14,22 @@
                     <span class="text-white font-bold text-sm">{{ substr($employee->name, 0, 1) }}</span>
                 </div>
                 <div class="min-w-0">
-                    <div class="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{{ $employee->name }}</div>
-                    <div class="text-[11px] text-gray-500 dark:text-gray-400">{{ $employee->position }} | {{ number_format((float) $employee->monthly_salary, 2) }} {{ $employee->currency }}</div>
+                    <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $employee->name }}</div>
+                    <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $employee->position }} | {{ number_format((float) $employee->monthly_salary, 2) }} {{ $employee->currency }}</div>
                 </div>
             </div>
-            <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <svg class="w-4 h-4 text-ink-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
             </svg>
         </a>
     @empty
         <div class="empty-state">
-            <div class="w-12 h-12 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
-                <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                <svg class="w-6 h-6 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                 </svg>
             </div>
-            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ __('messages.no_staff') }}</p>
+            <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_staff') }}</p>
         </div>
     @endforelse
 </div>

@@ -2,10 +2,10 @@
 
 @section('content')
     <div class="mb-4 page-enter">
-        <a href="{{ route('orders.returns.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400">
+        <a href="{{ route('orders.returns.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
         </a>
-        <h2 class="text-lg font-bold text-gray-900 dark:text-white mt-2">{{ __('messages.new_order_return') }}</h2>
+        <h2 class="text-lg font-bold text-ink-900 dark:text-white mt-2">{{ __('messages.new_order_return') }}</h2>
     </div>
 
     <div class="card p-4 page-enter" style="animation-delay: 0.1s;">
@@ -19,24 +19,24 @@
                         <option value="{{ $order->id }}" data-currency="{{ $order->currency }}" data-customer="{{ $order->party?->name }}" @if(old('order_id') == $order->id) selected @endif>#{{ $order->id }} - {{ $order->party?->name }} ({{ number_format($order->total_amount) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }})</option>
                     @endforeach
                 </select>
-                @error('order_id') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                @error('order_id') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.customer') }}</label>
-                <input type="text" id="customer-name" readonly class="form-input bg-gray-100 dark:bg-gray-800 cursor-not-allowed">
+                <input type="text" id="customer-name" readonly class="form-input bg-ink-100 dark:bg-ink-800 cursor-not-allowed">
             </div>
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.return_date') }}</label>
                 <input type="date" name="return_date" value="{{ old('return_date', date('Y-m-d')) }}" required class="form-input">
-                @error('return_date') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                @error('return_date') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.return_reason') }}</label>
                 <textarea name="reason" rows="2" class="form-input">{{ old('reason') }}</textarea>
-                @error('reason') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                @error('reason') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
             <div class="mb-4">
@@ -47,7 +47,7 @@
                     <option value="completed" {{ old('status', 'completed') === 'completed' ? 'selected' : '' }}>{{ __('messages.completed') }}</option>
                     <option value="cancelled" {{ old('status') === 'cancelled' ? 'selected' : '' }}>{{ __('messages.cancelled') }}</option>
                 </select>
-                @error('status') <p class="text-red-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                @error('status') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
             <div class="mb-4">
@@ -59,7 +59,7 @@
                         </select>
                         <input type="number" name="products[0][quantity]" min="1" value="1" required class="product-qty w-20 form-input text-center">
                         <input type="number" name="products[0][unit_price]" min="0" step="0.01" value="0" required class="product-price w-24 form-input text-center">
-                        <button type="button" class="remove-product text-red-500 p-1 flex-shrink-0">
+                        <button type="button" class="remove-product text-danger-500 p-1 flex-shrink-0">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                         </button>
                     </div>
@@ -67,9 +67,9 @@
                 <button type="button" id="add-product" class="text-primary-600 dark:text-primary-400 text-xs font-semibold mt-2">+ {{ __('messages.another_product') }}</button>
             </div>
 
-            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 mb-4 flex justify-between text-sm">
-                <span class="text-gray-500 dark:text-gray-400">{{ __('messages.total_amount') }}:</span>
-                <span id="total-amount" class="font-bold text-gray-900 dark:text-white">0 {{ __('messages.afn') }}</span>
+            <div class="bg-ink-50 dark:bg-ink-800/50 rounded-xl p-3 mb-4 flex justify-between text-sm">
+                <span class="text-ink-500 dark:text-ink-400">{{ __('messages.total_amount') }}:</span>
+                <span id="total-amount" class="font-bold text-ink-900 dark:text-white">0 {{ __('messages.afn') }}</span>
             </div>
 
             <button type="submit" class="btn-primary w-full">{{ __('messages.register') }}</button>

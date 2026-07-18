@@ -1,4 +1,4 @@
-@php
+﻿@php
 use App\Models\Setting;
 @endphp
 <!DOCTYPE html>
@@ -31,8 +31,8 @@ use App\Models\Setting;
             </svg>
         </div>
                     <div>
-                        <h1 class="text-sm font-bold text-gray-900 dark:text-white">MGS</h1>
-                        <span class="text-[10px] text-gray-500 dark:text-gray-400">{{ $headerDescription ?? __('messages.dashboard') }}</span>
+                        <h1 class="text-sm font-bold text-ink-900 dark:text-white">MGS</h1>
+                        <span class="text-[10px] text-ink-500 dark:text-ink-400">{{ $headerDescription ?? __('messages.dashboard') }}</span>
                     </div>
                 </div>
 
@@ -42,9 +42,9 @@ use App\Models\Setting;
                             @csrf
                         </form>
                         <select onchange="changeLanguage(this.value)"
-                            class="text-[11px] bg-gray-100/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl px-2.5 py-2
+                            class="text-[11px] bg-ink-100/80 dark:bg-ink-800/80 border border-ink-200 dark:border-ink-700 rounded-xl px-2.5 py-2
                                    appearance-none cursor-pointer transition-all duration-200 hover:border-primary-300 dark:hover:border-primary-600
-                                   focus:outline-none focus:ring-2 focus:ring-primary-500/30 font-semibold text-gray-700 dark:text-gray-300">
+                                   focus:outline-none focus:ring-2 focus:ring-primary-500/30 font-semibold text-ink-700 dark:text-ink-300">
                             <option value="ps" {{ app()->getLocale() === 'ps' ? 'selected' : '' }}>{{ __('messages.pashto') }}</option>
                             <option value="fa" {{ app()->getLocale() === 'fa' ? 'selected' : '' }}>{{ __('messages.persian') }}</option>
                             <option value="en" {{ app()->getLocale() === 'en' ? 'selected' : '' }}>{{ __('messages.english') }}</option>
@@ -75,8 +75,8 @@ use App\Models\Setting;
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
                         </svg>
                     </div>
-                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 flex-1">{{ session('success') }}</p>
-                    <button onclick="this.closest('.toast').remove()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1">
+                    <p class="text-sm font-medium text-ink-800 dark:text-ink-200 flex-1">{{ session('success') }}</p>
+                    <button onclick="this.closest('.toast').remove()" class="text-ink-400 hover:text-ink-600 dark:hover:text-ink-300 transition-colors p-1">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -87,13 +87,13 @@ use App\Models\Setting;
         @if (session('error'))
             <div class="toast" role="alert">
                 <div class="flex items-center gap-2.5 bg-white dark:bg-[#1e2127] border border-danger-200 dark:border-danger-800/50 rounded-2xl px-4 py-3 shadow-card">
-                    <div class="w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center flex-shrink-0">
-                        <svg class="w-3.5 h-3.5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-7 h-7 rounded-full bg-danger-100 dark:bg-danger-900/50 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-3.5 h-3.5 text-danger-600 dark:text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
                     </div>
-                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 flex-1">{{ session('error') }}</p>
-                    <button onclick="this.closest('.toast').remove()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1">
+                    <p class="text-sm font-medium text-ink-800 dark:text-ink-200 flex-1">{{ session('error') }}</p>
+                    <button onclick="this.closest('.toast').remove()" class="text-ink-400 hover:text-ink-600 dark:hover:text-ink-300 transition-colors p-1">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -137,7 +137,7 @@ use App\Models\Setting;
                 <a href="{{ route('cashbook.index') }}"
                    class="nav-item {{ request()->routeIs('cashbook.*') ? 'nav-item-active' : '' }} group -mt-2"
                    aria-label="{{ __('messages.cashbook') }}">
-                    <div class="w-10 h-10 rounded-full bg-brand text-white flex items-center justify-center shadow-fab">
+                    <div class="w-10 h-10 rounded-full brand-grad text-white flex items-center justify-center shadow-fab">
                         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>

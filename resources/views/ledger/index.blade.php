@@ -2,7 +2,7 @@
 
 @section('content')
     <div class="page-header page-enter">
-        <h2 class="text-lg font-bold text-gray-900 dark:text-white">{{ __('messages.ledger') }}</h2>
+        <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ __('messages.ledger') }}</h2>
     </div>
 
     <div class="card overflow-hidden">
@@ -14,20 +14,20 @@
                     </div>
                     <div class="min-w-0">
                         <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ $person['name'] }}</span>
+                            <span class="text-sm font-medium text-ink-800 dark:text-ink-200">{{ $person['name'] }}</span>
                             <span class="badge {{ $person['type'] === 'customer' ? 'badge-info' : 'badge-warning' }}">{{ $person['type_label'] }}</span>
                         </div>
                         @if ($person['phone'])
-                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ $person['phone'] }}</div>
+                            <div class="text-xs text-ink-500 dark:text-ink-400 mt-0.5">{{ $person['phone'] }}</div>
                         @endif
                     </div>
                 </div>
                 <div class="text-right flex-shrink-0 ml-3">
                     @if ($person['remaining_afn'] > 0)
-                        <div class="text-sm font-semibold {{ $person['type'] === 'customer' ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400' }}">{{ number_format($person['remaining_afn']) }} {{ __('messages.afn') }}</div>
+                        <div class="text-sm font-semibold {{ $person['type'] === 'customer' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">{{ number_format($person['remaining_afn']) }} {{ __('messages.afn') }}</div>
                     @endif
                     @if ($person['remaining_usd'] > 0)
-                        <div class="text-sm font-semibold {{ $person['type'] === 'customer' ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400' }}">{{ number_format($person['remaining_usd']) }}$</div>
+                        <div class="text-sm font-semibold {{ $person['type'] === 'customer' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">{{ number_format($person['remaining_usd']) }}$</div>
                     @endif
                     @if ($person['remaining_afn'] <= 0 && $person['remaining_usd'] <= 0)
                         <span class="badge badge-success">{{ __('messages.fully_paid') }}</span>
@@ -36,7 +36,7 @@
             </a>
         @empty
             <div class="empty-state">
-                <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('messages.no_customers_or_suppliers') }}</p>
+                <p class="text-sm text-ink-500 dark:text-ink-400">{{ __('messages.no_customers_or_suppliers') }}</p>
             </div>
         @endforelse
     </div>

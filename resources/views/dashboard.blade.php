@@ -1,6 +1,21 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('content')
+    <!-- Brand hero: net balance -->
+    <div class="brand-grad rounded-3xl p-5 mb-6 text-white shadow-fab relative overflow-hidden">
+        <div class="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-white/10"></div>
+        <div class="absolute -right-2 top-10 w-16 h-16 rounded-full bg-white/5"></div>
+        <p class="relative text-[11px] font-semibold uppercase tracking-wider text-white/80">{{ __('messages.net_balance') }}</p>
+        <p class="relative text-3xl font-extrabold tabular-nums mt-1">
+            {{ number_format(($totalRevenueAFN + $totalRevenueUSD * $rate) - ($totalExpenseAFN + $totalExpenseUSD * $rate)) }}
+            <span class="text-base font-bold text-white/70">{{ __('messages.afn') }}</span>
+        </p>
+        <div class="relative flex items-center gap-4 mt-4 text-[11px] font-medium text-white/90">
+            <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-white/80"></span>{{ __('messages.revenue') }}: {{ number_format($totalRevenueAFN + $totalRevenueUSD * $rate) }}</span>
+            <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-white/50"></span>{{ __('messages.expenses') }}: {{ number_format($totalExpenseAFN + $totalExpenseUSD * $rate) }}</span>
+        </div>
+    </div>
+
     <!-- Quick Action Cards (DigiKhata-style) -->
     <div class="grid grid-cols-2 gap-3 mb-6">
         <a href="{{ route('orders.create') }}" class="action-card">
@@ -34,17 +49,17 @@
         <div class="metric-tile">
             <span class="metric-label">{{ __('messages.revenue') }}</span>
             <span class="metric-value text-primary-600 dark:text-primary-400">{{ number_format($totalRevenueAFN + $totalRevenueUSD * $rate) }}</span>
-            <span class="text-[9px] text-gray-400">{{ __('messages.afn') }}</span>
+            <span class="text-[9px] text-ink-400">{{ __('messages.afn') }}</span>
         </div>
         <div class="metric-tile">
             <span class="metric-label">{{ __('messages.expenses') }}</span>
-            <span class="metric-value text-red-500">{{ number_format($totalExpenseAFN + $totalExpenseUSD * $rate) }}</span>
-            <span class="text-[9px] text-gray-400">{{ __('messages.afn') }}</span>
+            <span class="metric-value text-danger-500">{{ number_format($totalExpenseAFN + $totalExpenseUSD * $rate) }}</span>
+            <span class="text-[9px] text-ink-400">{{ __('messages.afn') }}</span>
         </div>
         <div class="metric-tile">
             <span class="metric-label">{{ __('messages.pending') }}</span>
-            <span class="metric-value text-amber-500">{{ $pendingOrders + $pendingPayments }}</span>
-            <span class="text-[9px] text-gray-400">{{ __('messages.documents') }}</span>
+            <span class="metric-value text-accent-500">{{ $pendingOrders + $pendingPayments }}</span>
+            <span class="text-[9px] text-ink-400">{{ __('messages.documents') }}</span>
         </div>
     </div>
 
@@ -53,7 +68,7 @@
         <div class="chart-container">
             <div class="flex items-center gap-2 mb-3">
                 <div class="w-1 h-5 rounded-full bg-primary-500"></div>
-                <h3 class="text-xs font-bold text-gray-800 dark:text-gray-200">{{ __('messages.weekly_revenue') }}</h3>
+                <h3 class="text-xs font-bold text-ink-800 dark:text-ink-200">{{ __('messages.weekly_revenue') }}</h3>
             </div>
             <div class="relative" style="height: 160px;">
                 <canvas id="weeklyRevenueChart"></canvas>
@@ -61,8 +76,8 @@
         </div>
         <div class="chart-container">
             <div class="flex items-center gap-2 mb-3">
-                <div class="w-1 h-5 rounded-full bg-red-400"></div>
-                <h3 class="text-xs font-bold text-gray-800 dark:text-gray-200">{{ __('messages.weekly_expenses') }}</h3>
+                <div class="w-1 h-5 rounded-full bg-danger-400"></div>
+                <h3 class="text-xs font-bold text-ink-800 dark:text-ink-200">{{ __('messages.weekly_expenses') }}</h3>
             </div>
             <div class="relative" style="height: 160px;">
                 <canvas id="weeklyExpenseChart"></canvas>
@@ -72,19 +87,19 @@
 
     <!-- Low Stock Alert -->
     @if ($lowStockProducts > 0)
-        <a href="{{ route('inventory.index') }}" class="flex items-center gap-3 p-3.5 mb-4 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30">
-            <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-                <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+        <a href="{{ route('inventory.index') }}" class="flex items-center gap-3 p-3.5 mb-4 rounded-xl bg-danger-50 dark:bg-danger-900/10 border border-danger-200 dark:border-danger-800/30">
+            <div class="w-8 h-8 rounded-lg bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-danger-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
                 </svg>
             </div>
             <div class="flex-1 min-w-0">
-                <p class="text-sm font-bold text-red-800 dark:text-red-300">
-                    <span class="text-red-600 dark:text-red-400">{{ $lowStockProducts }}</span> {{ __('messages.low_stock_products') }}
+                <p class="text-sm font-bold text-danger-800 dark:text-danger-300">
+                    <span class="text-danger-600 dark:text-danger-400">{{ $lowStockProducts }}</span> {{ __('messages.low_stock_products') }}
                 </p>
-                <p class="text-[11px] text-red-600 dark:text-red-400">{{ __('messages.take_action') }}</p>
+                <p class="text-[11px] text-danger-600 dark:text-danger-400">{{ __('messages.take_action') }}</p>
             </div>
-            <svg class="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <svg class="w-4 h-4 text-danger-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
             </svg>
         </a>
@@ -99,7 +114,7 @@
                 {{ __('messages.view_all') }}
             </a>
         </div>
-        <div class="divide-y divide-gray-100 dark:divide-gray-700/30">
+        <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
             @forelse ($recentOrders as $order)
                 <a href="{{ route('orders.show', $order) }}" class="list-row">
                     <div class="flex items-center gap-3 min-w-0">
@@ -109,12 +124,12 @@
                             </svg>
                         </div>
                         <div class="min-w-0">
-                            <div class="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{{ $order->party?->name }}</div>
-                            <div class="text-[11px] text-gray-500 dark:text-gray-400">{{ $order->created_at->format('d M') }}</div>
+                            <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $order->party?->name }}</div>
+                            <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $order->created_at->format('d M') }}</div>
                         </div>
                     </div>
                     <div class="text-right flex-shrink-0 ml-3">
-                        <div class="text-sm font-bold text-gray-900 dark:text-gray-100">{{ number_format($order->total_amount) }}</div>
+                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100">{{ number_format($order->total_amount) }}</div>
                         <span class="inline-flex items-center gap-1 badge
                             @if($order->display_status === 'paid' || $order->display_status === 'completed') badge-success
                             @elseif($order->display_status === 'processing') badge-info
@@ -132,12 +147,12 @@
                 </a>
             @empty
                 <div class="empty-state">
-                    <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-2">
-                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <div class="w-10 h-10 rounded-full bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-2">
+                        <svg class="w-5 h-5 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
                         </svg>
                     </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('messages.no_orders') }}</p>
+                    <p class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_orders') }}</p>
                 </div>
             @endforelse
         </div>
@@ -152,39 +167,39 @@
                 {{ __('messages.view_all') }}
             </a>
         </div>
-        <div class="divide-y divide-gray-100 dark:divide-gray-700/30">
+        <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
             @forelse ($topDebtors as $debtor)
                 <a href="{{ route('ledger.show', ['customer', $debtor->id]) }}" class="list-row">
                     <div class="flex items-center gap-3 min-w-0">
-                        <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-                            <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                        <div class="w-8 h-8 rounded-lg bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-4 h-4 text-danger-600 dark:text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
                             </svg>
                         </div>
                         <div class="min-w-0">
-                            <div class="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{{ $debtor->name }}</div>
-                            <div class="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+                            <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $debtor->name }}</div>
+                            <div class="flex items-center gap-2 text-[11px] text-ink-500 dark:text-ink-400">
                                 @if ($debtor->pending_afn > 0)
-                                    <span class="text-red-600 dark:text-red-400 font-semibold">{{ number_format($debtor->pending_afn) }} {{ __('messages.afn') }}</span>
+                                    <span class="text-danger-600 dark:text-danger-400 font-semibold">{{ number_format($debtor->pending_afn) }} {{ __('messages.afn') }}</span>
                                 @endif
                                 @if ($debtor->pending_usd > 0)
-                                    <span class="text-red-600 dark:text-red-400 font-semibold">{{ number_format($debtor->pending_usd) }}$</span>
+                                    <span class="text-danger-600 dark:text-danger-400 font-semibold">{{ number_format($debtor->pending_usd) }}$</span>
                                 @endif
                             </div>
                         </div>
                     </div>
-                    <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <svg class="w-4 h-4 text-ink-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
                     </svg>
                 </a>
             @empty
                 <div class="empty-state">
-                    <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-2">
-                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <div class="w-10 h-10 rounded-full bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-2">
+                        <svg class="w-5 h-5 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                     </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('messages.all_settled') }}</p>
+                    <p class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.all_settled') }}</p>
                 </div>
             @endforelse
         </div>
@@ -199,22 +214,22 @@
                 {{ __('messages.view_all') }}
             </a>
         </div>
-        <div class="divide-y divide-gray-100 dark:divide-gray-700/30">
+        <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
             @forelse ($recentPurchases as $purchase)
                 <a href="{{ route('purchases.show', $purchase) }}" class="list-row">
                     <div class="flex items-center gap-3 min-w-0">
-                        <div class="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-                            <svg class="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                        <div class="w-8 h-8 rounded-lg bg-accent-100 dark:bg-accent-900/30 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-4 h-4 text-accent-600 dark:text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
                             </svg>
                         </div>
                         <div class="min-w-0">
-                            <div class="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{{ $purchase->party?->name ?? __('messages.unknown') }}</div>
-                            <div class="text-[11px] text-gray-500 dark:text-gray-400">{{ $purchase->created_at->format('d M') }}</div>
+                            <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $purchase->party?->name ?? __('messages.unknown') }}</div>
+                            <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $purchase->created_at->format('d M') }}</div>
                         </div>
                     </div>
                     <div class="text-right flex-shrink-0 ml-3">
-                        <div class="text-sm font-bold text-gray-900 dark:text-gray-100">{{ number_format($purchase->total_amount) }}</div>
+                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100">{{ number_format($purchase->total_amount) }}</div>
                         <span class="inline-flex items-center gap-1 badge
                             @if($purchase->display_status === 'paid' || $purchase->display_status === 'completed') badge-success
                             @elseif($purchase->display_status === 'processing') badge-info
@@ -232,12 +247,12 @@
                 </a>
             @empty
                 <div class="empty-state">
-                    <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-2">
-                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <div class="w-10 h-10 rounded-full bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-2">
+                        <svg class="w-5 h-5 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
                         </svg>
                     </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('messages.no_purchases') }}</p>
+                    <p class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_purchases') }}</p>
                 </div>
             @endforelse
         </div>
@@ -252,26 +267,26 @@
                 {{ __('messages.view_all') }}
             </a>
         </div>
-        <div class="divide-y divide-gray-100 dark:divide-gray-700/30">
+        <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
             @forelse ($recentReminders as $reminder)
                 <div class="list-row">
                     <div class="flex items-center gap-3 min-w-0">
                         <div class="w-8 h-8 rounded-lg
                             @if($reminder->status === 'sent') bg-primary-100 dark:bg-primary-900/30
-                            @elseif($reminder->status === 'failed') bg-red-100 dark:bg-red-900/30
-                            @else bg-amber-100 dark:bg-amber-900/30 @endif
+                            @elseif($reminder->status === 'failed') bg-danger-100 dark:bg-danger-900/30
+                            @else bg-accent-100 dark:bg-accent-900/30 @endif
                             flex items-center justify-center flex-shrink-0">
                             <svg class="w-4 h-4
                                 @if($reminder->status === 'sent') text-primary-600 dark:text-primary-400
-                                @elseif($reminder->status === 'failed') text-red-600 dark:text-red-400
-                                @else text-amber-600 dark:text-amber-400 @endif"
+                                @elseif($reminder->status === 'failed') text-danger-600 dark:text-danger-400
+                                @else text-accent-600 dark:text-accent-400 @endif"
                                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
                             </svg>
                         </div>
                         <div class="min-w-0">
-                            <div class="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{{ $reminder->remindable?->name ?? __('messages.deleted') }}</div>
-                            <div class="text-[11px] text-gray-500 dark:text-gray-400">{{ $reminder->created_at->diffForHumans() }}</div>
+                            <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $reminder->remindable?->name ?? __('messages.deleted') }}</div>
+                            <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $reminder->created_at->diffForHumans() }}</div>
                         </div>
                     </div>
                     <span class="badge
@@ -283,7 +298,7 @@
                 </div>
             @empty
                 <div class="empty-state">
-                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('messages.no_reminders') }}</p>
+                    <p class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_reminders') }}</p>
                 </div>
             @endforelse
         </div>

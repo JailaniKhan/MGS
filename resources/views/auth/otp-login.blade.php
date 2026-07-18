@@ -21,14 +21,14 @@
             <div class="w-16 h-16 rounded-2xl bg-brand text-white flex items-center justify-center mx-auto shadow-lg shadow-primary-500/30 mb-3">
                 <span class="text-white font-bold text-2xl">M</span>
             </div>
-            <h1 class="text-xl font-bold text-gray-900 dark:text-white">MGS</h1>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ __('messages.business_mgmt_system') }}</p>
+            <h1 class="text-xl font-bold text-ink-900 dark:text-white">MGS</h1>
+            <p class="text-sm text-ink-500 dark:text-ink-400 mt-1">{{ __('messages.business_mgmt_system') }}</p>
         </div>
 
         <!-- OTP Login Card -->
         <div class="bg-white dark:bg-[#16181c] rounded-2xl border border-ink-100 dark:border-white/[0.06] p-6 shadow-card">
-            <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-1">{{ __('messages.phone_login') }}</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">{{ __('messages.enter_phone_for_otp') }}</p>
+            <h2 class="text-lg font-bold text-ink-900 dark:text-white mb-1">{{ __('messages.phone_login') }}</h2>
+            <p class="text-sm text-ink-500 dark:text-ink-400 mb-6">{{ __('messages.enter_phone_for_otp') }}</p>
 
             <div id="step-phone">
                 <div class="mb-4">
@@ -59,11 +59,11 @@
                 <div class="w-14 h-14 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mx-auto mb-3">
                     <svg class="w-7 h-7 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 </div>
-                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ __('messages.login_successful') }}</p>
+                <p class="text-sm font-medium text-ink-900 dark:text-white">{{ __('messages.login_successful') }}</p>
             </div>
 
-            <div class="mt-6 text-center border-t border-gray-100 dark:border-gray-700/30 pt-4">
-                <a href="{{ route('login') }}" class="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+            <div class="mt-6 text-center border-t border-ink-100 dark:border-ink-700/30 pt-4">
+                <a href="{{ route('login') }}" class="text-xs font-medium text-ink-500 dark:text-ink-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
                     {{ __('messages.email_login_instead') }}
                 </a>
             </div>
