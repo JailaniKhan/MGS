@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Category;
 use App\Models\Expense;
 use Illuminate\Http\Request;
 
@@ -15,7 +16,8 @@ class ExpenseController extends Controller
 
     public function create()
     {
-        return view('expenses.create');
+        $categories = Category::orderBy('name')->pluck('name');
+        return view('expenses.create', compact('categories'));
     }
 
     public function store(Request $request)
@@ -41,7 +43,8 @@ class ExpenseController extends Controller
 
     public function edit(Expense $expense)
     {
-        return view('expenses.edit', compact('expense'));
+        $categories = Category::orderBy('name')->pluck('name');
+        return view('expenses.edit', compact('expense', 'categories'));
     }
 
     public function update(Request $request, Expense $expense)

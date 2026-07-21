@@ -14,7 +14,14 @@
             @csrf
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.categories') }}</label>
-                <input type="text" name="category" value="{{ old('category') }}" required class="form-input" placeholder="{{ __('messages.expense_category') }}">
+                <select name="category_select" id="category-select" class="form-input">
+                    <option value="" disabled {{ old('category') ? '' : 'selected' }}>{{ __('messages.select_category') }}</option>
+                    @foreach ($categories as $cat)
+                        <option value="{{ $cat }}" {{ old('category') === $cat ? 'selected' : '' }}>{{ $cat }}</option>
+                    @endforeach
+                    <option value="__other__" {{ old('category') && !in_array(old('category'), $categories->toArray()) ? 'selected' : '' }}>{{ __('messages.other') }}</option>
+                </select>
+                <input type="text" name="category" id="category-input" value="{{ old('category') }}" required class="form-input mt-2 hidden" placeholder="{{ __('messages.expense_category') }}">
                 @error('category') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
@@ -60,4 +67,31 @@
             <button type="submit" class="btn-primary w-full"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>{{ __('messages.submit') }}</button>
         </form>
     </div>
+
+    @push('scripts')
+    <script>
+        (function () {
+            const select = document.getElementById('category-select');
+            const input = document.getElementById('category-input');
+            if (!select || !input) return;
+
+            function sync() {
+                if (select.value === '__other__') {
+                    input.classList.remove('hidden');
+                    input.setAttribute('required', 'required');
+                } else {
+                    input.classList.add('hidden');
+                    input.removeAttribute('required');
+                    input.value = select.value;
+                }
+            }
+
+            select.addEventListener('change', sync);
+            document.querySelector('form').addEventListener('submit', function () {
+                if (select.value !== '__other__') input.value = select.value;
+            });
+            sync();
+        })();
+    </script>
+    @endpush
 @endsection

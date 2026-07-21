@@ -74,6 +74,8 @@ return [
     'category_deleted' => 'Category deleted successfully.',
     'category_has_products' => 'This category has products linked to it. Delete them first.',
     'category_updated' => 'Category updated successfully.',
+    'select_category' => 'Select a category',
+    'other' => 'Other (type new)',
     'change_status' => 'Change Status',
     'closing_balance' => 'Closing Balance',
     'cogs' => 'Cost of Goods Sold (COGS)',

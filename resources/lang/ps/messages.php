@@ -74,6 +74,8 @@ return [
     'category_deleted' => 'کتګوري په بریالیتوب سره ړنګه شوه',
     'category_has_products' => 'دې کتګورۍ سره محصولات تړلي دي، لومړی هغه ړنګ کړئ',
     'category_updated' => 'کتګوري په بریالیتوب سره سمه شوه',
+    'select_category' => 'یوه کتګوري غوره کړئ',
+    'other' => 'نور (نوی ولیکئ)',
     'change_status' => 'د حالت بدلول',
     'closing_balance' => 'د پای اوسطه',
     'cogs' => 'د پلور شویو توکو لګښت',
