@@ -64,4 +64,104 @@ class SettingsController extends Controller
 
         return redirect()->back()->with('success', __('messages.saved_successfully'));
     }
+
+    /**
+     * Show the OpenWA WhatsApp gateway connection status and a live QR code.
+     * The QR is fetched on demand from the self-hosted OpenWA gateway so it
+     * can be scanned directly inside the app.
+     */
+    public function openwa(\App\Services\WhatsApp\OpenWaService $openWa)
+    {
+        $configured = $openWa->isConfigured();
+        $status = $configured ? $openWa->sessionStatus() : null;
+        $qr = null;
+
+        if ($status && ($status['status'] ?? null) === 'qr_ready') {
+            $qr = $openWa->qrCode();
+        }
+
+        return view('settings.openwa', compact('configured', 'status', 'qr'));
+    }
+
+    /**
+     * AJAX endpoint that returns a fresh QR code + session status as JSON,
+     * so the settings page can refresh without a full reload.
+     */
+    public function openwaQr(\App\Services\WhatsApp\OpenWaService $openWa)
+    {
+        if (!$openWa->isConfigured()) {
+            return response()->json(['configured' => false], 200);
+        }
+
+        $status = $openWa->sessionStatus();
+        $qr = null;
+
+        if ($status && ($status['status'] ?? null) === 'qr_ready') {
+            $qr = $openWa->qrCode();
+        }
+
+        return response()->json([
+            'configured' => true,
+            'status' => $status['status'] ?? null,
+            'qr' => $qr,
+        ]);
+    }
+
+    /**
+     * Generate an 8-character pairing code (alternative to scanning the QR)
+     * so the session can be linked by typing the code into WhatsApp.
+     */
+    public function openwaPairingCode(Request $request, \App\Services\WhatsApp\OpenWaService $openWa)
+    {
+        if (!$openWa->isConfigured()) {
+            return response()->json(['configured' => false], 200);
+        }
+
+        $validated = $request->validate([
+            'phone' => 'required|string|regex:/^[0-9]{6,15}$/',
+        ]);
+
+        $code = $openWa->requestPairingCode($validated['phone']);
+
+        if (!$code) {
+            return response()->json(['error' => 'Could not generate pairing code.'], 422);
+        }
+
+        return response()->json(['pairingCode' => $code]);
+    }
+
+    /**
+     * Send a test WhatsApp message via the connected OpenWA gateway so the
+     * user can verify delivery without running the test suite.
+     */
+    public function openwaTestSend(\App\Services\WhatsApp\OpenWaService $openWa)
+    {
+        if (!$openWa->isConfigured()) {
+            return response()->json(['success' => false, 'error' => 'OpenWA is not configured.'], 200);
+        }
+
+        $status = $openWa->sessionStatus();
+
+        if (($status['status'] ?? null) !== 'ready' && ($status['status'] ?? null) !== 'connected') {
+            return response()->json([
+                'success' => false,
+                'error' => 'Session is not connected (state: ' . ($status['status'] ?? 'unknown') . '). Link the device first.',
+            ], 200);
+        }
+
+        $phone = $status['phone'] ?? config('services.openwa.test_chat_id');
+
+        if (!$phone) {
+            return response()->json(['success' => false, 'error' => 'No connected phone number found.'], 200);
+        }
+
+        $message = __('messages.openwa_test_message', ['time' => now()->format('Y-m-d H:i')]);
+
+        $sent = $openWa->send($phone, $message);
+
+        return response()->json([
+            'success' => $sent,
+            'error' => $sent ? null : 'Gateway rejected the message. Check the session and try again.',
+        ]);
+    }
 }

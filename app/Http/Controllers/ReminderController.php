@@ -60,6 +60,7 @@ class ReminderController extends Controller
             currency: $currency,
             channel: $validated['channel'],
             dueDate: now()->addDays(7)->format('Y-m-d'),
+            userId: $request->user()?->id,
         );
 
         // SMS: return the message so the frontend can open the native SMS app
@@ -127,6 +128,7 @@ class ReminderController extends Controller
             currency: $currency,
             channel: $validated['channel'],
             dueDate: now()->addDays(7)->format('Y-m-d'),
+            userId: $request->user()?->id,
         );
 
         // SMS: return the message so the frontend can open the native SMS app

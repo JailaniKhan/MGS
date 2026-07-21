@@ -3,6 +3,7 @@
 namespace App\Services\Reminder;
 
 use App\Models\Reminder;
+use App\Services\WhatsApp\OpenWaService;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Support\Facades\Log;
 
@@ -10,7 +11,8 @@ class ReminderService
 {
     public function __construct(
         private AIMessageGenerator $messageGenerator,
-        private ?WhatsAppService $whatsAppService = null,
+        private WhatsAppService $whatsAppService,
+        private OpenWaService $openWaService,
     ) {}
 
     /**
@@ -27,11 +29,13 @@ class ReminderService
         string $currency,
         string $channel = 'sms',
         string $dueDate = '',
+        ?int $userId = null,
     ): Reminder {
         $message = $this->messageGenerator->generate($name, $amount, $currency, $dueDate);
 
         if ($channel === 'whatsapp') {
             $reminder = Reminder::create([
+                'user_id' => $userId,
                 'remindable_type' => $remindableType,
                 'remindable_id' => $remindableId,
                 'amount' => $amount,
@@ -42,12 +46,28 @@ class ReminderService
             ]);
 
             try {
+                // Only the self-hosted OpenWA gateway has a session/connection
+                // state to check. The Meta Cloud API client sends directly.
+                if ($this->openWaService && $this->openWaService->isConfigured()) {
+                    $status = $this->openWaService->sessionStatus();
+                    $sessionState = $status['status'] ?? null;
+
+                    if ($sessionState !== 'ready' && $sessionState !== 'connected') {
+                        $reminder->update([
+                            'status' => 'failed',
+                            'error_message' => "WhatsApp session not connected (state: {$sessionState}). Link the device in Settings → WhatsApp Gateway.",
+                        ]);
+
+                        return $reminder->fresh();
+                    }
+                }
+
                 $sent = $this->whatsAppService?->send($phone, $message) ?? false;
 
                 $reminder->update([
                     'status' => $sent ? 'sent' : 'failed',
                     'sent_at' => $sent ? now() : null,
-                    'error_message' => $sent ? null : 'Provider returned failure',
+                    'error_message' => $sent ? null : 'WhatsApp gateway rejected the message.',
                 ]);
             } catch (\Exception $e) {
                 Log::error('WhatsApp send failed', [

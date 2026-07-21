@@ -37,9 +37,6 @@ use App\Models\Setting;
 
                 <div class="flex items-center gap-2">
                     <div class="relative">
-                        <form method="POST" action="{{ route('language.update') }}" id="language-form" class="hidden">
-                            @csrf
-                        </form>
                         <select onchange="changeLanguage(this.value)"
                             class="text-[11px] bg-ink-100/80 dark:bg-ink-800/80 border border-ink-200 dark:border-ink-700 rounded-xl px-2.5 py-2
                                    appearance-none cursor-pointer transition-all duration-200 hover:border-primary-300 dark:hover:border-primary-600
@@ -142,13 +139,16 @@ use App\Models\Setting;
 
         <script>
             function changeLanguage(lang) {
-                const form = document.getElementById('language-form');
-                const langInput = document.createElement('input');
-                langInput.type = 'hidden';
-                langInput.name = 'language';
-                langInput.value = lang;
-                form.appendChild(langInput);
-                form.submit();
+                fetch('{{ route('language.update') }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({ language: lang }),
+                })
+                .then(() => window.location.reload())
+                .catch(() => window.location.reload());
             }
         </script>
 

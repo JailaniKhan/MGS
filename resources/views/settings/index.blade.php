@@ -112,6 +112,8 @@
     </div>
 
     <div class="mt-4 text-center">
+        <a href="{{ route('settings.openwa') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 dark:text-primary-400 mb-3"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 4.5h9a3 3 0 013 3v9a3 3 0 01-3 3h-9a3 3 0 01-3-3v-9a3 3 0 013-3z"/></svg>{{ __('messages.whatsapp_gateway') }}</a>
+        <br>
         <a href="{{ route('dashboard') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}</a>
     </div>
 </div>

@@ -7,8 +7,17 @@ use Illuminate\Support\Facades\Log;
 
 class WhatsAppService
 {
+    public function __construct(
+        private OpenWaService $openWa,
+    ) {}
+
     public function send(string $phone, string $message): bool
     {
+        // Prefer the self-hosted OpenWA gateway when configured.
+        if ($this->openWa && $this->openWa->isConfigured()) {
+            return $this->openWa->send($phone, $message);
+        }
+
         $token = config('services.whatsapp.token');
         $phoneNumberId = config('services.whatsapp.phone_number_id');
         $url = config('services.whatsapp.url', 'https://graph.facebook.com/v18.0');

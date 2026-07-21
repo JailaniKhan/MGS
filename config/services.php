@@ -41,8 +41,21 @@ return [
         'url' => env('WHATSAPP_URL', 'https://graph.facebook.com/v18.0'),
     ],
 
+    'openwa' => [
+        'base_url' => env('OPENWA_BASE_URL', 'http://localhost:2785'),
+        'api_key' => env('OPENWA_API_KEY'),
+        'session' => env('OPENWA_SESSION', 'default'),
+        'webhook_secret' => env('OPENWA_WEBHOOK_SECRET'),
+    ],
+
     'anthropic' => [
         'api_key' => env('ANTHROPIC_API_KEY'),
+    ],
+
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URL'),
     ],
 
 ];

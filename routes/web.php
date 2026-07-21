@@ -36,6 +36,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings', [App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
     Route::post('/settings', [App\Http\Controllers\SettingsController::class, 'update'])->name('settings.update');
     Route::post('/language', [App\Http\Controllers\SettingsController::class, 'updateLanguage'])->name('language.update');
+    Route::get('/settings/openwa', [App\Http\Controllers\SettingsController::class, 'openwa'])->name('settings.openwa');
+    Route::get('/settings/openwa/qr', [App\Http\Controllers\SettingsController::class, 'openwaQr'])->name('settings.openwa.qr');
+    Route::post('/settings/openwa/pairing-code', [App\Http\Controllers\SettingsController::class, 'openwaPairingCode'])->name('settings.openwa.pairing');
+    Route::post('/settings/openwa/test-send', [App\Http\Controllers\SettingsController::class, 'openwaTestSend'])->name('settings.openwa.test');
 
     Route::get('/people', [App\Http\Controllers\PeopleController::class, 'index'])->name('people.index');
     Route::get('/transactions', [App\Http\Controllers\TransactionsController::class, 'index'])->name('transactions.index');
