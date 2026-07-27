@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\Expense;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class ExpenseController extends Controller
 {
     public function index()
     {
-        $expenses = Expense::latest('expense_date')->paginate(30);
+        $expenses = Expense::latest('expense_date')->paginate(self::PER_PAGE)->withQueryString();
         return view('expenses.index', compact('expenses'));
     }
 
@@ -31,7 +32,7 @@ class ExpenseController extends Controller
             'receipt_path' => 'nullable|string|max:500',
         ]);
 
-        Expense::create($validated);
+        Expense::create(array_merge($validated, ['user_id' => Auth::id()]));
 
         return redirect()->route('expenses.index')->with('success', __('messages.expense_created'));
     }

@@ -151,7 +151,8 @@ class ReminderController extends Controller
     {
         $reminders = \App\Models\Reminder::with('remindable')
             ->orderBy('created_at', 'desc')
-            ->paginate(20);
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
 
         return view('reminders.index', compact('reminders'));
     }

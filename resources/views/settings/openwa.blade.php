@@ -16,12 +16,32 @@
         </div>
     @else
         <div class="card p-6">
-            {{-- Session status badge --}}
+            {{--<span class="badge {{ state badge }}">
+                connected  → badge-success (state 'connected' or 'ready')
+                qr_ready   → badge-warning
+                unreachable→ badge-danger (status is null, gateway down)
+                failed/other → badge-danger
+            </span>-->--}}
+            @php
+                $rawState = $status['status'] ?? null;
+                $isReachable = $status !== null;
+                $badgeClass = match (true) {
+                    in_array($rawState, ['connected', 'ready']) => 'badge-success',
+                    $rawState === 'qr_ready' => 'badge-warning',
+                    !$isReachable => 'badge-danger',
+                    default => 'badge-danger',
+                };
+                $badgeLabel = $isReachable ? ucfirst($rawState ?? 'unknown') : 'Unreachable';
+            @endphp
+
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2">
-                    <span class="badge {{ ($status['status'] ?? '') === 'connected' ? 'badge-success' : (($status['status'] ?? '') === 'qr_ready' ? 'badge-warning' : 'badge-danger') }}">
-                        {{ ucfirst($status['status'] ?? 'unknown') }}
-                    </span>
+                    @isset($gatewayRunning)
+                        <span class="badge {{ $gatewayRunning ? 'badge-success' : 'badge-danger' }}">
+                            {{ $gatewayRunning ? __('messages.openwa_gateway_running') ?? 'Gateway: Running' : __('messages.openwa_gateway_stopped') ?? 'Gateway: Stopped' }}
+                        </span>
+                    @endisset
+                    <span class="badge {{ $badgeClass }}">{{ $badgeLabel }}</span>
                     @if (!empty($status['phone']))
                         <span class="text-sm text-ink-500 dark:text-ink-400">{{ $status['phone'] }}</span>
                     @endif
@@ -37,6 +57,12 @@
             </div>
 
             <div id="testSendResult" class="text-sm mt-2 hidden"></div>
+
+            @if (!$isReachable)
+                <div class="text-sm text-danger-600 dark:text-danger-400 bg-danger-50 dark:bg-danger-900/20 rounded-lg p-3 mb-4">
+                    {{ __('messages.openwa_unreachable') ?? 'OpenWA gateway is not reachable. Make sure it is running (it auto-starts on login) and OPENWA_BASE_URL is correct.' }}
+                </div>
+            @endif
 
             {{-- QR code --}}
             <div class="flex flex-col items-center justify-center py-4">

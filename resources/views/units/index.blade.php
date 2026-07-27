@@ -53,4 +53,7 @@
             </div>
         @endforelse
     </div>
+    @if ($units->hasPages())
+        <div class="mt-4">{{ $units->links() }}</div>
+    @endif
 @endsection

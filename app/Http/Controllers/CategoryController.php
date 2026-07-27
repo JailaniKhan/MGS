@@ -9,7 +9,11 @@ class CategoryController extends Controller
 {
     public function index()
     {
-        $categories = Category::withCount('products')->orderBy('name')->get();
+        $categories = Category::withCount('products')
+            ->orderBy('name')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
         return view('categories.index', compact('categories'));
     }
 

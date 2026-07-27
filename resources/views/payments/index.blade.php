@@ -56,6 +56,9 @@
         @empty
             <div class="px-4 py-3 text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_outstanding') }}</div>
         @endforelse
+        @if ($receivables->hasPages())
+            <div class="px-4 py-2">{{ $receivables->links() }}</div>
+        @endif
 
         <div class="px-4 py-2 bg-danger-50 dark:bg-danger-900/10 text-xs font-semibold text-danger-700 dark:text-danger-300 border-t border-ink-100 dark:border-ink-700/30">{{ __('messages.payables') }}</div>
         @forelse ($payables as $purchase)
@@ -69,6 +72,9 @@
         @empty
             <div class="px-4 py-3 text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_outstanding') }}</div>
         @endforelse
+        @if ($payables->hasPages())
+            <div class="px-4 py-2">{{ $payables->links() }}</div>
+        @endif
     </div>
 
     <div class="card overflow-hidden page-enter" style="animation-delay: 0.15s;">
@@ -99,4 +105,7 @@
             <div class="empty-state"><p class="text-sm text-ink-500 dark:text-ink-400">{{ __('messages.no_transactions') }}</p></div>
         @endforelse
     </div>
+    @if ($transactions->hasPages())
+        <div class="mt-4">{{ $transactions->links() }}</div>
+    @endif
 @endsection

@@ -5,13 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Unit;
+use App\Models\StockMovement;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::with('category', 'unit')->orderBy('name')->get();
+        $products = Product::with('category', 'unit')
+            ->orderBy('name')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
         return view('products.index', compact('products'));
     }
 
@@ -58,7 +64,22 @@ class ProductController extends Controller
             'description' => 'nullable|string',
         ]);
 
+        $oldStock = $product->stock;
         $product->update($validated);
+        $newStock = $product->fresh()->stock;
+
+        if ($oldStock !== $newStock) {
+            $change = $newStock - $oldStock;
+            StockMovement::create([
+                'user_id' => Auth::id(),
+                'product_id' => $product->id,
+                'quantity_change' => $change,
+                'movement_type' => 'adjustment',
+                'reference_type' => 'product',
+                'reference_id' => $product->id,
+                'notes' => __('messages.stock_adjusted'),
+            ]);
+        }
 
         return redirect()->route('products.index')->with('success', __('messages.product_updated'));
     }

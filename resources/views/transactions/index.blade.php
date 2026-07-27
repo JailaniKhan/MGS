@@ -62,6 +62,9 @@
                 </div>
             @endforelse
         </div>
+        @if ($orders->hasPages())
+            <div class="mt-3">{{ $orders->links() }}</div>
+        @endif
     </div>
 
     <div id="section-purchases" class="tab-section hidden page-enter">
@@ -112,6 +115,9 @@
                 </div>
             @endforelse
         </div>
+        @if ($purchases->hasPages())
+            <div class="mt-3">{{ $purchases->links() }}</div>
+        @endif
     </div>
 @endsection
 
@@ -128,5 +134,9 @@
         activeBtn.classList.remove('bg-ink-100', 'dark:bg-ink-800', 'text-ink-600', 'dark:text-ink-300', 'border', 'border-ink-200', 'dark:border-ink-700');
         activeBtn.classList.add('bg-primary-500', 'text-white', 'shadow-sm', 'shadow-primary-500/20');
     }
+
+    @if (request()->has('purchases_page'))
+        switchTab('purchases');
+    @endif
 </script>
 @endpush

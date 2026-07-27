@@ -10,8 +10,16 @@ class TransactionsController extends Controller
 {
     public function index()
     {
-        $orders = Order::with('customer', 'orderItems.product')->orderBy('created_at', 'desc')->get();
-        $purchases = Purchase::with('supplier')->orderBy('created_at', 'desc')->get();
+        $orders = Order::with(['customer', 'supplier'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(self::PER_PAGE, ['*'], 'orders_page')
+            ->withQueryString();
+
+        $purchases = Purchase::with(['customer', 'supplier'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(self::PER_PAGE, ['*'], 'purchases_page')
+            ->withQueryString();
+
         return view('transactions.index', compact('orders', 'purchases'));
     }
 }

@@ -1,0 +1,1268 @@
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
+
+class OpenWaInstall extends Command
+{
+    protected $signature = 'openwa:install
+        {--target= : Target platform: android-arm64, linux-x64, win-x64 (auto-detect by default)}
+        {--from= : Path to an existing OpenWA installation (e.g. D:\\Mobile App\\OpenWA)}
+        {--lightweight : Install a lightweight WhatsApp gateway (~48MB) instead of full OpenWA}
+        {--openwa-version= : OpenWA release tag (default: latest)}
+        {--node-version= : Node.js version (default: 22.14.0)}
+        {--no-deps : Skip npm install step}
+        {--no-build : Skip npm run build (use when dist/ already exists)}
+        {--no-node : Skip Node.js download step}
+        {--force : Overwrite existing installation}';
+
+    protected $description = 'Download and install Node.js + OpenWA for the target platform';
+
+    protected string $runtimeDir;
+
+    public function handle(): int
+    {
+        $this->runtimeDir = storage_path('app/openwa');
+
+        if (is_dir($this->runtimeDir) && !$this->option('force')) {
+            $this->components->twoColumnDetail('Installation exists', $this->runtimeDir);
+            $this->warn('Use --force to overwrite, or skip if already set up.');
+            return self::SUCCESS;
+        }
+
+        $target = $this->option('target') ?: $this->detectTarget();
+        $nodeVersion = $this->option('node-version') ?: $this->defaultNodeVersion($target);
+
+        $this->components->twoColumnDetail('Target platform', $target);
+        $this->components->twoColumnDetail('Node.js version', $nodeVersion);
+
+        $this->ensureDirectories();
+
+        if ($this->option('force') && is_dir("{$this->runtimeDir}/modules")) {
+            $this->components->task('Cleaning previous npm modules', fn () => $this->rrmdir("{$this->runtimeDir}/modules") ?: true);
+            mkdir("{$this->runtimeDir}/modules", 0755, true);
+        }
+
+        $nodeBinary = null;
+        if (!$this->option('no-node')) {
+            $nodeBinary = $this->installNode($target, $nodeVersion);
+            if (!$nodeBinary) {
+                return self::FAILURE;
+            }
+        }
+
+        $apiKey = env('OPENWA_API_KEY') ?: $this->generateApiKey();
+
+        // On Android we MUST use the lightweight Baileys-only variant — the
+        // full OpenWA bundle depends on puppeteer/Chromium, dockerode, postgres,
+        // redis and other services that cannot run on stock Android. Baileys is
+        // a pure-JS WhatsApp Web implementation and works fine.
+        $forceLightweight = str_starts_with($target, 'android-');
+
+        if ($this->option('lightweight') || $forceLightweight) {
+            $appDir = $this->installLightweight();
+            if (!$appDir) return self::FAILURE;
+        } else {
+            $appDir = $this->installOpenwa();
+            if (!$appDir) return self::FAILURE;
+
+            if (!$this->option('no-deps')) {
+                $this->installDependencies($appDir);
+            }
+
+            if (!$this->option('no-build') && !$this->option('lightweight')) {
+                $this->buildOpenwa($appDir);
+            }
+        }
+
+        if ($nodeBinary) {
+            $this->writeEnvConfig($appDir, $nodeBinary, $apiKey);
+        }
+        $this->writeOpenwaEnv($appDir, $apiKey);
+
+        $this->newLine();
+        $this->components->success('OpenWA installation complete!');
+        $this->line("  API Key: <fg=green>{$apiKey}</>");
+        $this->line("  Node:    {$nodeBinary}");
+        $this->line("  App:     {$appDir}");
+        $this->newLine();
+        $this->warn('Run "php artisan openwa:bundle" before building the APK to verify everything is ready.');
+
+        return self::SUCCESS;
+    }
+
+    protected function writeOpenwaEnv(string $appDir, string $apiKey): void
+    {
+        $envPath = "{$appDir}/.env";
+
+        $config = [
+            'NODE_ENV' => 'production',
+            'PORT' => '2785',
+            'API_KEY' => $apiKey,
+            'AUTH_TYPE' => 'api-key',
+            'AUTO_START_SESSIONS' => 'true',
+            'MAX_CONCURRENT_SESSIONS' => '1',
+            'SESSION_DATA_PATH' => './data/sessions',
+            'ENGINE_TYPE' => 'baileys',
+            'DATABASE_TYPE' => 'sqlite',
+            'DATABASE_PATH' => './data/database.sqlite',
+            'DATABASE_SYNCHRONIZE' => 'true',
+            'DATABASE_LOGGING' => 'false',
+            'STORAGE_TYPE' => 'local',
+            'STORAGE_LOCAL_PATH' => './data/media',
+            'DASHBOARD_ENABLED' => 'false',
+            'REDIS_ENABLED' => 'false',
+            'REDIS_BUILTIN' => 'false',
+            'QUEUE_ENABLED' => 'false',
+            'CACHE_ENABLED' => 'false',
+            'POSTGRES_BUILTIN' => 'false',
+            'MINIO_BUILTIN' => 'false',
+            'LOG_LEVEL' => 'error',
+            'LOG_FORMAT' => 'json',
+            'DOMAIN' => 'localhost',
+            'CORS_ORIGINS' => '*',
+            'PUPPETEER_HEADLESS' => 'true',
+            'PUPPETEER_ARGS' => '--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage',
+        ];
+
+        $lines = ["# OpenWA configuration for MGS bundled gateway\n"];
+        foreach ($config as $key => $value) {
+            $lines[] = "{$key}={$value}\n";
+        }
+
+        file_put_contents($envPath, implode('', $lines));
+        $this->components->twoColumnDetail('OpenWA .env', 'generated');
+    }
+
+    protected function detectTarget(): string
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            return 'win-x64';
+        }
+
+        $machine = php_uname('m');
+        if (PHP_OS_FAMILY === 'Darwin') {
+            return str_contains($machine, 'arm') ? 'darwin-arm64' : 'darwin-x64';
+        }
+
+        return str_contains($machine, 'aarch64') ? 'linux-arm64' : 'linux-x64';
+    }
+
+    protected function ensureDirectories(): void
+    {
+        $dirs = [
+            $this->runtimeDir,
+            "{$this->runtimeDir}/downloads",
+            "{$this->runtimeDir}/node",
+            "{$this->runtimeDir}/app",
+            "{$this->runtimeDir}/modules",
+        ];
+        foreach ($dirs as $dir) {
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+        }
+    }
+
+    protected function installLightweight(): ?string
+    {
+        $appDir = "{$this->runtimeDir}/app";
+
+        if (is_file("{$appDir}/server.js") && !$this->option('force')) {
+            $this->components->twoColumnDetail('Lightweight gateway', 'already installed');
+            return $appDir;
+        }
+
+        $this->components->task('Creating lightweight gateway', function () use ($appDir) {
+            if (is_dir($appDir)) $this->rrmdir($appDir);
+            mkdir($appDir, 0755, true);
+
+            $packageJson = [
+                'name' => 'mgs-wa-gateway',
+                'version' => '1.0.0',
+                'private' => true,
+                'type' => 'module',
+                'dependencies' => [
+                    '@whiskeysockets/baileys' => '^6.7.0',
+                    '@hapi/boom' => '^10.0.0',
+                    'dotenv' => '^16.4.0',
+                    'express' => '^4.21.0',
+                    'qrcode' => '^1.5.4',
+                ],
+            ];
+
+            file_put_contents(
+                "{$appDir}/package.json",
+                json_encode($packageJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+            );
+
+            $serverCode = 'require("dotenv").config();
+const express = require("express");
+const { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
+const { Boom } = require("@hapi/boom");
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+const QR = require("qrcode");
+
+const PORT = parseInt(process.env.PORT || "2785", 10);
+const API_KEY = process.env.API_KEY || "";
+const SESSION_DATA_PATH = process.env.SESSION_DATA_PATH || "./data/sessions";
+const AUTO_START = process.env.AUTO_START_SESSIONS !== "false";
+const sessions = new Map();
+
+async function getSession(id) {
+    if (sessions.has(id)) { const s = sessions.get(id); if (s.status !== "dead") return s; }
+    const s = { id, sock: null, status: "initializing", qr: null, phone: null }; sessions.set(id, s); return s;
+}
+
+async function startSession(id) {
+    const s = await getSession(id);
+    if (s.sock) { try { s.sock.end(undefined); } catch (e) {} }
+    const authDir = path.join(__dirname, SESSION_DATA_PATH, id);
+    fs.mkdirSync(authDir, { recursive: true });
+    const { state, saveCreds } = await useMultiFileAuthState(authDir);
+    const { version } = await fetchLatestBaileysVersion();
+    s.status = "initializing"; s.qr = null;
+    const sock = makeWASocket({ version, auth: state, printQRInTerminal: false, generateHighQualityLink: true, logger: { level: "error" }, browser: ["MGS Gateway", "Chrome", "22.14.0"] });
+    s.sock = sock;
+    sock.ev.on("creds.update", saveCreds);
+    sock.ev.on("connection.update", (upd) => {
+        if (upd.qr) { QR.toDataURL(upd.qr).then(d => { s.qr = d; }).catch(() => {}); s.status = "qr_ready"; }
+        if (upd.connection === "open") { s.status = "ready"; s.qr = null; if (sock.user) s.phone = sock.user.id ? sock.user.id.split(":")[0] : null; }
+        if (upd.connection === "close") {
+            const r = upd.lastDisconnect?.error instanceof Boom ? upd.lastDisconnect.error.output.statusCode : DisconnectReason.restartRequired;
+            s.status = r === DisconnectReason.loggedOut ? "dead" : "disconnected";
+            if (r !== DisconnectReason.loggedOut && AUTO_START) setTimeout(() => startSession(id), 5000);
+        }
+    });
+}
+
+const app = express(); app.use(express.json());
+app.get("/api/health", (r, s) => s.json({ status: "ok", uptime: process.uptime() }));
+app.use((req, res, next) => { if (!API_KEY) return next(); if (req.headers["x-api-key"] !== API_KEY && req.query.apiKey !== API_KEY) return res.status(401).json({ error: "unauthorized" }); next(); });
+app.get("/api/sessions", (r, s) => { const o = {}; for (const [i, x] of sessions) o[i] = { status: x.status, phone: x.phone }; s.json(o); });
+app.get("/api/sessions/:id", (r, s) => { const x = sessions.get(r.params.id); s.json(x ? { status: x.status, phone: x.phone } : { status: "not_found" }); });
+app.post("/api/sessions/:id/start", async (r, s) => { try { await startSession(r.params.id); s.json({ status: "started" }); } catch (e) { s.status(500).json({ error: e.message }); } });
+app.get("/api/sessions/:id/qr", (r, s) => { const x = sessions.get(r.params.id); s.json({ qrCode: x?.qr || null, status: x?.status || "not_found" }); });
+app.post("/api/sessions/:id/pairing-code", async (r, s) => {
+    if (!r.body.phoneNumber) return s.status(400).json({ error: "phoneNumber required" });
+    try { const x = await getSession(r.params.id); if (!x.sock || x.status === "dead") { await startSession(r.params.id); await new Promise(r2 => setTimeout(r2, 3000)); }
+        const code = await x.sock.requestPairingCode(r.body.phoneNumber); s.json({ pairingCode: code }); } catch (e) { s.status(500).json({ error: e.message }); }
+});
+app.post("/api/sessions/:id/messages/send-text", async (r, s) => {
+    if (!r.body.chatId || !r.body.text) return s.status(400).json({ error: "chatId and text required" });
+    const x = sessions.get(r.params.id); if (!x || !x.sock || x.status !== "ready") return s.status(400).json({ error: "session not ready" });
+    try { const sent = await x.sock.sendMessage(r.body.chatId, { text: r.body.text }); s.json({ status: "sent", id: sent?.key?.id }); } catch (e) { s.status(500).json({ error: e.message }); }
+});
+app.post("/api/sessions/:id/messages/send-image", async (r, s) => {
+    if (!r.body.chatId || !r.body.image) return s.status(400).json({ error: "chatId and image required" });
+    const x = sessions.get(r.params.id); if (!x || !x.sock || x.status !== "ready") return s.status(400).json({ error: "session not ready" });
+    try { const sent = await x.sock.sendMessage(r.body.chatId, { image: { url: r.body.image }, caption: r.body.caption || "" }); s.json({ status: "sent", id: sent?.key?.id }); } catch (e) { s.status(500).json({ error: e.message }); }
+});
+app.post("/api/sessions/:id/messages/send-document", async (r, s) => {
+    if (!r.body.chatId || !r.body.document) return s.status(400).json({ error: "chatId and document required" });
+    const x = sessions.get(r.params.id); if (!x || !x.sock || x.status !== "ready") return s.status(400).json({ error: "session not ready" });
+    try { const sent = await x.sock.sendMessage(r.body.chatId, { document: { url: r.body.document }, mimetype: r.body.mimetype || "application/octet-stream", fileName: r.body.fileName || "document" }); s.json({ status: "sent", id: sent?.key?.id }); } catch (e) { s.status(500).json({ error: e.message }); }
+});
+http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gateway on http://127.0.0.1:" + PORT));
+';
+
+            file_put_contents("{$appDir}/server.js", $serverCode);
+            return true;
+        });
+
+        if (!$this->option('no-deps')) {
+            $modulesDir = "{$this->runtimeDir}/modules";
+            if (is_dir("{$modulesDir}/node_modules") && count(scandir("{$modulesDir}/node_modules")) > 2) {
+                $this->components->twoColumnDetail('npm dependencies', 'already installed');
+            } else {
+                $this->components->task('Installing npm dependencies', function () use ($appDir, $modulesDir) {
+                    if (PHP_OS_FAMILY === 'Windows') {
+                        $cmd = sprintf('cd /D "%s" && npm install --omit=dev 2>&1', $appDir);
+                    } else {
+                        $cmd = sprintf('cd "%s" && npm install --omit=dev 2>&1', $appDir);
+                    }
+                    exec($cmd, $output, $exitCode);
+                    if ($exitCode !== 0) {
+                        Log::warning('npm install failed', ['output' => implode("\n", $output)]);
+                        return false;
+                    }
+                    $nm = "{$appDir}/node_modules";
+                    if (is_dir($nm)) {
+                        if (is_dir($modulesDir)) $this->rrmdir($modulesDir);
+                        rename($nm, $modulesDir);
+                        $stub = "{$modulesDir}/node_modules";
+                        if (is_dir($stub)) $this->rrmdir($stub);
+                    }
+                    return true;
+                });
+            }
+        }
+
+        if (!is_file("{$appDir}/server.js")) {
+            $this->error('Failed to create lightweight gateway');
+            return null;
+        }
+
+        return $appDir;
+    }
+
+    protected function installNode(string $target, string $version): ?string
+    {
+        $nodeDir = "{$this->runtimeDir}/node";
+        $expectedBinName = str_starts_with($target, 'win-') ? 'node.exe' : 'node';
+
+        // Check if a Node binary matching the *requested target* is already
+        // installed. We can't just check `node` OR `node.exe` because on a
+        // Windows dev box you'll have node.exe for local dev, and we want
+        // cross-builds (e.g. --target=android-arm64) to redownload for the
+        // correct arch rather than ship the wrong binary in the bundle.
+        $existing = "{$nodeDir}/{$expectedBinName}";
+        if (is_file($existing) && $this->nodeMatchesTarget($existing, $target)) {
+            $this->components->twoColumnDetail('Node.js', 'already installed');
+            return $this->findNodeBinary($nodeDir);
+        }
+
+        // For cross-targets (e.g. bundling android-arm64 on a Windows host)
+        // wipe the node/ dir to avoid mixing architectures.
+        if (is_dir($nodeDir) && !is_file($existing)) {
+            $this->components->task('Clearing previous Node.js (arch mismatch)', function () use ($nodeDir) {
+                $this->rrmdir($nodeDir);
+                return true;
+            });
+        }
+        if (!is_dir($nodeDir)) {
+            mkdir($nodeDir, 0755, true);
+        }
+
+        $url = $this->nodeDownloadUrl($target, $version);
+        if (!$url) {
+            $this->error("No Node.js build available for target: {$target}");
+            return null;
+        }
+
+        $filename = basename(parse_url($url, PHP_URL_PATH));
+        $archive = "{$this->runtimeDir}/downloads/{$filename}";
+
+        $this->components->task("Downloading Node.js {$version} ({$target})", function () use ($url, $archive) {
+            return $this->download($url, $archive);
+        });
+
+        $this->components->task('Extracting Node.js', fn() => $this->extractNode($archive, $nodeDir, $target));
+
+        // On Android, the Termux `node` binary depends on shared libraries
+        // (libc++, openssl, c-ares, libicu, libsqlite) that ship in separate
+        // Termux .deb packages. Without them, exec() returns ENOENT. We need
+        // to download + extract these debs next to node/ so OpenWaManager can
+        // inject the directory into LD_LIBRARY_PATH at launch time.
+        if (str_starts_with($target, 'android-')) {
+            $this->installTermuxDependencies($target, $nodeDir);
+        }
+
+        $candidate = $this->findNodeBinary($nodeDir);
+        if (!$candidate || !$this->nodeMatchesTarget($candidate, $target)) {
+            $this->warn("Extracted node binary does not match target architecture ({$target}).");
+        }
+        return $candidate;
+    }
+
+    /**
+     * Inspect the first bytes of a Node.js binary to verify it matches the
+     * requested target architecture. Used to avoid shipping the wrong binary
+     * in a cross-compilation scenario (e.g. bundling android-arm64 from a
+     * Windows dev host that already has node.exe installed for local use).
+     *
+     * Returns true if the binary's file format matches the target family.
+     */
+    protected function nodeMatchesTarget(string $binPath, string $target): bool
+    {
+        if (!is_file($binPath)) {
+            return false;
+        }
+
+        $fp = @fopen($binPath, 'rb');
+        if (!$fp) {
+            return false;
+        }
+        $magic = fread($fp, 8);
+        fclose($fp);
+
+        if ($magic === false || strlen($magic) < 4) {
+            return false;
+        }
+
+        $isElf = substr($magic, 0, 4) === "\x7f\x45\x4c\x46";
+        $isPe  = substr($magic, 0, 2) === "MZ";
+
+        if (str_starts_with($target, 'win-')) {
+            // Windows targets need a PE (MZ..) executable.
+            return $isPe;
+        }
+        if (str_starts_with($target, 'android-') || str_starts_with($target, 'linux-') || str_starts_with($target, 'darwin-')) {
+            // All unix targets need an ELF binary (yes, macOS app-bundles are
+            // Mach-O, but we never install Mach-O here — only the linear ELF).
+            // For our purposes, "non-PE" is correct because the macOS tarballs
+            // currently download a Mach-O `node` binary which is also non-MZ.
+            return !$isPe && $isElf;
+        }
+        // Unknown target type — be permissive and assume it's correct.
+        return true;
+    }
+
+    /**
+     * Download + extract the Termux .deb packages that the Termux `node`
+     * binary depends on. The .so files are placed into `nodeDir/lib/` so
+     * they can be added to LD_LIBRARY_PATH at launch time.
+     */
+    protected function installTermuxDependencies(string $target, string $nodeDir): void
+    {
+        $archShort = $this->termuxArch($target);
+        if (!$archShort) {
+            $this->warn("Cannot resolve Termux arch for target {$target} — skipping dependency libs.");
+            return;
+        }
+
+        $urls = $this->termuxDependencyUrls($archShort);
+        $libDir = "{$nodeDir}/lib";
+        if (!is_dir($libDir)) {
+            mkdir($libDir, 0755, true);
+        }
+        $dlDir = "{$this->runtimeDir}/downloads";
+        if (!is_dir($dlDir)) {
+            mkdir($dlDir, 0755, true);
+        }
+
+        $alreadyInstalled = is_file("{$libDir}/libssl.so.3") && is_file("{$libDir}/libcrypto.so.3");
+        if ($alreadyInstalled) {
+            $this->components->twoColumnDetail('Termux libs', 'already installed');
+            return;
+        }
+
+        foreach ($urls as $name => $url) {
+            $debName = basename(parse_url($url, PHP_URL_PATH));
+            $debPath = "{$dlDir}/termux-{$debName}";
+
+            if (!is_file($debPath)) {
+                $ok = $this->components->task("Downloading Termux {$name}", fn() => $this->download($url, $debPath));
+                if (!$ok) {
+                    $this->warn("Failed to download {$name} — Node may fail to start on Android.");
+                    continue;
+                }
+            }
+
+            $this->components->task("Extracting {$name}", fn() => $this->extractDebInto($debPath, $libDir));
+        }
+    }
+
+    protected function nodeDownloadUrl(string $target, string $version): ?string
+    {
+        $map = [
+            'win-x64'        => ["https://nodejs.org/dist/v{$version}/node-v{$version}-win-x64.zip", 'zip'],
+            'linux-x64'      => ["https://nodejs.org/dist/v{$version}/node-v{$version}-linux-x64.tar.xz", 'txz'],
+            'linux-arm64'    => ["https://nodejs.org/dist/v{$version}/node-v{$version}-linux-arm64.tar.xz", 'txz'],
+            'darwin-x64'     => ["https://nodejs.org/dist/v{$version}/node-v{$version}-darwin-x64.tar.gz", 'tgz'],
+            'darwin-arm64'   => ["https://nodejs.org/dist/v{$version}/node-v{$version}-darwin-arm64.tar.gz", 'tgz'],
+            // Android uses Termux's Bionic-compiled Node.js (.deb package).
+            // The official nodejs.org linux-arm64 build is glibc-linked and
+            // WILL NOT run on stock Android (Android uses Bionic libc, not glibc).
+            // Termux ships Node.js built against Android's Bionic libc, so the
+            // binary can be exec()'d directly from app-private storage.
+            'android-arm64'  => ["https://packages.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_{$version}_aarch64.deb", 'deb'],
+            'android-x86_64' => ["https://packages.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_{$version}_x86_64.deb", 'deb'],
+            'android-x86'    => ["https://packages.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_{$version}_i686.deb", 'deb'],
+            'android-arm'    => ["https://packages.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_{$version}_arm.deb", 'deb'],
+        ];
+
+        return $map[$target][0] ?? null;
+    }
+
+    /**
+     * Returns the archive format string ('zip','txz','tgz','deb') for a target,
+     * or null if the target is unknown.
+     */
+    protected function nodeArchiveFormat(string $target): ?string
+    {
+        $map = [
+            'win-x64'        => 'zip',
+            'linux-x64'      => 'txz',
+            'linux-arm64'    => 'txz',
+            'darwin-x64'     => 'tgz',
+            'darwin-arm64'   => 'tgz',
+            'android-arm64'  => 'deb',
+            'android-x86_64' => 'deb',
+            'android-x86'    => 'deb',
+            'android-arm'    => 'deb',
+        ];
+        return $map[$target] ?? null;
+    }
+
+    /**
+     * The list of Termux .deb packages (URLs) required to run the Termux
+     * `node` binary on stock Android. The node binary depends on these libs:
+     *   libc++, openssl, c-ares, libicu, libsqlite, zlib
+     *
+     * We bundle them and inject their directory into LD_LIBRARY_PATH at
+     * launch time, since Android's default linker doesn't search the
+     * app-private storage path.
+     *
+     * @return array<string,string> Map of package-name => download URL
+     */
+    protected function termuxDependencyUrls(string $archShort): array
+    {
+        // Pinned versions confirmed in the Termux apt repo as of 2026-07.
+        // zlib is intentionally omitted because Android ships its own libz.so
+        // that is compatible enough for Node's usage. If a future Node version
+        // requires a newer libz, add `zlib_1.3.1_*` here.
+        $packages = [
+            'libc++'   => 'libc++/libc++_29',
+            'openssl'  => 'openssl/openssl_1:3.6.3',
+            'c-ares'   => 'c-ares/c-ares_1.34.8',
+            'libicu'   => 'libicu/libicu_78.3',
+            'libsqlite'=> 'libsqlite/libsqlite_3.53.4',
+        ];
+
+        $base = 'https://packages.termux.dev/apt/termux-main/pool/main';
+        $urls = [];
+        foreach ($packages as $name => $pathSuffix) {
+            // Termux encodes the first letter of the package name as the
+            // pool subdir, e.g. `libc++` lives under `libc/`, `openssl` under `o/`.
+            $poolSub = strtolower(substr($name, 0, 1));
+            // `libc++` actually lives under `libc/` (first four chars).
+            // Strip everything after the '+' for the pool-subdir lookup.
+            $cleanName = preg_replace('/\+.*$/', '', $name);
+            if (strlen($cleanName) >= 4) {
+                $poolSub = strtolower(substr($cleanName, 0, 4));
+            }
+            $urls[$name] = "{$base}/{$poolSub}/{$name}/" . basename($pathSuffix) . "_{$archShort}.deb";
+        }
+        return $urls;
+    }
+
+    /**
+     * Returns the short arch string Termux expects in its .deb filenames,
+     * given our internal target name ('android-arm64' => 'aarch64', etc.).
+     */
+    protected function termuxArch(string $target): ?string
+    {
+        return [
+            'android-arm64'  => 'aarch64',
+            'android-x86_64' => 'x86_64',
+            'android-x86'    => 'i686',
+            'android-arm'    => 'arm',
+        ][$target] ?? null;
+    }
+
+    /**
+     * Default Node.js versions for each target platform. Termux is pinned
+     * separately because its build is updated independently of nodejs.org and
+     * not every nodejs.org release is repackaged by Termux.
+     */
+    protected function defaultNodeVersion(string $target): string
+    {
+        // Termux nodejs-lts is currently at 24.18.0 (as of 2026-07).
+        if (str_starts_with($target, 'android-')) {
+            return '24.18.0';
+        }
+        return '22.14.0';
+    }
+
+    protected function extractNode(string $archive, string $nodeDir, string $target): bool
+    {
+        $tmp = "{$this->runtimeDir}/downloads/_node_extract";
+        if (is_dir($tmp)) {
+            $this->rrmdir($tmp);
+        }
+        mkdir($tmp, 0755, true);
+
+        if (str_ends_with($archive, '.deb')) {
+            // .deb = `ar` archive containing data.tar.xz (or data.tar.gz)
+            $ok = $this->extractDebInto($archive, $tmp);
+            if (!$ok) {
+                $this->rrmdir($tmp);
+                return false;
+            }
+            // data.tar.xz extracted files into $tmp; move them to $tmp/root
+            // so the consistent logic below can find them. Termux layout is:
+            //   ./data/data/com.termux/files/usr/bin/node
+            //   ./data/data/com.termux/files/usr/lib/*.so -> not needed here
+            // The recursive scanner below will find node at any depth.
+        } elseif (str_ends_with($archive, '.zip')) {
+            $zip = new \ZipArchive;
+            if ($zip->open($archive) !== true) {
+                return false;
+            }
+            $zip->extractTo($tmp);
+            $zip->close();
+        } elseif (str_ends_with($archive, '.tar.xz') || str_ends_with($archive, '.txz')) {
+            // .tar.xz: first decompress to .tar, then extract with PharData
+            $tarPath = substr($archive, 0, -3); // strip .xz
+            if (!file_exists($tarPath)) {
+                exec('xz -d -k -f "' . $archive . '" 2>NUL', $xzOut, $xzCode);
+                if ($xzCode !== 0) {
+                    // Fallback: try using 7-Zip
+                    exec('7z x -y -o"' . $tmp . '" "' . $archive . '" 2>NUL', $szOut, $szCode);
+                    if ($szCode !== 0) {
+                        return false;
+                    }
+                    $tarPath = null;
+                }
+            }
+            if ($tarPath && file_exists($tarPath)) {
+                $phar = new \PharData($tarPath);
+                $phar->extractTo($tmp);
+                @unlink($tarPath);
+            }
+        } elseif (str_ends_with($archive, '.tar.gz') || str_ends_with($archive, '.tgz')) {
+            try {
+                $phar = new \PharData($archive);
+                $phar->extractTo($tmp);
+            } catch (\Throwable $e) {
+                // gzip fallback: decompress to tar, then extract
+                $tarPath = str_ends_with($archive, '.gz')
+                    ? substr($archive, 0, -3)
+                    : $archive . '.tar';
+                if (!file_exists($tarPath)) {
+                    $gz = gzopen($archive, 'rb');
+                    $out = fopen($tarPath, 'wb');
+                    while (!gzeof($gz)) {
+                        fwrite($out, gzread($gz, 8192));
+                    }
+                    gzclose($gz);
+                    fclose($out);
+                }
+                if (file_exists($tarPath)) {
+                    $phar = new \PharData($tarPath);
+                    $phar->extractTo($tmp);
+                    @unlink($tarPath);
+                }
+            }
+        } else {
+            // Plain .tar or unknown — try PharData directly
+            $phar = new \PharData($archive);
+            $phar->extractTo($tmp);
+        }
+
+        // Find the `node` (or `node.exe`) binary anywhere under $tmp.
+        // Works for both the standard node-tarball layout (`node-vX/bin/node`)
+        // and the Termux .deb layout (`./data/data/com.termux/files/usr/bin/node`).
+        $nodeBinary = $this->findFileRecursive($tmp, PHP_OS_FAMILY === 'Windows' ? 'node.exe' : 'node');
+        if (!$nodeBinary) {
+            $this->rrmdir($tmp);
+            return false;
+        }
+
+        $destNode = $nodeDir . '/' . basename($nodeBinary);
+        if (!is_dir($nodeDir)) {
+            mkdir($nodeDir, 0755, true);
+        }
+        copy($nodeBinary, $destNode);
+        if (PHP_OS_FAMILY !== 'Windows') {
+            @chmod($destNode, 0755);
+        }
+
+        // For Termux debs, also copy shared libs to nodeDir/lib so OpenWaManager
+        // can wire LD_LIBRARY_PATH to that directory at launch time. The deps
+        // live at ./data/data/com.termux/files/usr/lib/*.so in the node deb
+        // itself for some builds, or in the separate lib debs. We do the heavy
+        // lifting in installTermuxDependencies(), but copy any .so files found
+        // in the node deb itself here as a convenience.
+        $libDir = "{$nodeDir}/lib";
+        if (!is_dir($libDir)) {
+            mkdir($libDir, 0755, true);
+        }
+        $usrLibDir = dirname($nodeBinary) . '/../lib';
+        if (is_dir($usrLibDir)) {
+            $realLibDir = realpath($usrLibDir);
+            if ($realLibDir && is_dir($realLibDir)) {
+                foreach (scandir($realLibDir) as $entry) {
+                    if ($entry === '.' || $entry === '..') continue;
+                    if (!str_ends_with($entry, '.so') && !preg_match('/\.so\.\d+/', $entry)) continue;
+                    copy("{$realLibDir}/{$entry}", "{$libDir}/{$entry}");
+                }
+            }
+        }
+
+        $this->rrmdir($tmp);
+        return is_file($destNode);
+    }
+
+    /**
+     * Extract the `data.tar.xz` (or `.gz`) contained inside a .deb archive
+     * into the given target directory. Returns true on success.
+     *
+     * A .deb is an `ar` archive with three members:
+     *   - debian-binary  (plain text, version line)
+     *   - control.tar.xz (package metadata)
+     *   - data.tar.xz     (the real files we want)
+     *
+     * We don't depend on the `ar` or `dpkg-deb` binaries — we parse the `ar`
+     * format manually (it's a simple fixed-offset header format) to support
+     * Windows hosts that lack those POSIX tools.
+     */
+    protected function extractDebInto(string $debPath, string $destDir): bool
+    {
+        if (!is_file($debPath)) {
+            return false;
+        }
+        if (!is_dir($destDir)) {
+            mkdir($destDir, 0755, true);
+        }
+
+        $fp = @fopen($debPath, 'rb');
+        if (!$fp) {
+            return false;
+        }
+
+        // ar magic: "!<arch>\n" (8 bytes)
+        $magic = fread($fp, 8);
+        if ($magic !== "!<arch>\n") {
+            fclose($fp);
+            return false;
+        }
+
+        $dataTarName = null;
+        $dataTarOffset = null;
+        $dataTarSize = null;
+
+        // Each subsequent member is a 60-byte header followed by file data.
+        while (!feof($fp)) {
+            $header = fread($fp, 60);
+            if (strlen($header) < 60) {
+                break;
+            }
+
+            // Header layout (60 bytes):
+            //   0-15  filename (16)
+            //  16-27  mtime    (12)
+            //  28-33  owner    (6)
+            //  34-39  group    (6)
+            //  40-47  mode     (8)
+            //  48-59  size     (10) decimal
+            $sizeRaw = trim(substr($header, 48, 10));
+            $size = (int)$sizeRaw;
+            $name = trim(substr($header, 0, 16));
+            // Strip trailing spaces and the "/" terminator ar uses.
+            $name = rtrim($name, "/ \t");
+
+            // Position after header read: at the start of file data.
+            $dataStart = ftell($fp);
+
+            // We want data.tar.xz OR data.tar.gz (in that order).
+            if ($name === 'data.tar.xz' || $name === 'data.tar.gz' || $name === 'data.tar.bz2' || $name === 'data.tar.lzma') {
+                $dataTarName = $name;
+                $dataTarOffset = $dataStart;
+                $dataTarSize = $size;
+                break;
+            }
+
+            // Skip file content, align to 2-byte boundary (ar convention).
+            $skip = $size + ($size % 2);
+            fseek($fp, $dataStart + $skip, SEEK_SET);
+        }
+
+        if ($dataTarName === null) {
+            fclose($fp);
+            return false;
+        }
+
+        // Stream the data.tar.* archive out to a temp file.
+        fseek($fp, $dataTarOffset, SEEK_SET);
+        $tmpTar = $destDir . '/.' . basename($dataTarName) . '.tmp';
+        $out = fopen($tmpTar, 'wb');
+        $left = $dataTarSize;
+        while ($left > 0 && !feof($fp)) {
+            $buf = fread($fp, min(1 << 20, $left));
+            if ($buf === false || $buf === '') {
+                break;
+            }
+            fwrite($out, $buf);
+            $left -= strlen($buf);
+        }
+        fclose($out);
+        fclose($fp);
+
+        // Decompress (if needed) and extract the data.tar archive.
+        try {
+            if (str_ends_with($dataTarName, '.xz')) {
+                // Try the `xz` binary first; if unavailable, fall back to a pure-PHP decompressor.
+                $decompressed = substr($tmpTar, 0, -3); // strip .xz, leaving .tar
+                if (!file_exists($decompressed)) {
+                    $xzCode = 255;
+                    if (PHP_OS_FAMILY === 'Windows') {
+                        exec('where xz 2>NUL', $xzWhere, $xzWhereCode);
+                        if ($xzWhereCode === 0) {
+                            exec('xz -d -k -f "' . $tmpTar . '" 2>NUL', $xzOut, $xzCode);
+                        }
+                    } else {
+                        exec('command -v xz >/dev/null 2>&1 && xz -d -k -f "' . $tmpTar . '" 2>/dev/null', $xzOut, $xzCode);
+                    }
+                    if ($xzCode !== 0) {
+                        $this->xzDecompressToFile($tmpTar, $decompressed);
+                    }
+                }
+                if (!file_exists($decompressed)) {
+                    @unlink($tmpTar);
+                    return false;
+                }
+                $phar = new \PharData($decompressed);
+                $phar->extractTo($destDir, overwrite: true);
+                @unlink($decompressed);
+            } else if (str_ends_with($dataTarName, '.gz')) {
+                $decompressed = substr($tmpTar, 0, -3);
+                if (!file_exists($decompressed)) {
+                    $gz = gzopen($tmpTar, 'rb');
+                    $out2 = fopen($decompressed, 'wb');
+                    while (!gzeof($gz)) {
+                        fwrite($out2, gzread($gz, 1 << 20));
+                    }
+                    gzclose($gz);
+                    fclose($out2);
+                }
+                $phar = new \PharData($decompressed);
+                $phar->extractTo($destDir, overwrite: true);
+                @unlink($decompressed);
+            } else if (str_ends_with($dataTarName, '.bz2')) {
+                $decompressed = substr($tmpTar, 0, -4); // strip .bz2
+                if (!file_exists($decompressed)) {
+                    $bz = bzopen($tmpTar, 'r');
+                    $out2 = fopen($decompressed, 'wb');
+                    while (!feof($bz)) {
+                        fwrite($out2, bzread($bz, 1 << 20));
+                    }
+                    bzclose($bz);
+                    fclose($out2);
+                }
+                $phar = new \PharData($decompressed);
+                $phar->extractTo($destDir, overwrite: true);
+                @unlink($decompressed);
+            } else {
+                // Plain tar.
+                $phar = new \PharData($tmpTar);
+                $phar->extractTo($destDir, overwrite: true);
+            }
+        } catch (\Throwable $e) {
+            @unlink($tmpTar);
+            return false;
+        }
+
+        @unlink($tmpTar);
+        return true;
+    }
+
+    /**
+     * Pure-PHP XZ decompressor fallback. Reads `.xz` file, writes `.tar`.
+     * Only used when the `xz` binary isn't available on the host.
+     */
+    protected function xzDecompressToFile(string $xzPath, string $tarPath): void
+    {
+        if (!function_exists('xzdecrypt')) {
+            throw new \RuntimeException('xz binary not available and PHP has no xz extension');
+        }
+        $data = file_get_contents($xzPath);
+        $decompressed = xzdecrypt($data);
+        if ($decompressed === false) {
+            throw new \RuntimeException('xzdecrypt() returned false');
+        }
+        file_put_contents($tarPath, $decompressed);
+    }
+
+    /**
+     * Recursively find a file by name under a directory. Returns the full
+     * path or null. Used to locate `node` inside Termux deb extraction
+     * directories (which are deeply nested).
+     */
+    protected function findFileRecursive(string $dir, string $filename): ?string
+    {
+        if (!is_dir($dir)) return null;
+        $rii = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+        foreach ($rii as $file) {
+            if ($file->getFilename() === $filename) {
+                return $file->getPathname();
+            }
+        }
+        return null;
+    }
+
+    protected function findNodeBinary(string $nodeDir): ?string
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            return is_file("{$nodeDir}/node.exe") ? "{$nodeDir}/node.exe" : null;
+        }
+        return is_file("{$nodeDir}/node") ? "{$nodeDir}/node" : null;
+    }
+
+    protected function installOpenwa(): ?string
+    {
+        $appDir = "{$this->runtimeDir}/app";
+
+        if (is_file("{$appDir}/package.json") && !$this->option('force')) {
+            $this->components->twoColumnDetail('OpenWA app', 'already installed');
+            return $appDir;
+        }
+
+        $fromPath = $this->option('from');
+        if ($fromPath) {
+            return $this->installFromLocal($fromPath, $appDir);
+        }
+
+        return $this->installFromGitHub($appDir);
+    }
+
+    protected function installFromLocal(string $source, string $appDir): ?string
+    {
+        $source = rtrim($source, '\\/');
+
+        if (!is_dir($source)) {
+            $this->error("Source path does not exist: {$source}");
+            return null;
+        }
+
+        if (!is_file("{$source}/package.json")) {
+            $this->error("No package.json found at {$source} — not a valid OpenWA installation");
+            return null;
+        }
+
+        $this->components->task("Copying OpenWA from {$source}", function () use ($source, $appDir) {
+            if (is_dir($appDir)) {
+                $this->rrmdir($appDir);
+            }
+            $this->rcopy($source, $appDir);
+            return true;
+        });
+
+        if (!is_file("{$appDir}/package.json")) {
+            $this->error('Failed to copy OpenWA from local path');
+            return null;
+        }
+
+        $this->components->twoColumnDetail('Copied from', $source);
+        return $appDir;
+    }
+
+    protected function installFromGitHub(string $appDir): ?string
+    {
+        $version = $this->option('openwa-version');
+        $url = $version
+            ? "https://github.com/rmyndharis/OpenWA/archive/refs/tags/{$version}.zip"
+            : "https://github.com/rmyndharis/OpenWA/archive/refs/heads/main.zip";
+
+        $archive = "{$this->runtimeDir}/downloads/openwa-source.zip";
+
+        $this->components->task('Downloading OpenWA source', function () use ($url, $archive) {
+            return $this->download($url, $archive);
+        });
+
+        $this->components->task('Extracting OpenWA source', function () use ($archive, $appDir) {
+            $tmp = "{$this->runtimeDir}/downloads/_openwa_extract";
+            if (is_dir($tmp)) {
+                $this->rrmdir($tmp);
+            }
+            mkdir($tmp, 0755, true);
+
+            $zip = new \ZipArchive;
+            if ($zip->open($archive) !== true) {
+                return false;
+            }
+            $zip->extractTo($tmp);
+            $zip->close();
+
+            $entries = scandir($tmp);
+            $subDir = null;
+            foreach ($entries as $entry) {
+                if ($entry !== '.' && $entry !== '..' && is_dir("{$tmp}/{$entry}")) {
+                    $subDir = "{$tmp}/{$entry}";
+                    break;
+                }
+            }
+
+            if (!$subDir) {
+                return false;
+            }
+
+            $this->rcopy($subDir, $appDir);
+            $this->rrmdir($tmp);
+            return true;
+        });
+
+        if (!is_file("{$appDir}/package.json")) {
+            $this->error('OpenWA source extraction failed — package.json not found');
+            return null;
+        }
+
+        return $appDir;
+    }
+
+    protected function installDependencies(string $appDir): void
+    {
+        $modulesDir = "{$this->runtimeDir}/modules";
+
+        if (is_dir("{$modulesDir}/node_modules") && count(scandir("{$modulesDir}/node_modules")) > 2) {
+            $this->components->twoColumnDetail('npm dependencies', 'already installed from modules');
+            return;
+        }
+
+        // Check if node_modules already exists in the app dir (from local copy)
+        $appNm = "{$appDir}/node_modules";
+        if (is_dir($appNm) && count(scandir($appNm)) > 2) {
+            $this->components->task('Moving existing node_modules to modules/', function () use ($appNm, $modulesDir) {
+                $this->renameNodeModules($appNm, $modulesDir);
+                return true;
+            });
+            return;
+        }
+
+        $this->components->task('Installing npm dependencies', function () use ($appDir, $modulesDir, $appNm) {
+            // Full install (incl. devDependencies) is required for `nest build`.
+            // --ignore-scripts skips the OpenWA dashboard postinstall hook.
+            if (PHP_OS_FAMILY === 'Windows') {
+                $cmd = sprintf(
+                    'cd /D "%s" && npm install --prefix "%s" --ignore-scripts 2>&1',
+                    $appDir,
+                    $appDir
+                );
+            } else {
+                $cmd = sprintf(
+                    'cd "%s" && npm install --prefix "%s" --ignore-scripts 2>&1',
+                    $appDir,
+                    $appDir
+                );
+            }
+            exec($cmd, $output, $exitCode);
+
+            if ($exitCode !== 0) {
+                Log::warning('OpenWA npm install failed', ['output' => implode("\n", $output)]);
+                return false;
+            }
+
+            if (is_dir($appNm)) {
+                $this->renameNodeModules($appNm, $modulesDir);
+            }
+
+            return true;
+        });
+    }
+
+    protected function buildOpenwa(string $appDir): void
+    {
+        if (is_file("{$appDir}/dist/main.js")) {
+            $this->components->twoColumnDetail('OpenWA build', 'dist/main.js already exists');
+            return;
+        }
+
+        $modulesDir = "{$this->runtimeDir}/modules";
+        $nodeModules = is_dir("{$appDir}/node_modules")
+            ? "{$appDir}/node_modules"
+            : (is_dir($modulesDir) ? $modulesDir : null);
+
+        if ($nodeModules && !is_dir("{$appDir}/node_modules")) {
+            $this->linkNodeModules($appDir, $nodeModules);
+        }
+
+        $built = $this->components->task('Building OpenWA (nest build)', function () use ($appDir) {
+            if (PHP_OS_FAMILY === 'Windows') {
+                $cmd = sprintf('cd /D "%s" && npm run build 2>&1', $appDir);
+            } else {
+                $cmd = sprintf('cd "%s" && npm run build 2>&1', $appDir);
+            }
+            exec($cmd, $output, $exitCode);
+
+            if ($exitCode !== 0) {
+                Log::warning('OpenWA build failed', ['output' => implode("\n", array_slice($output, -30))]);
+                return false;
+            }
+
+            return is_file("{$appDir}/dist/main.js");
+        });
+
+        if (!$built) {
+            $this->error('OpenWA build failed — dist/main.js was not created.');
+            $this->warn('Try building manually: cd "' . $appDir . '" && npm install --ignore-scripts && npm run build');
+            return;
+        }
+
+        $this->components->task('Pruning dev dependencies', function () use ($appDir, $modulesDir) {
+            if (PHP_OS_FAMILY === 'Windows') {
+                $cmd = sprintf('cd /D "%s" && npm prune --omit=dev 2>&1', $appDir);
+            } else {
+                $cmd = sprintf('cd "%s" && npm prune --omit=dev 2>&1', $appDir);
+            }
+            exec($cmd, $output, $exitCode);
+
+            $appNm = "{$appDir}/node_modules";
+            if (is_dir($appNm)) {
+                $this->renameNodeModules($appNm, $modulesDir);
+            } elseif (is_dir($modulesDir)) {
+                $this->linkNodeModules($appDir, $modulesDir);
+            }
+
+            return true;
+        });
+    }
+
+    protected function linkNodeModules(string $appDir, string $modulesDir): void
+    {
+        $link = "{$appDir}/node_modules";
+
+        if (is_link($link) || is_dir($link)) {
+            return;
+        }
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            exec(sprintf('mklink /J "%s" "%s" 2>NUL', $link, $modulesDir));
+        } else {
+            @symlink($modulesDir, $link);
+        }
+    }
+
+    protected function renameNodeModules(string $source, string $dest): void
+    {
+        if (is_dir($dest)) {
+            $this->rrmdir($dest);
+        }
+
+        rename($source, $dest);
+
+        $stubModules = "{$dest}/node_modules";
+        if (is_dir($stubModules)) {
+            $this->rrmdir($stubModules);
+        }
+    }
+
+    protected function generateApiKey(): string
+    {
+        return 'mgs_' . bin2hex(random_bytes(24));
+    }
+
+    protected function writeEnvConfig(string $appDir, string $nodeBinary, string $apiKey): void
+    {
+        $envPath = base_path('.env');
+        $envContent = file_exists($envPath) ? file_get_contents($envPath) : '';
+
+        $replacements = [
+            'OPENWA_API_KEY' => $apiKey,
+            'OPENWA_BINARY_DIR' => $appDir,
+            'OPENWA_NODE_BINARY' => $nodeBinary,
+            'OPENWA_AUTO_START' => 'true',
+            'OPENWA_BASE_URL' => 'http://127.0.0.1:2785',
+        ];
+
+        foreach ($replacements as $key => $value) {
+            $escaped = str_replace('\\', '\\\\', $value);
+            if (preg_match("/^{$key}=.*/m", $envContent)) {
+                $envContent = preg_replace("/^{$key}=.*/m", "{$key}={$escaped}", $envContent);
+            } else {
+                $envContent .= "\n{$key}={$escaped}";
+            }
+        }
+
+        file_put_contents($envPath, $envContent);
+        $this->components->twoColumnDetail('.env updated', count($replacements) . ' entries');
+    }
+
+    protected function download(string $url, string $dest): bool
+    {
+        $dir = dirname($dest);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $fp = fopen($dest, 'w+');
+        if (!$fp) {
+            return false;
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_FILE => $fp,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT => 300,
+            CURLOPT_CONNECTTIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_USERAGENT => 'MGS-Installer/1.0',
+        ]);
+
+        $ok = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+        curl_close($ch);
+        fclose($fp);
+
+        if (!$ok || $httpCode >= 400) {
+            @unlink($dest);
+            Log::error('Download failed', ['url' => $url, 'http' => $httpCode, 'err' => $error]);
+            return false;
+        }
+
+        $fileSize = filesize($dest);
+        if ($fileSize < 1024) {
+            @unlink($dest);
+            Log::error('Downloaded file too small (likely an error page)', [
+                'url' => $url, 'size' => $fileSize,
+            ]);
+            return false;
+        }
+
+        if ($contentType && str_contains($contentType, 'text/html')) {
+            $content = file_get_contents($dest);
+            if (str_contains((string)$content, '<html') || str_contains((string)$content, '<!DOCTYPE')) {
+                @unlink($dest);
+                Log::error('Downloaded an HTML page instead of a binary', ['url' => $url]);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    protected function rcopy(string $src, string $dst): void
+    {
+        $dir = opendir($src);
+        @mkdir($dst, 0755, true);
+        while (($file = readdir($dir)) !== false) {
+            if ($file === '.' || $file === '..' || $file === 'node_modules') continue;
+            $srcPath = "{$src}/{$file}";
+            $dstPath = "{$dst}/{$file}";
+            if (is_dir($srcPath)) {
+                $this->rcopy($srcPath, $dstPath);
+            } else {
+                copy($srcPath, $dstPath);
+            }
+        }
+        closedir($dir);
+    }
+
+    protected function rrmdir(string $dir): void
+    {
+        if (!is_dir($dir)) return;
+
+        // On Windows, RecursiveDirectoryIterator fails to descend into
+        // junctions/symlinks (`node_modules` often has them) and unlink()
+        // fails when files are held open by antivirus / Windows Search.
+        // Shell out to `rd /s /q` which handles all of that natively.
+        if (PHP_OS_FAMILY === 'Windows') {
+            $normalized = str_replace('/', DIRECTORY_SEPARATOR, $dir);
+            exec('rd /s /q "' . $normalized . '" 2>NUL', $o, $code);
+            if (!is_dir($dir)) return;
+            // Fall through to the manual walk if `rd` failed.
+        }
+
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($items as $item) {
+            if ($item->isDir() && !is_link($item->getPathname())) {
+                @rmdir($item->getRealPath());
+            } else {
+                @unlink($item->getRealPath());
+            }
+        }
+        @rmdir($dir);
+    }
+}

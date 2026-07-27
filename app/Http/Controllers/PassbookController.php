@@ -103,8 +103,8 @@ class PassbookController extends Controller
             $query = $query->filter(fn($item) => $item['date']->lte(Carbon::parse($dateTo)->endOfDay()));
         }
 
-        // Sort by date descending
-        $transactions = $query->sortByDesc('date')->values();
+        // Sort by date descending, then paginate the combined feed.
+        $allTransactions = $query->sortByDesc('date')->values();
 
         // Totals are cash-basis: actual money received vs paid.
         // Invoices (credit_in/credit_out) are excluded so they are not
@@ -113,6 +113,8 @@ class PassbookController extends Controller
         $totalInUSD = $query->filter(fn($i) => $i['type'] === 'cash_in' && $i['currency'] === 'USD')->sum('amount');
         $totalOut = $query->filter(fn($i) => in_array($i['type'], ['cash_out', 'expense'], true) && $i['currency'] === 'AFN')->sum('amount');
         $totalOutUSD = $query->filter(fn($i) => in_array($i['type'], ['cash_out', 'expense'], true) && $i['currency'] === 'USD')->sum('amount');
+
+        $transactions = $this->paginateCollection($allTransactions);
 
         return view('passbook.index', compact('transactions', 'filter', 'dateFrom', 'dateTo', 'totalIn', 'totalInUSD', 'totalOut', 'totalOutUSD'));
     }

@@ -50,4 +50,7 @@
             </div>
         @endforelse
     </div>
+    @if ($orderReturns->hasPages())
+        <div class="mt-4">{{ $orderReturns->links() }}</div>
+    @endif
 @endsection

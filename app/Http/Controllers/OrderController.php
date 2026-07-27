@@ -7,15 +7,24 @@ use App\Models\Customer;
 use App\Models\Supplier;
 use App\Models\Product;
 use App\Models\Setting;
+use App\Models\StockMovement;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
     public function index()
     {
-        $orders = Order::with('customer', 'orderItems.product')->orderBy('created_at', 'desc')->get();
-        $purchases = \App\Models\Purchase::with('supplier', 'purchaseItems.product.unit', 'purchasePayments')
-            ->orderBy('created_at', 'desc')->get();
+        $orders = Order::with(['customer', 'supplier'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(self::PER_PAGE, ['*'], 'orders_page')
+            ->withQueryString();
+
+        $purchases = \App\Models\Purchase::with(['customer', 'supplier'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(self::PER_PAGE, ['*'], 'purchases_page')
+            ->withQueryString();
+
         return view('orders.index', compact('orders', 'purchases'));
     }
 
@@ -67,60 +76,77 @@ class OrderController extends Controller
 
         $subtotal = '0.00';
         $orderItems = [];
+        $order = null;
 
-        foreach ($validated['products'] as $item) {
-            $product = Product::findOrFail($item['product_id']);
+        DB::transaction(function () use ($validated, $orderItems, $subtotal, $customerId, $personType, $personId, &$order) {
+            foreach ($validated['products'] as $item) {
+                $product = Product::where('id', $item['product_id'])->lockForUpdate()->firstOrFail();
 
-            if ($product->stock < $item['quantity']) {
-                return back()->with('error', "د {$product->name} __('messages.insufficient_stock')! (__('messages.pending'): {$product->stock})");
+                if ($product->stock < $item['quantity']) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'products' => __('messages.insufficient_stock') . ' د ' . $product->name . '! (' . __('messages.pending') . ': ' . $product->stock . ')',
+                    ]);
+                }
+
+                $unitPrice = (string) $item['unit_price'];
+                $lineTotal = bcmul($unitPrice, (string) $item['quantity'], 2);
+                $subtotal = bcadd($subtotal, $lineTotal, 2);
+
+                $orderItems[] = [
+                    'product_id' => $product->id,
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $unitPrice,
+                    'subtotal' => $lineTotal,
+                    'lot_number' => $item['lot_number'] ?? null,
+                ];
+
+                $product->decrement('stock', $item['quantity']);
             }
 
-            $unitPrice = (string) $item['unit_price'];
-            $lineTotal = bcmul($unitPrice, (string) $item['quantity'], 2);
-            $subtotal = bcadd($subtotal, $lineTotal, 2);
+            $taxRate = $validated['tax_rate'] ?? 0;
+            $taxType = $validated['tax_type'] ?? 'exclusive';
+            $taxAmount = 0;
+            $totalAmount = $subtotal;
 
-            $orderItems[] = [
-                'product_id' => $product->id,
-                'quantity' => $item['quantity'],
-                'unit_price' => $unitPrice,
-                'subtotal' => $lineTotal,
-                'lot_number' => $item['lot_number'] ?? null,
-            ];
-
-            $product->decrement('stock', $item['quantity']);
-        }
-
-        $taxRate = $validated['tax_rate'] ?? 0;
-        $taxType = $validated['tax_type'] ?? 'exclusive';
-        $taxAmount = 0;
-        $totalAmount = $subtotal;
-
-        if ($taxRate > 0) {
-            if ($taxType === 'exclusive') {
-                $taxAmount = bcmul($subtotal, bcdiv((string) $taxRate, '100', 6), 2);
-                $totalAmount = bcadd($subtotal, $taxAmount, 2);
-            } else {
-                // Inclusive: tax is included in price, so extract it
-                $totalAmount = $subtotal;
-                $taxAmount = bcmul($subtotal, bcdiv((string) $taxRate, bcadd('100', (string) $taxRate, 6), 6), 2);
-                $subtotal = bcsub($totalAmount, $taxAmount, 2);
+            if ($taxRate > 0) {
+                if ($taxType === 'exclusive') {
+                    $taxAmount = bcmul($subtotal, bcdiv((string) $taxRate, '100', 6), 2);
+                    $totalAmount = bcadd($subtotal, $taxAmount, 2);
+                } else {
+                    $totalAmount = $subtotal;
+                    $taxAmount = bcmul($subtotal, bcdiv((string) $taxRate, bcadd('100', (string) $taxRate, 6), 6), 2);
+                    $subtotal = bcsub($totalAmount, $taxAmount, 2);
+                }
             }
-        }
 
-        $order = Order::create([
-            'customer_id' => $customerId,
-            'person_type' => $personType,
-            'person_id' => $personId,
-            'status' => 'pending',
-            'subtotal' => $subtotal,
-            'tax_rate' => $taxRate,
-            'tax_type' => $taxType,
-            'tax_amount' => $taxAmount,
-            'total_amount' => $totalAmount,
-            'currency' => $validated['currency'],
-        ]);
+            $order = Order::create([
+                'customer_id' => $customerId,
+                'person_type' => $personType,
+                'person_id' => $personId,
+                'status' => 'pending',
+                'subtotal' => $subtotal,
+                'tax_rate' => $taxRate,
+                'tax_type' => $taxType,
+                'tax_amount' => $taxAmount,
+                'total_amount' => $totalAmount,
+                'currency' => $validated['currency'],
+            ]);
 
-        $order->orderItems()->createMany($orderItems);
+            $order->orderItems()->createMany($orderItems);
+
+            // Record stock movements after order is created so we have the reference ID
+            foreach ($orderItems as $item) {
+                StockMovement::create([
+                    'user_id' => Auth::id(),
+                    'product_id' => $item['product_id'],
+                    'quantity_change' => -$item['quantity'],
+                    'movement_type' => 'sale',
+                    'reference_type' => 'order',
+                    'reference_id' => $order->id,
+                    'notes' => __('messages.sale'),
+                ]);
+            }
+        });
 
         return redirect()->route('orders.index')->with('success', __('messages.order_created'));
     }
@@ -207,7 +233,7 @@ class OrderController extends Controller
     public function status(Order $order, $status)
     {
         $allowed = ['pending', 'processing', 'completed', 'cancelled'];
-        if (!in_array($status, $allowed)) {
+        if (!in_array($status, $allowed, true)) {
             return back()->with('error', __('messages.invalid_status'));
         }
 
@@ -218,6 +244,16 @@ class OrderController extends Controller
         if ($status === 'cancelled' && $order->status !== 'cancelled') {
             foreach ($order->orderItems as $item) {
                 $item->product->increment('stock', $item->quantity);
+
+                StockMovement::create([
+                    'user_id' => Auth::id(),
+                    'product_id' => $item->product_id,
+                    'quantity_change' => $item->quantity,
+                    'movement_type' => 'order_cancelled',
+                    'reference_type' => 'order',
+                    'reference_id' => $order->id,
+                    'notes' => __('messages.order_cancelled'),
+                ]);
             }
         }
 
@@ -229,6 +265,16 @@ class OrderController extends Controller
     {
         foreach ($order->orderItems as $item) {
             $item->product->increment('stock', $item->quantity);
+
+            StockMovement::create([
+                'user_id' => Auth::id(),
+                'product_id' => $item->product_id,
+                'quantity_change' => $item->quantity,
+                'movement_type' => 'order_deleted',
+                'reference_type' => 'order',
+                'reference_id' => $order->id,
+                'notes' => __('messages.order_deleted'),
+            ]);
         }
         $order->delete();
         return redirect()->route('orders.index')->with('success', __('messages.order_deleted'));

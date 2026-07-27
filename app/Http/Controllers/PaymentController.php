@@ -41,8 +41,13 @@ class PaymentController extends Controller
         $balanceAFN = $incomingAFN - $outgoingAFN;
         $balanceUSD = $incomingUSD - $outgoingUSD;
 
-        // Recent transactions (combine incoming and outgoing)
-        $incomingTransactions = Payment::with('order.customer')
+        // Recent transactions (combine incoming and outgoing). Cap each source so
+        // the wallet page does not load the entire payment history into memory.
+        $feedLimit = self::PER_PAGE * 5;
+
+        $incomingTransactions = Payment::with(['order.customer', 'order.supplier'])
+            ->latest()
+            ->limit($feedLimit)
             ->get()
             ->map(function ($p) {
                 return [
@@ -55,7 +60,9 @@ class PaymentController extends Controller
                 ];
             });
 
-        $outgoingTransactions = PurchasePayment::with('purchase.supplier')
+        $outgoingTransactions = PurchasePayment::with(['purchase.customer', 'purchase.supplier'])
+            ->latest()
+            ->limit($feedLimit)
             ->get()
             ->map(function ($p) {
                 return [
@@ -69,7 +76,7 @@ class PaymentController extends Controller
             });
 
         // Ledger transactions
-        $ledgerEntries = PartyPayment::get();
+        $ledgerEntries = PartyPayment::latest()->limit($feedLimit)->get();
         // Load person names efficiently based on person_type
         $customerIds = $ledgerEntries->where('person_type', 'customer')->pluck('person_id')->unique();
         $supplierIds = $ledgerEntries->where('person_type', 'supplier')->pluck('person_id')->unique();
@@ -91,29 +98,40 @@ class PaymentController extends Controller
             ];
         });
 
-        $transactions = collect($incomingTransactions)
+        $allTransactions = collect($incomingTransactions)
             ->concat($outgoingTransactions)
             ->concat($ledgerTransactions)
             ->sortByDesc('date')
-            ->values()
-            ->take(50);
+            ->values();
+
+        $transactions = $this->paginateCollection($allTransactions, self::PER_PAGE, 'tx_page');
 
         // Outstanding balances: receivables (orders — both customer and supplier) and
         // payables (purchases). These were previously absent from the payments page, so
         // supplier-created orders never showed up here.
-        $receivables = Order::with(['customer', 'supplier'])
-            ->where('status', '!=', 'cancelled')
-            ->get()
-            ->filter(fn($o) => $o->remaining_amount > 0)
-            ->sortByDesc('created_at')
-            ->values();
+        $receivables = $this->paginateCollection(
+            Order::with(['customer', 'supplier'])
+                ->where('status', '!=', 'cancelled')
+                ->latest()
+                ->limit(100)
+                ->get()
+                ->filter(fn ($o) => $o->remaining_amount > 0)
+                ->values(),
+            self::PER_PAGE,
+            'recv_page'
+        );
 
-        $payables = Purchase::with('supplier')
-            ->where('status', '!=', 'cancelled')
-            ->get()
-            ->filter(fn($p) => $p->remaining_amount > 0)
-            ->sortByDesc('created_at')
-            ->values();
+        $payables = $this->paginateCollection(
+            Purchase::with(['customer', 'supplier'])
+                ->where('status', '!=', 'cancelled')
+                ->latest()
+                ->limit(100)
+                ->get()
+                ->filter(fn ($p) => $p->remaining_amount > 0)
+                ->values(),
+            self::PER_PAGE,
+            'pay_page'
+        );
 
         return view('payments.index', compact(
             'incomingAFN', 'incomingUSD',
@@ -174,7 +192,7 @@ class PaymentController extends Controller
 
     public function customerIndex()
     {
-        $payments = Payment::with(['order.customer'])->orderBy('created_at', 'desc')->get();
+        $payments = Payment::with(['order.customer'])->orderBy('created_at', 'desc')->paginate(self::PER_PAGE)->withQueryString();
         $paymentsData = $payments->map(function ($payment) {
             return [
                 'id' => $payment->id,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PartyPayment;
 use Illuminate\Http\Request;
@@ -11,7 +12,11 @@ class CustomerController extends Controller
 {
     public function index()
     {
-        $customers = Customer::withCount('orders')->orderBy('name')->get();
+        $customers = Customer::withCount('orders')
+            ->orderBy('name')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
         return view('customers.index', compact('customers'));
     }
 
@@ -37,29 +42,25 @@ class CustomerController extends Controller
     {
         $customer->load('orders.orderItems.product');
 
-        // Calculate payment data (same logic as LedgerController)
-        $paymentsFromOrdersAFN = Payment::whereHas('order', function ($q) use ($customer) {
-            $q->where('customer_id', $customer->id);
-        })->where('currency', 'AFN')->sum('amount');
-        
-        $paymentsFromOrdersUSD = Payment::whereHas('order', function ($q) use ($customer) {
-            $q->where('customer_id', $customer->id);
-        })->where('currency', 'USD')->sum('amount');
+        $orderIds = Order::where('person_type', 'customer')->where('person_id', $customer->id)->pluck('id');
+
+        $paymentsFromOrdersAFN = Payment::whereIn('order_id', $orderIds)->where('currency', 'AFN')->sum('amount');
+        $paymentsFromOrdersUSD = Payment::whereIn('order_id', $orderIds)->where('currency', 'USD')->sum('amount');
 
         $ledgerPaymentsAFN = PartyPayment::where('person_type', 'customer')
             ->where('person_id', $customer->id)
             ->where('currency', 'AFN')
             ->where('type', 'payment_received')
             ->sum('amount');
-            
+
         $ledgerPaymentsUSD = PartyPayment::where('person_type', 'customer')
             ->where('person_id', $customer->id)
             ->where('currency', 'USD')
             ->where('type', 'payment_received')
             ->sum('amount');
 
-        $totalAFN = $customer->orders()->where('currency', 'AFN')->sum('total_amount');
-        $totalUSD = $customer->orders()->where('currency', 'USD')->sum('total_amount');
+        $totalAFN = Order::whereIn('id', $orderIds)->where('currency', 'AFN')->sum('total_amount');
+        $totalUSD = Order::whereIn('id', $orderIds)->where('currency', 'USD')->sum('total_amount');
         $paidAFN = $paymentsFromOrdersAFN + $ledgerPaymentsAFN;
         $paidUSD = $paymentsFromOrdersUSD + $ledgerPaymentsUSD;
 

@@ -6,15 +6,19 @@ use App\Models\OrderReturn;
 use App\Models\Order;
 use App\Models\OrderReturnItem;
 use App\Models\Product;
+use App\Models\StockMovement;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class OrderReturnController extends Controller
 {
     public function index()
     {
-        $orderReturns = OrderReturn::with('order.customer', 'items.product')
+        $orderReturns = OrderReturn::with(['order.customer', 'order.supplier', 'items.product'])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
         return view('orders.returns.index', compact('orderReturns'));
     }
 
@@ -65,9 +69,22 @@ class OrderReturnController extends Controller
             'total_amount' => $subtotal,
             'status' => $validated['status'],
             'currency' => $order->currency,
+            'user_id' => Auth::id(),
         ]);
 
         $orderReturn->items()->createMany($returnItems);
+
+        foreach ($returnItems as $item) {
+            StockMovement::create([
+                'user_id' => Auth::id(),
+                'product_id' => $item['product_id'],
+                'quantity_change' => $item['quantity'],
+                'movement_type' => 'return',
+                'reference_type' => 'order_return',
+                'reference_id' => $orderReturn->id,
+                'notes' => __('messages.return'),
+            ]);
+        }
 
         return redirect()->route('orders.returns.index')->with('success', __('messages.order_return_created'));
     }
@@ -88,6 +105,16 @@ class OrderReturnController extends Controller
     {
         foreach ($orderReturn->items as $item) {
             $item->product->decrement('stock', $item->quantity);
+
+            StockMovement::create([
+                'user_id' => Auth::id(),
+                'product_id' => $item->product_id,
+                'quantity_change' => -$item->quantity,
+                'movement_type' => 'return_cancelled',
+                'reference_type' => 'order_return',
+                'reference_id' => $orderReturn->id,
+                'notes' => __('messages.return_cancelled'),
+            ]);
         }
         $orderReturn->delete();
         return redirect()->route('orders.returns.index')->with('success', __('messages.order_return_deleted'));

@@ -75,6 +75,9 @@
                 @endforelse
             </div>
         </div>
+        @if ($products->hasPages())
+            <div class="mt-3">{{ $products->links() }}</div>
+        @endif
     </div>
 
     <!-- Categories List -->
@@ -133,6 +136,9 @@
                 @endforelse
             </div>
         </div>
+        @if ($categories->hasPages())
+            <div class="mt-3">{{ $categories->links() }}</div>
+        @endif
     </div>
 
     <!-- Units List -->
@@ -194,6 +200,9 @@
                 @endforelse
             </div>
         </div>
+        @if ($units->hasPages())
+            <div class="mt-3">{{ $units->links() }}</div>
+        @endif
     </div>
 @endsection
 
@@ -210,5 +219,12 @@
         activeBtn.classList.remove('bg-ink-100', 'dark:bg-ink-800', 'text-ink-600', 'dark:text-ink-300', 'border', 'border-ink-200', 'dark:border-ink-700');
         activeBtn.classList.add('bg-primary-500', 'text-white', 'shadow-sm', 'shadow-primary-500/20');
     }
+
+    // Keep the active tab when paging categories/units.
+    @if (request()->has('categories_page'))
+        switchTab('categories');
+    @elseif (request()->has('units_page'))
+        switchTab('units');
+    @endif
 </script>
 @endpush

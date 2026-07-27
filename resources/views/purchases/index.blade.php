@@ -60,4 +60,7 @@
             @endforelse
         </div>
     </div>
+    @if ($purchases->hasPages())
+        <div class="mt-4">{{ $purchases->links() }}</div>
+    @endif
 @endsection

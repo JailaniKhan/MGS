@@ -51,4 +51,7 @@
             </div>
         @endforelse
     </div>
+    @if ($suppliers->hasPages())
+        <div class="mt-4">{{ $suppliers->links() }}</div>
+    @endif
 @endsection

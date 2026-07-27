@@ -67,7 +67,9 @@ class CashbookController extends Controller
             }
         }
 
-        $people = collect(array_values($people))->sortBy('name')->values();
+        $people = $this->paginateCollection(
+            collect(array_values($people))->sortBy('name')->values()
+        );
 
         $cashAFN = $balanceService->cashBalance($userId, 'AFN');
         $cashUSD = $balanceService->cashBalance($userId, 'USD');

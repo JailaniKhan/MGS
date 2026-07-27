@@ -121,6 +121,9 @@ class OpenWaService
 
     /**
      * Get the session status. Useful to know if the QR has been scanned.
+     *
+     * @return array|null Array of session info, or null if not configured /
+     *         gateway unreachable / request failed.
      */
     public function sessionStatus(): ?array
     {
@@ -128,7 +131,13 @@ class OpenWaService
             return null;
         }
 
-        $response = $this->client()->get("/api/sessions/{$this->session()}");
+        try {
+            $response = $this->client()->get("/api/sessions/{$this->session()}");
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::warning('OpenWA unreachable (sessionStatus)', ['error' => $e->getMessage()]);
+
+            return null;
+        }
 
         return $response->successful() ? $response->json() : null;
     }
@@ -142,7 +151,13 @@ class OpenWaService
             return null;
         }
 
-        $response = $this->client()->get("/api/sessions/{$this->session()}/qr");
+        try {
+            $response = $this->client()->get("/api/sessions/{$this->session()}/qr");
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::warning('OpenWA unreachable (qrCode)', ['error' => $e->getMessage()]);
+
+            return null;
+        }
 
         if (!$response->successful()) {
             return null;
@@ -174,10 +189,16 @@ class OpenWaService
             $phone = '93' . $phone;
         }
 
-        $response = $this->client()->post(
-            "/api/sessions/{$this->session()}/pairing-code",
-            ['phoneNumber' => $phone]
-        );
+        try {
+            $response = $this->client()->post(
+                "/api/sessions/{$this->session()}/pairing-code",
+                ['phoneNumber' => $phone]
+            );
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::warning('OpenWA unreachable (pairing code)', ['error' => $e->getMessage()]);
+
+            return null;
+        }
 
         if (!$response->successful()) {
             Log::error('OpenWA pairing code request failed', [
@@ -211,10 +232,16 @@ class OpenWaService
             $payload['secret'] = $secret;
         }
 
-        $response = $this->client()->post(
-            "/api/sessions/{$this->session()}/webhooks",
-            $payload
-        );
+        try {
+            $response = $this->client()->post(
+                "/api/sessions/{$this->session()}/webhooks",
+                $payload
+            );
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::warning('OpenWA unreachable (register webhook)', ['error' => $e->getMessage()]);
+
+            return false;
+        }
 
         return $response->successful();
     }

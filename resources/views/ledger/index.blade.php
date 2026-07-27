@@ -40,4 +40,7 @@
             </div>
         @endforelse
     </div>
+    @if ($people->hasPages())
+        <div class="mt-4">{{ $people->links() }}</div>
+    @endif
 @endsection

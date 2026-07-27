@@ -82,6 +82,12 @@ class MigrateToDoubleEntry extends Command
         $tables = ['customers', 'suppliers', 'categories', 'units', 'products', 'orders', 'purchases', 'employees', 'cashbook_entries'];
 
         foreach ($tables as $table) {
+            // Skip tables that don't have a user_id column yet
+            if (! $this->columnExists($table, 'user_id')) {
+                $this->warn("Skipping {$table} — user_id column not found.");
+                continue;
+            }
+
             DB::table($table)->whereNull('user_id')->update(['user_id' => $user->id]);
 
             $rows = DB::table($table)->whereNull('uuid')->get();
@@ -89,6 +95,19 @@ class MigrateToDoubleEntry extends Command
                 DB::table($table)->where('id', $row->id)->update(['uuid' => (string) Str::uuid()]);
             }
         }
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        static $cache = [];
+
+        $key = "{$table}.{$column}";
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        $cache[$key] = DB::getSchemaBuilder()->hasColumn($table, $column);
+        return $cache[$key];
     }
 
     private function migrateCustomers(User $user, ChartOfAccountsSeeder $chartOfAccounts): void

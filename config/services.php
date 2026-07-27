@@ -42,10 +42,13 @@ return [
     ],
 
     'openwa' => [
-        'base_url' => env('OPENWA_BASE_URL', 'http://localhost:2785'),
+        'base_url' => env('OPENWA_BASE_URL', 'http://127.0.0.1:2785'),
         'api_key' => env('OPENWA_API_KEY'),
         'session' => env('OPENWA_SESSION', 'default'),
         'webhook_secret' => env('OPENWA_WEBHOOK_SECRET'),
+        'binary_dir' => env('OPENWA_BINARY_DIR'),
+        'node_binary' => env('OPENWA_NODE_BINARY'),
+        'auto_start' => env('OPENWA_AUTO_START', false),
     ],
 
     'anthropic' => [

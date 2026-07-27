@@ -33,4 +33,7 @@
         </div>
     @endforelse
 </div>
+@if ($employees->hasPages())
+    <div class="mt-4">{{ $employees->links() }}</div>
+@endif
 @endsection

@@ -163,6 +163,19 @@ return [
         '*_SECRET',
         'DB_PASSWORD',
         'DB_USERNAME',
+        'ANTHROPIC_API_KEY',
+        'WHATSAPP_API_KEY',
+        'WHATSAPP_PHONE_NUMBER_ID',
+        // OPENWA_API_KEY is intentionally kept — the bundled self-hosted gateway
+        // uses an auto-generated local-only key. Users who switch to a remote
+        // gateway can override it via the Settings UI.
+        // 'OPENWA_API_KEY',
+        // OPENWA_WEBHOOK_SECRET is stripped — inbound webhooks from a remote
+        // OpenWA gateway use a server-side secret that should not be baked
+        // into the APK. If you self-host the gateway on-device, define it
+        // through the Settings UI instead.
+        'OPENWA_WEBHOOK_SECRET',
+        'GOOGLE_CLIENT_SECRET',
     ],
 
     /*

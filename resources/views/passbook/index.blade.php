@@ -63,7 +63,7 @@
     <div class="card overflow-hidden">
         <div class="section-header">
             <span class="section-header-title">{{ __('messages.transactions') }}</span>
-            <span class="badge badge-info">{{ $transactions->count() }}</span>
+            <span class="badge badge-info">{{ method_exists($transactions, 'total') ? $transactions->total() : $transactions->count() }}</span>
         </div>
         <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
             @forelse ($transactions as $txn)
@@ -123,6 +123,9 @@
             @endforelse
         </div>
     </div>
+    @if ($transactions->hasPages())
+        <div class="mt-4">{{ $transactions->links() }}</div>
+    @endif
 
     <div class="mt-4 text-center">
         <a href="{{ route('dashboard') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">

@@ -75,6 +75,9 @@
             @endforelse
         </div>
     </div>
+    @if ($orders->hasPages())
+        <div class="mt-3 mb-4">{{ $orders->links() }}</div>
+    @endif
 
     <div class="card overflow-hidden page-enter" style="animation-delay: 0.1s;">
         <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
@@ -132,4 +135,7 @@
             @endforelse
         </div>
     </div>
+    @if ($purchases->hasPages())
+        <div class="mt-3">{{ $purchases->links() }}</div>
+    @endif
 @endsection

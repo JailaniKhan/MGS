@@ -71,6 +71,9 @@
                 @endforelse
             </div>
         </div>
+        @if ($customers->hasPages())
+            <div class="mt-3">{{ $customers->links() }}</div>
+        @endif
     </div>
 
     <div id="section-suppliers" class="tab-section hidden page-enter">
@@ -130,6 +133,9 @@
                 @endforelse
             </div>
         </div>
+        @if ($suppliers->hasPages())
+            <div class="mt-3">{{ $suppliers->links() }}</div>
+        @endif
     </div>
 
     <!-- Reminder Channel Modal -->
@@ -234,5 +240,9 @@
         activeBtn.classList.remove('bg-ink-100', 'dark:bg-ink-800', 'text-ink-600', 'dark:text-ink-300', 'border', 'border-ink-200', 'dark:border-ink-700');
         activeBtn.classList.add('bg-primary-500', 'text-white', 'shadow-sm', 'shadow-primary-500/20');
     }
+
+    @if (request()->has('suppliers_page'))
+        switchTab('suppliers');
+    @endif
 </script>
 @endpush

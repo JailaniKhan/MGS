@@ -8,15 +8,19 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\PurchasePayment;
 use App\Models\Setting;
+use App\Models\StockMovement;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class PurchaseController extends Controller
 {
     public function index()
     {
-        $purchases = Purchase::with('supplier', 'purchaseItems.product.unit')
+        $purchases = Purchase::with(['customer', 'supplier'])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
         return view('purchases.index', compact('purchases'));
     }
 
@@ -104,6 +108,18 @@ class PurchaseController extends Controller
 
         $purchase->purchaseItems()->createMany($purchaseItems);
 
+        foreach ($purchaseItems as $item) {
+            StockMovement::create([
+                'user_id' => Auth::id(),
+                'product_id' => $item['product_id'],
+                'quantity_change' => $item['quantity'],
+                'movement_type' => 'purchase',
+                'reference_type' => 'purchase',
+                'reference_id' => $purchase->id,
+                'notes' => __('messages.purchase'),
+            ]);
+        }
+
         return redirect()->route('purchases.index')->with('success', __('messages.purchase_created'));
     }
 
@@ -122,7 +138,7 @@ class PurchaseController extends Controller
     public function status(Purchase $purchase, $status)
     {
         $allowed = ['pending', 'processing', 'completed', 'cancelled'];
-        if (!in_array($status, $allowed)) {
+        if (!in_array($status, $allowed, true)) {
             return back()->with('error', __('messages.invalid_status'));
         }
 
@@ -133,6 +149,16 @@ class PurchaseController extends Controller
         if ($status === 'cancelled' && $purchase->status !== 'cancelled') {
             foreach ($purchase->purchaseItems as $item) {
                 $item->product->decrement('stock', $item->quantity);
+
+                StockMovement::create([
+                    'user_id' => Auth::id(),
+                    'product_id' => $item->product_id,
+                    'quantity_change' => -$item->quantity,
+                    'movement_type' => 'purchase_cancelled',
+                    'reference_type' => 'purchase',
+                    'reference_id' => $purchase->id,
+                    'notes' => __('messages.purchase_cancelled'),
+                ]);
             }
         }
 

@@ -26,7 +26,6 @@ class OtpAuthController extends Controller
 
         return response()->json([
             'message' => 'OTP sent successfully',
-            'otp' => $otp,
         ]);
     }
 

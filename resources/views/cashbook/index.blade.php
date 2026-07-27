@@ -76,6 +76,9 @@
         </div>
     @endforelse
 </div>
+@if ($people->hasPages())
+    <div class="mt-3 mb-4">{{ $people->links() }}</div>
+@endif
 
 @if($uncategorized->isNotEmpty())
     <h3 class="text-xs font-semibold uppercase tracking-wide text-ink-500 dark:text-ink-400 mt-4 mb-2 page-enter">{{ __('messages.uncategorized') }}</h3>

@@ -21,12 +21,12 @@ use App\Http\Controllers\SalaryController;
 
 // Auth routes (no auth middleware)
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 Route::get('/login/phone', function () {
     return view('auth.otp-login');
 })->name('login.phone');
 Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
-Route::post('/register', [AuthController::class, 'register']);
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Protected routes (require authentication)
@@ -40,6 +40,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/openwa/qr', [App\Http\Controllers\SettingsController::class, 'openwaQr'])->name('settings.openwa.qr');
     Route::post('/settings/openwa/pairing-code', [App\Http\Controllers\SettingsController::class, 'openwaPairingCode'])->name('settings.openwa.pairing');
     Route::post('/settings/openwa/test-send', [App\Http\Controllers\SettingsController::class, 'openwaTestSend'])->name('settings.openwa.test');
+    Route::post('/settings/openwa/restart', [App\Http\Controllers\SettingsController::class, 'openwaRestart'])->name('settings.openwa.restart');
 
     Route::get('/people', [App\Http\Controllers\PeopleController::class, 'index'])->name('people.index');
     Route::get('/transactions', [App\Http\Controllers\TransactionsController::class, 'index'])->name('transactions.index');
@@ -62,7 +63,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/orders/{order}/show', [OrderController::class, 'show'])->name('orders.show');
     Route::get('/orders/{order}/print', [OrderController::class, 'print'])->name('orders.print');
-    Route::get('/orders/{order}/status/{status}', [OrderController::class, 'status'])->name('orders.status');
+    Route::post('/orders/{order}/status/{status}', [OrderController::class, 'status'])->name('orders.status');
     Route::get('/orders/product-price/{product}', [OrderController::class, 'getProductPrice'])->name('orders.product-price');
 
     Route::prefix('orders/returns')->name('orders.returns.')->group(function () {
@@ -129,7 +130,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/app-lock/set-pin', [App\Http\Controllers\AppLockController::class, 'setPin'])->name('app-lock.set-pin');
     Route::delete('/app-lock/remove-pin', [App\Http\Controllers\AppLockController::class, 'removePin'])->name('app-lock.remove-pin');
     Route::post('/app-lock/toggle-biometric', [App\Http\Controllers\AppLockController::class, 'toggleBiometric'])->name('app-lock.toggle-biometric');
-    Route::post('/app-lock/verify-pin', [App\Http\Controllers\AppLockController::class, 'verifyPin'])->name('app-lock.verify-pin');
+    Route::post('/app-lock/verify-pin', [App\Http\Controllers\AppLockController::class, 'verifyPin'])->name('app-lock.verify-pin')->middleware('throttle:5,1');
     Route::get('/lock', [App\Http\Controllers\AppLockController::class, 'lockScreen'])->name('app-lock.lock');
 
     // Onboarding

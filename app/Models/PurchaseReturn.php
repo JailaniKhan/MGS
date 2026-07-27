@@ -21,6 +21,7 @@ class PurchaseReturn extends Model
         'reason',
         'total_amount',
         'status',
+        'currency',
     ];
 
     protected static function booted(): void

@@ -51,6 +51,16 @@
             "@php artisan config:clear --ansi @no_additional_args",
             "@php artisan test"
         ],
+        "openwa:install": [
+            "@php artisan openwa:install"
+        ],
+        "openwa:bundle": [
+            "@php artisan openwa:bundle"
+        ],
+        "openwa:build-prep": [
+            "@php artisan openwa:install --target=android-arm64 --no-deps",
+            "@php artisan openwa:bundle --target=android-arm64"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"

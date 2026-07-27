@@ -6,15 +6,19 @@ use App\Models\PurchaseReturn;
 use App\Models\Purchase;
 use App\Models\PurchaseReturnItem;
 use App\Models\Product;
+use App\Models\StockMovement;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class PurchaseReturnController extends Controller
 {
     public function index()
     {
-        $purchaseReturns = PurchaseReturn::with('purchase.supplier', 'items.product')
+        $purchaseReturns = PurchaseReturn::with(['purchase.supplier', 'purchase.customer', 'items.product'])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
         return view('purchases.returns.index', compact('purchaseReturns'));
     }
 
@@ -65,9 +69,22 @@ class PurchaseReturnController extends Controller
             'total_amount' => $subtotal,
             'status' => $validated['status'],
             'currency' => $purchase->currency,
+            'user_id' => Auth::id(),
         ]);
 
         $purchaseReturn->items()->createMany($returnItems);
+
+        foreach ($returnItems as $item) {
+            StockMovement::create([
+                'user_id' => Auth::id(),
+                'product_id' => $item['product_id'],
+                'quantity_change' => -$item['quantity'],
+                'movement_type' => 'purchase_return',
+                'reference_type' => 'purchase_return',
+                'reference_id' => $purchaseReturn->id,
+                'notes' => __('messages.purchase_return'),
+            ]);
+        }
 
         return redirect()->route('purchases.returns.index')->with('success', __('messages.purchase_return_created'));
     }
@@ -88,6 +105,16 @@ class PurchaseReturnController extends Controller
     {
         foreach ($purchaseReturn->items as $item) {
             $item->product->increment('stock', $item->quantity);
+
+            StockMovement::create([
+                'user_id' => Auth::id(),
+                'product_id' => $item->product_id,
+                'quantity_change' => $item->quantity,
+                'movement_type' => 'purchase_return_cancelled',
+                'reference_type' => 'purchase_return',
+                'reference_id' => $purchaseReturn->id,
+                'notes' => __('messages.purchase_return_cancelled'),
+            ]);
         }
         $purchaseReturn->delete();
         return redirect()->route('purchases.returns.index')->with('success', __('messages.purchase_return_deleted'));

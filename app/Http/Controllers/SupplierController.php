@@ -9,7 +9,11 @@ class SupplierController extends Controller
 {
     public function index()
     {
-        $suppliers = Supplier::withCount('purchases')->orderBy('name')->get();
+        $suppliers = Supplier::withCount('purchases')
+            ->orderBy('name')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
         return view('suppliers.index', compact('suppliers'));
     }
 

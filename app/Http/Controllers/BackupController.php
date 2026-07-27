@@ -24,6 +24,7 @@ use App\Models\PurchaseReturn;
 use App\Models\PurchaseReturnItem;
 use App\Models\StockMovement;
 use App\Models\Setting;
+use Illuminate\Support\Facades\Auth;
 
 class BackupController extends Controller
 {
@@ -58,26 +59,28 @@ class BackupController extends Controller
 
     public function store(Request $request)
     {
+        $userId = Auth::id();
+
         $backupData = [
-            'customers' => Customer::all()->toArray(),
-            'suppliers' => Supplier::all()->toArray(),
-            'products' => Product::all()->toArray(),
-            'orders' => Order::with('orderItems')->get()->toArray(),
-            'order_items' => OrderItem::all()->toArray(),
-            'payments' => Payment::all()->toArray(),
-            'purchases' => Purchase::with('purchaseItems')->get()->toArray(),
-            'purchase_items' => PurchaseItem::all()->toArray(),
-            'purchase_payments' => PurchasePayment::all()->toArray(),
-            'expenses' => Expense::all()->toArray(),
-            'employees' => Employee::all()->toArray(),
-            'cashbook_entries' => CashbookEntry::all()->toArray(),
-            'categories' => Category::all()->toArray(),
-            'units' => Unit::all()->toArray(),
-            'order_returns' => OrderReturn::with('items')->get()->toArray(),
-            'order_return_items' => OrderReturnItem::all()->toArray(),
-            'purchase_returns' => PurchaseReturn::with('items')->get()->toArray(),
-            'purchase_return_items' => PurchaseReturnItem::all()->toArray(),
-            'stock_movements' => StockMovement::all()->toArray(),
+            'customers' => Customer::where('user_id', $userId)->get()->toArray(),
+            'suppliers' => Supplier::where('user_id', $userId)->get()->toArray(),
+            'products' => Product::where('user_id', $userId)->get()->toArray(),
+            'orders' => Order::where('user_id', $userId)->with('orderItems')->get()->toArray(),
+            'order_items' => OrderItem::whereHas('order', fn($q) => $q->where('user_id', $userId))->get()->toArray(),
+            'payments' => Payment::whereHas('order', fn($q) => $q->where('user_id', $userId))->get()->toArray(),
+            'purchases' => Purchase::where('user_id', $userId)->with('purchaseItems')->get()->toArray(),
+            'purchase_items' => PurchaseItem::whereHas('purchase', fn($q) => $q->where('user_id', $userId))->get()->toArray(),
+            'purchase_payments' => PurchasePayment::whereHas('purchase', fn($q) => $q->where('user_id', $userId))->get()->toArray(),
+            'expenses' => Expense::where('user_id', $userId)->get()->toArray(),
+            'employees' => Employee::where('user_id', $userId)->get()->toArray(),
+            'cashbook_entries' => CashbookEntry::where('user_id', $userId)->get()->toArray(),
+            'categories' => Category::where('user_id', $userId)->get()->toArray(),
+            'units' => Unit::where('user_id', $userId)->get()->toArray(),
+            'order_returns' => OrderReturn::where('user_id', $userId)->with('items')->get()->toArray(),
+            'order_return_items' => OrderReturnItem::whereHas('orderReturn', fn($q) => $q->where('user_id', $userId))->get()->toArray(),
+            'purchase_returns' => PurchaseReturn::where('user_id', $userId)->with('items')->get()->toArray(),
+            'purchase_return_items' => PurchaseReturnItem::whereHas('purchaseReturn', fn($q) => $q->where('user_id', $userId))->get()->toArray(),
+            'stock_movements' => StockMovement::where('user_id', $userId)->get()->toArray(),
             'settings' => Setting::all()->toArray(),
         ];
 

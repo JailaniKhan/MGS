@@ -9,7 +9,9 @@ class StaffController extends Controller
 {
     public function index()
     {
-        $employees = Employee::orderBy('name')->get();
+        $employees = Employee::orderBy('name')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
 
         return view('staff.index', compact('employees'));
     }
