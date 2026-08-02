@@ -9,9 +9,7 @@
         <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/>
-                    </svg>
+                    <x-icon name="lock-closed" class="w-5 h-5 text-primary-600 dark:text-primary-400"/>
                 </div>
                 <div>
                     <h3 class="text-sm font-bold text-ink-900 dark:text-white">{{ __('messages.pin_lock') }}</h3>
@@ -56,9 +54,7 @@
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-secondary-100 dark:bg-secondary-900/30 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-secondary-600 dark:text-secondary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a48.667 48.667 0 00-1.418 8.773 7.46 7.46 0 01-1.418-8.773c0-1.57.564-3.043 1.418-4.243M12.75 10.5a3 3 0 11-6 0 3 3 0 016 0zm0 0v1.5a3 3 0 01-3 3m6-3v.75"/>
-                    </svg>
+                    <x-icon name="finger-print" class="w-5 h-5 text-secondary-600 dark:text-secondary-400"/>
                 </div>
                 <div>
                     <h3 class="text-sm font-bold text-ink-900 dark:text-white">{{ __('messages.fingerprint_lock') }}</h3>
@@ -78,7 +74,7 @@
 
     <div class="mt-4 text-center">
         <a href="{{ route('settings.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
+            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>
             {{ __('messages.back') }}
         </a>
     </div>

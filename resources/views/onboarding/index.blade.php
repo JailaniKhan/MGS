@@ -19,9 +19,7 @@
         <!-- Step 1: Company Info -->
         <div class="onboarding-step active" id="step-1">
             <div class="w-16 h-16 rounded-2xl bg-brand text-white flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary-500/30">
-                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/>
-                </svg>
+                <x-icon name="building-office" class="w-8 h-8 text-white"/>
             </div>
             <h2 class="text-xl font-bold text-center text-ink-900 mb-2">{{ __('messages.welcome_to_mgs') }}</h2>
             <p class="text-sm text-ink-500 text-center mb-6">{{ __('messages.setup_business_info') }}</p>
@@ -53,10 +51,7 @@
         <!-- Step 2: Categories -->
         <div class="onboarding-step" id="step-2">
             <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-secondary-500 to-secondary-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-secondary-500/30">
-                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6z"/>
-                </svg>
+                <x-icon name="tag" class="w-8 h-8 text-white"/>
             </div>
             <h2 class="text-xl font-bold text-center text-ink-900 mb-2">{{ __('messages.add_categories') }}</h2>
             <p class="text-sm text-ink-500 text-center mb-6">{{ __('messages.categories_help_organize') }}</p>
@@ -77,9 +72,7 @@
         <!-- Step 3: Units -->
         <div class="onboarding-step" id="step-3">
             <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-accent-500/30">
-                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/>
-                </svg>
+                <x-icon name="squares-2x2" class="w-8 h-8 text-white"/>
             </div>
             <h2 class="text-xl font-bold text-center text-ink-900 mb-2">{{ __('messages.setup_units') }}</h2>
             <p class="text-sm text-ink-500 text-center mb-6">{{ __('messages.units_help_measure') }}</p>
@@ -102,9 +95,7 @@
         <div class="onboarding-step" id="step-success" style="display:none;">
             <div class="text-center">
                 <div class="w-20 h-20 rounded-full bg-primary-100 flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-10 h-10 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
-                    </svg>
+                    <x-icon name="check" class="w-10 h-10 text-primary-600" strokeWidth="2"/>
                 </div>
                 <h2 class="text-xl font-bold text-ink-900 mb-2">{{ __('messages.all_set') }}</h2>
                 <p class="text-sm text-ink-500 mb-6">{{ __('messages.onboarding_complete_msg') }}</p>

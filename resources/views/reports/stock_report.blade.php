@@ -3,7 +3,7 @@
 @section('content')
     <div class="mb-4 page-enter">
         <a href="{{ route('dashboard') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
+            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>{{ __('messages.back') }}
         </a>
         <h2 class="text-lg font-bold text-ink-900 dark:text-white mt-2">{{ __('messages.stock_report') }}</h2>
     </div>
@@ -18,7 +18,7 @@
                 </select>
             </div>
             <div>
-                <button type="submit" class="btn-primary mt-5"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>{{ __('messages.filter') }}</button>
+                <button type="submit" class="btn-primary mt-5"><x-icon name="check" class="w-4 h-4" strokeWidth="2"/>{{ __('messages.filter') }}</button>
             </div>
         </form>
     </div>
@@ -26,7 +26,7 @@
     @if($lowStockProducts->count() > 0)
     <div class="p-4 mb-4 bg-accent-50 dark:bg-accent-900/10 border border-accent-200 dark:border-accent-700/30 rounded-xl page-enter" style="animation-delay: 0.1s;">
         <div class="flex items-center gap-2 mb-2">
-            <svg class="w-4 h-4 text-accent-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.5-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L6.303 15c-.771 1.333.192 3 1.732 3z"></path></svg>
+            <x-icon name="exclamation-triangle" class="w-4 h-4 text-accent-600" strokeWidth="2"/>
             <h3 class="text-xs font-bold text-accent-800 dark:text-accent-300 uppercase tracking-wider">{{ __('messages.low_stock') }}</h3>
         </div>
         <p class="text-[11px] text-accent-700 dark:text-accent-400 mb-2">{{ __('messages.warning') }} {{ $minStockThreshold }} {{ __('messages.needs_restock') }} {{ $lowStockProducts->count() }} {{ __('messages.selected_items') }}:</p>

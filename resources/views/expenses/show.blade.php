@@ -3,7 +3,7 @@
 @section('content')
     <div class="mb-4 page-enter">
         <a href="{{ route('expenses.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
+            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>{{ __('messages.back') }}
         </a>
     </div>
 
@@ -11,7 +11,7 @@
         <div class="flex items-start justify-between mb-4">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-danger-500 to-danger-700 flex items-center justify-center shadow-sm">
-                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <x-icon name="currency-dollar" class="w-4 h-4 text-white"/>
                 </div>
                 <div>
                     <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ $expense->category }}</h2>

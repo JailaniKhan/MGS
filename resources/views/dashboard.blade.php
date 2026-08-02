@@ -17,35 +17,27 @@
     </div>
 
     <!-- Quick Action Cards (DigiKhata-style) -->
-    <div class="grid grid-cols-2 gap-3 mb-6">
+    <div class="grid-responsive-2 mb-6">
         <a href="{{ route('orders.create') }}" class="action-card">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
-            </svg>
+            <x-icon name="plus" class="w-7 h-7"/>
             <span class="text-[10px] font-bold leading-tight">{{ __('messages.new_order') }}</span>
         </a>
         <a href="{{ route('purchases.create') }}" class="action-card">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/>
-            </svg>
+            <x-icon name="shopping-cart" class="w-7 h-7"/>
             <span class="text-[10px] font-bold leading-tight">{{ __('messages.new_purchase') }}</span>
         </a>
         <a href="{{ route('expenses.create') }}" class="action-card">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            <x-icon name="currency-dollar" class="w-7 h-7"/>
             <span class="text-[10px] font-bold leading-tight">{{ __('messages.new_expense') }}</span>
         </a>
         <a href="{{ route('people.index') }}" class="action-card">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/>
-            </svg>
+            <x-icon name="users" class="w-7 h-7"/>
             <span class="text-[10px] font-bold leading-tight">{{ __('messages.people') }}</span>
         </a>
     </div>
 
     <!-- Summary Metrics -->
-    <div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="grid-responsive-3 mb-6">
         <div class="metric-tile">
             <span class="metric-label">{{ __('messages.revenue') }}</span>
             <span class="metric-value text-primary-600 dark:text-primary-400">{{ number_format($totalRevenueAFN + $totalRevenueUSD * $rate) }}</span>
@@ -89,9 +81,7 @@
     @if ($lowStockProducts > 0)
         <a href="{{ route('inventory.index') }}" class="flex items-center gap-3 p-3.5 mb-4 rounded-xl bg-danger-50 dark:bg-danger-900/10 border border-danger-200 dark:border-danger-800/30">
             <div class="w-8 h-8 rounded-lg bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center flex-shrink-0">
-                <svg class="w-4 h-4 text-danger-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
-                </svg>
+                <x-icon name="exclamation-triangle" class="w-4 h-4 text-danger-500"/>
             </div>
             <div class="flex-1 min-w-0">
                 <p class="text-sm font-bold text-danger-800 dark:text-danger-300">
@@ -99,9 +89,7 @@
                 </p>
                 <p class="text-[11px] text-danger-600 dark:text-danger-400">{{ __('messages.take_action') }}</p>
             </div>
-            <svg class="w-4 h-4 text-danger-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
-            </svg>
+            <x-icon name="chevron-right" class="w-4 h-4 text-danger-400 flex-shrink-0" strokeWidth="2"/>
         </a>
     @endif
 
@@ -119,9 +107,7 @@
                 <a href="{{ route('orders.show', $order) }}" class="list-row">
                     <div class="flex items-center gap-3 min-w-0">
                         <div class="w-8 h-8 rounded-lg bg-secondary-100 dark:bg-secondary-900/30 flex items-center justify-center flex-shrink-0">
-                            <svg class="w-4 h-4 text-secondary-600 dark:text-secondary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            </svg>
+                            <x-icon name="user" class="w-4 h-4 text-secondary-600 dark:text-secondary-400"/>
                         </div>
                         <div class="min-w-0">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $order->party?->name }}</div>
@@ -147,9 +133,7 @@
                 </a>
             @empty
                 <x-empty-state description="{{ __('messages.no_orders') }}">
-                    <svg class="w-6 h-6 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
-                    </svg>
+                    <x-icon name="inbox" class="w-6 h-6 text-ink-400"/>
                 </x-empty-state>
             @endforelse
         </div>
@@ -169,9 +153,7 @@
                 <a href="{{ route('ledger.show', ['customer', $debtor->id]) }}" class="list-row">
                     <div class="flex items-center gap-3 min-w-0">
                         <div class="w-8 h-8 rounded-lg bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center flex-shrink-0">
-                            <svg class="w-4 h-4 text-danger-600 dark:text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
-                            </svg>
+                            <x-icon name="user" class="w-4 h-4 text-danger-600 dark:text-danger-400"/>
                         </div>
                         <div class="min-w-0">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $debtor->name }}</div>
@@ -185,15 +167,11 @@
                             </div>
                         </div>
                     </div>
-                    <svg class="w-4 h-4 text-ink-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
-                    </svg>
+                    <x-icon name="chevron-right" class="w-4 h-4 text-ink-400 flex-shrink-0" strokeWidth="2"/>
                 </a>
             @empty
                 <x-empty-state description="{{ __('messages.all_settled') }}">
-                    <svg class="w-6 h-6 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    <x-icon name="check-circle" class="w-6 h-6 text-ink-400"/>
                 </x-empty-state>
             @endforelse
         </div>
@@ -213,9 +191,7 @@
                 <a href="{{ route('purchases.show', $purchase) }}" class="list-row">
                     <div class="flex items-center gap-3 min-w-0">
                         <div class="w-8 h-8 rounded-lg bg-accent-100 dark:bg-accent-900/30 flex items-center justify-center flex-shrink-0">
-                            <svg class="w-4 h-4 text-accent-600 dark:text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
-                            </svg>
+                            <x-icon name="shopping-bag" class="w-4 h-4 text-accent-600 dark:text-accent-400"/>
                         </div>
                         <div class="min-w-0">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $purchase->party?->name ?? __('messages.unknown') }}</div>
@@ -241,11 +217,8 @@
                 </a>
             @empty
                 <x-empty-state description="{{ __('messages.no_purchases') }}">
-                    <svg class="w-6 h-6 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
-                    </svg>
+                    <x-icon name="inbox" class="w-6 h-6 text-ink-400"/>
                 </x-empty-state>
-                </div>
             @endforelse
         </div>
     </div>
@@ -268,13 +241,10 @@
                             @elseif($reminder->status === 'failed') bg-danger-100 dark:bg-danger-900/30
                             @else bg-accent-100 dark:bg-accent-900/30 @endif
                             flex items-center justify-center flex-shrink-0">
-                            <svg class="w-4 h-4
+                            <x-icon name="bell" class="w-4 h-4
                                 @if($reminder->status === 'sent') text-primary-600 dark:text-primary-400
                                 @elseif($reminder->status === 'failed') text-danger-600 dark:text-danger-400
-                                @else text-accent-600 dark:text-accent-400 @endif"
-                                fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
-                            </svg>
+                                @else text-accent-600 dark:text-accent-400 @endif"/>
                         </div>
                         <div class="min-w-0">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $reminder->remindable?->name ?? __('messages.deleted') }}</div>

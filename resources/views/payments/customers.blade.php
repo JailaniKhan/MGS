@@ -22,7 +22,7 @@
             <div class="px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 flex items-center justify-between">
                 <span id="modal-customer-name" class="text-sm font-semibold text-ink-800 dark:text-ink-200"></span>
                 <button id="close-modal" class="text-ink-400 hover:text-ink-600 dark:hover:text-ink-200">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <x-icon name="x-mark" class="w-5 h-5" strokeWidth="2"/>
                 </button>
             </div>
             <div id="payment-history-content" class="p-4 overflow-y-auto flex-1">

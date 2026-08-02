@@ -41,7 +41,7 @@
                             {{ $gatewayRunning ? __('messages.openwa_gateway_running') ?? 'Gateway: Running' : __('messages.openwa_gateway_stopped') ?? 'Gateway: Stopped' }}
                         </span>
                     @endisset
-                    <span class="badge {{ $badgeClass }}">{{ $badgeLabel }}</span>
+                    <span id="sessionBadge" class="badge {{ $badgeClass }}">{{ $badgeLabel }}</span>
                     @if (!empty($status['phone']))
                         <span class="text-sm text-ink-500 dark:text-ink-400">{{ $status['phone'] }}</span>
                     @endif
@@ -119,37 +119,94 @@
 @if ($configured)
 @push('scripts')
 <script>
-    document.getElementById('refreshBtn')?.addEventListener('click', async () => {
-        const btn = document.getElementById('refreshBtn');
+    const QR_PLACEHOLDER_CLASS = 'w-64 h-64 rounded-lg border border-dashed border-ink-300 dark:border-ink-600 flex items-center justify-center text-center text-sm text-ink-500 dark:text-ink-400 p-4';
+
+    function showPlaceholder(text) {
         const img = document.getElementById('qrImage');
         const placeholder = document.getElementById('qrPlaceholder');
-        btn.disabled = true;
-        btn.textContent = '...';
+        if (img && !placeholder) {
+            const div = document.createElement('div');
+            div.id = 'qrPlaceholder';
+            div.className = QR_PLACEHOLDER_CLASS;
+            img.replaceWith(div);
+            div.textContent = text;
+        } else if (placeholder) {
+            placeholder.textContent = text;
+        }
+    }
 
+    function setBadge(status) {
+        const badge = document.getElementById('sessionBadge');
+        if (!badge) return;
+        const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unreachable';
+        const cls = ['connected', 'ready'].includes(status)
+            ? 'badge-success'
+            : status === 'qr_ready'
+                ? 'badge-warning'
+                : 'badge-danger';
+        badge.textContent = label;
+        badge.className = 'badge ' + cls;
+    }
+
+    async function refreshState() {
         try {
-            const res = await fetch('{{ route('settings.openwa.qr') }}', { headers: { 'Accept': 'application/json' } });
-            const data = await res.json();
+            let res = await fetch('{{ route('settings.openwa.qr') }}', { headers: { 'Accept': 'application/json' } });
+            let data = await res.json();
 
+            setBadge(data.status);
+
+            // After a kick (start) the fresh socket needs ~2-4s to generate
+            // its first QR, so retry once before giving up.
+            if (!data.qr && data.status !== 'connected' && data.status !== 'dead') {
+                await new Promise(r => setTimeout(r, 3000));
+                res = await fetch('{{ route('settings.openwa.qr') }}', { headers: { 'Accept': 'application/json' } });
+                data = await res.json();
+                setBadge(data.status);
+            }
+
+            const img = document.getElementById('qrImage');
             if (data.qr) {
                 if (!img) {
-                    // Create image if only placeholder exists
+                    const placeholder = document.getElementById('qrPlaceholder');
                     const newImg = document.createElement('img');
                     newImg.id = 'qrImage';
                     newImg.alt = 'WhatsApp QR';
                     newImg.className = 'w-64 h-64 rounded-lg border border-ink-200 dark:border-ink-700 bg-white p-2';
-                    placeholder.replaceWith(newImg);
+                    if (placeholder) placeholder.replaceWith(newImg);
+                    else document.querySelector('.flex.flex-col.items-center.justify-center.py-4').appendChild(newImg);
                 }
                 document.getElementById('qrImage').src = data.qr;
+            } else if (img) {
+                // QR rotated/expired — drop the stale image so a dead code
+                // can't be scanned; the next poll will re-add a fresh one.
+                const div = document.createElement('div');
+                div.id = 'qrPlaceholder';
+                div.className = QR_PLACEHOLDER_CLASS;
+                div.textContent = data.status === 'connected'
+                    ? '{{ __('messages.openwa_connected') ?? 'Session connected. No QR needed.' }}'
+                    : '{{ __('messages.openwa_qr_unavailable') ?? 'QR not available right now. Click Refresh.' }}';
+                img.replaceWith(div);
+            } else {
+                showPlaceholder(data.status === 'connected'
+                    ? '{{ __('messages.openwa_connected') ?? 'Session connected. No QR needed.' }}'
+                    : '{{ __('messages.openwa_qr_unavailable') ?? 'QR not available right now. Click Refresh.' }}');
             }
         } catch (e) {
             console.error(e);
-        } finally {
-            btn.disabled = false;
-            btn.textContent = '{{ __('messages.refresh') ?? 'Refresh QR' }}';
         }
+    }
+
+    document.getElementById('refreshBtn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('refreshBtn');
+        btn.disabled = true;
+        btn.textContent = '...';
+        await refreshState();
+        btn.disabled = false;
+        btn.textContent = '{{ __('messages.refresh') ?? 'Refresh QR' }}';
     });
 
     document.getElementById('pairingBtn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('pairingBtn');
         const phone = document.getElementById('pairingPhone').value.trim();
         const result = document.getElementById('pairingResult');
         const codeEl = document.getElementById('pairingCode');

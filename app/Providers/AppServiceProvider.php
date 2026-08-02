@@ -57,8 +57,6 @@ class AppServiceProvider extends ServiceProvider
     {
         $manager = $this->app->make(OpenWaManager::class);
 
-        $manager->ensureStarted();
-
         // Detect NativePHP mobile runtime. We check three signals and treat
         // any one as authoritative:
         //   1. config('nativephp-internal.running') — the canonical flag
@@ -73,7 +71,15 @@ class AppServiceProvider extends ServiceProvider
             || getenv('NATIVEPHP_RUNNING') === 'true'
             || in_array(config('nativephp-internal.platform') ?: getenv('NATIVEPHP_PLATFORM'), ['android', 'ios'], true);
 
+        // Only auto-start the gateway in the NativePHP persistent runtime,
+        // where this boot() runs ONCE for the whole app session. On a web
+        // dev server (php artisan serve) boot() runs PER request, so calling
+        // ensureStarted() here blocked every page load on gateway HTTP
+        // probes (and possible relaunch). On web the gateway is started
+        // on demand by SettingsController::openwa() instead.
         if ($isMobile) {
+            $manager->ensureStarted();
+
             // Mobile (NativePHP persistent runtime): the PHP process lives for
             // the entire app session. Register a shutdown handler so the gateway
             // is stopped cleanly when the user closes the app — otherwise the

@@ -3,14 +3,14 @@
 @section('content')
     <div class="mb-4 page-enter">
         <a href="{{ route('ledger.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
+            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>{{ __('messages.back') }}
         </a>
     </div>
 
     <div class="card p-4 mb-4 page-enter" style="animation-delay: 0.05s;">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-brand text-white flex items-center justify-center shadow-sm flex-shrink-0">
-                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+                <x-icon name="user" class="w-5 h-5 text-white"/>
             </div>
             <div class="flex-1">
                 <div class="flex items-center gap-2">
@@ -23,7 +23,7 @@
             <a href="{{ $personType === 'customer' ? route('reminders.customer', $person) : route('reminders.supplier', $person) }}"
                onclick="event.preventDefault(); document.getElementById('reminder-form-ledger').classList.toggle('hidden')"
                class="p-2 text-secondary-600 dark:text-secondary-400 hover:bg-secondary-50 dark:hover:bg-secondary-900/20 rounded-xl transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
+                <x-icon name="bell" class="w-5 h-5"/>
             </a>
         </div>
     </div>
@@ -68,7 +68,7 @@
                 <p class="text-[10px] text-ink-400 mt-1">{{ __('messages.leave_empty_for_full') }}</p>
             </div>
             <button type="submit" class="btn-primary w-full">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>{{ __('messages.send_reminder') }}
+                <x-icon name="bell" class="w-4 h-4"/>{{ __('messages.send_reminder') }}
             </button>
         </form>
     </div>
@@ -145,7 +145,7 @@
                 <input type="text" name="notes" value="{{ old('notes') }}" class="form-input">
                 @error('notes') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
-            <button type="submit" class="btn-primary w-full"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>{{ __('messages.record_payment') }}</button>
+            <button type="submit" class="btn-primary w-full"><x-icon name="plus" class="w-4 h-4" strokeWidth="2"/>{{ __('messages.record_payment') }}</button>
         </form>
     </div>
 @endsection

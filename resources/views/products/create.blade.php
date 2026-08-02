@@ -3,7 +3,7 @@
 @section('content')
     <div class="mb-4 page-enter">
         <a href="{{ route('products.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
+            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>{{ __('messages.back') }}
         </a>
         <h2 class="text-lg font-bold text-ink-900 dark:text-white mt-2">{{ __('messages.new_product') }}</h2>
     </div>
@@ -21,10 +21,7 @@
                 <div class="flex gap-2">
                     <input type="text" name="barcode" id="barcode-input" value="{{ old('barcode') }}" class="form-input flex-1" placeholder="{{ __('messages.scan_or_enter_barcode') }}">
                     <button type="button" onclick="scanBarcode()" class="btn-secondary btn-sm whitespace-nowrap">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z"/>
-                        </svg>
+                        <x-icon name="qr-code" class="w-4 h-4"/>
                         {{ __('messages.scan') }}
                     </button>
                 </div>
@@ -68,7 +65,7 @@
                 <textarea name="description" rows="2" class="form-input">{{ old('description') }}</textarea>
                 @error('description') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
-            <button type="submit" class="btn-primary w-full"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>{{ __('messages.submit') }}</button>
+            <button type="submit" class="btn-primary w-full"><x-icon name="check-circle" class="w-4 h-4" strokeWidth="2"/>{{ __('messages.submit') }}</button>
         </form>
     </div>
 

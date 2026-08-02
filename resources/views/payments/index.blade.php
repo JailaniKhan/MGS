@@ -17,7 +17,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-2 mb-3">
                 <div class="w-8 h-8 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-                    <svg class="w-4 h-4 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <x-icon name="plus" class="w-4 h-4 text-primary-600 dark:text-primary-400" strokeWidth="2"/>
                 </div>
                 <span class="text-xs font-semibold text-ink-500 dark:text-ink-400 uppercase tracking-wider">{{ __('messages.incoming_payments') }}</span>
             </div>
@@ -27,7 +27,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-2 mb-3">
                 <div class="w-8 h-8 rounded-lg bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center">
-                    <svg class="w-4 h-4 text-danger-600 dark:text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                    <x-icon name="minus" class="w-4 h-4 text-danger-600 dark:text-danger-400" strokeWidth="2"/>
                 </div>
                 <span class="text-xs font-semibold text-ink-500 dark:text-ink-400 uppercase tracking-wider">{{ __('messages.outgoing_payments') }}</span>
             </div>
@@ -89,9 +89,9 @@
                 <div class="flex items-center gap-3 min-w-0">
                     <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 {{ $tx['type'] === 'incoming' ? 'bg-primary-100 dark:bg-primary-900/30' : 'bg-danger-100 dark:bg-danger-900/30' }}">
                         @if ($tx['type'] === 'incoming')
-                            <svg class="w-4 h-4 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            <x-icon name="plus" class="w-4 h-4 text-primary-600 dark:text-primary-400" strokeWidth="2"/>
                         @else
-                            <svg class="w-4 h-4 text-danger-600 dark:text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                            <x-icon name="minus" class="w-4 h-4 text-danger-600 dark:text-danger-400" strokeWidth="2"/>
                         @endif
                     </div>
                     <div class="min-w-0">

@@ -112,6 +112,26 @@
         font-variant-numeric: tabular-nums;
     }
 
+    [dir="rtl"] body {
+        /* Reset letter-spacing for Arabic/Persian scripts (letters must stay connected) */
+        letter-spacing: 0;
+        /* Vazirmatn-specific: better rendering hints for Persian/Pashto */
+        -moz-osx-font-smoothing: auto;
+        text-rendering: auto;
+    }
+
+    [dir="rtl"] .tracking-tight,
+    [dir="rtl"] .tracking-wide,
+    [dir="rtl"] .tracking-wider,
+    [dir="rtl"] .tracking-widest {
+        letter-spacing: 0;
+    }
+
+    /* RTL line-height adjustment (Arabic needs a bit more breathing room) */
+    [dir="rtl"] .leading-tight {
+        line-height: 1.4;
+    }
+
     /* Consistent, accessible focus ring */
     :focus-visible {
         outline: none;
@@ -471,6 +491,24 @@
 @utility list-row {
     @apply flex items-center justify-between px-4 py-3.5 transition-colors duration-200
            hover:bg-ink-50 dark:hover:bg-white/[0.03] active:bg-ink-100 dark:active:bg-white/[0.05];
+    min-width: 0;
+}
+
+/* Mobile horizontal scroll for list rows */
+@media (max-width: 639px) {
+    .list-row, .swipe-row {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .list-row::-webkit-scrollbar, .swipe-row::-webkit-scrollbar {
+        display: none;
+    }
+    .list-row > *, .swipe-row > * {
+        flex-shrink: 0;
+    }
 }
 
 /* ============================================
@@ -600,6 +638,22 @@
     visibility: hidden;
     pointer-events: none;
     transition: opacity 0.28s var(--ease-smooth), transform 0.28s var(--ease-smooth), visibility 0.28s var(--ease-smooth);
+}
+
+/* Mobile: single column FAB menu */
+@media (max-width: 480px) {
+    .fab-menu {
+        grid-template-columns: 1fr;
+        width: calc(100vw - 1.5rem);
+    }
+    .fab-menu-item {
+        flex-direction: row;
+        justify-content: flex-start;
+        text-align: left;
+    }
+    .fab-menu-item span {
+        font-size: 0.75rem;
+    }
 }
 .fab-menu.open {
     opacity: 1;
@@ -1100,4 +1154,297 @@ html.touch .swipe-actions {
 }
 @media (prefers-color-scheme: dark) {
     .sidebar-divider { background: rgb(255 255 255 / 0.06); }
+}
+
+/* ============================================
+   MOBILE-FIRST RESPONSIVE UTILITIES
+   ============================================ */
+
+/* Responsive grid: 2-col on desktop, 1-col on mobile */
+@utility grid-responsive-2 {
+    @apply grid gap-3;
+    grid-template-columns: repeat(1, 1fr);
+}
+@media (min-width: 640px) {
+    .grid-responsive-2 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Responsive grid: 3-col on desktop, 2-col on tablet, 1-col on mobile */
+@utility grid-responsive-3 {
+    @apply grid gap-3;
+    grid-template-columns: repeat(1, 1fr);
+}
+@media (min-width: 640px) {
+    .grid-responsive-3 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (min-width: 1024px) {
+    .grid-responsive-3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Ensure touch targets meet 44x44 minimum */
+@media (max-width: 767px) {
+    a, button, .btn-primary, .btn-secondary, .btn-danger, .btn-ghost,
+    .nav-item, .sidebar-link, .fab-menu-item, .list-row, .swipe-row {
+        min-height: 44px;
+    }
+    
+    /* Better form input sizing on mobile */
+    .form-input, .form-select {
+        font-size: 16px; /* Prevents zoom on iOS */
+        padding: 0.875rem 1rem;
+    }
+    
+    /* Card padding on mobile */
+    .card { @apply p-4; }
+    .card > * + * { @apply mt-3; }
+    
+    /* Modal/sheet full width on mobile */
+    .modal-card, .bottom-sheet {
+        width: calc(100vw - 1rem) !important;
+        max-width: none !important;
+        border-radius: 1rem 1rem 0 0 !important;
+    }
+    .modal-card { border-radius: 1rem !important; }
+    
+    /* Chart height on mobile */
+    .chart-container { @apply min-h-[200px]; }
+    .chart-container canvas { height: 200px !important; }
+    
+    /* Product row improvements */
+    .product-row { @apply flex-wrap gap-2; }
+    .product-row > * { @apply flex-1 min-w-0; }
+    .product-row .product-select { @apply flex-1; }
+    .product-row .product-price,
+    .product-row .product-qty,
+    .product-row .product-lot { @apply w-full; }
+    
+    /* List row improvements */
+    .list-row { @apply gap-3; }
+    .list-row > div:last-child { @apply w-auto min-w-[120px]; }
+    
+    /* Bottom nav improvements */
+    .nav-item { @apply py-2; }
+    .nav-item span { @apply text-xs; }
+    
+    /* FAB button larger on mobile */
+    #fab-btn { @apply w-12 h-12; }
+    #fab-btn svg { @apply w-6 h-6; }
+    
+    /* Header title smaller on mobile */
+    header h1 { @apply text-base; }
+    
+    /* Section titles smaller on mobile */
+    .section-title { @apply text-xs; }
+    
+    /* Empty state smaller on mobile */
+    .empty-state { @apply py-8 px-4; }
+    .empty-state svg { @apply w-10 h-10; }
+    
+    /* Toast smaller on mobile */
+    .toast .flex { @apply px-3 py-2.5; }
+    .toast p { @apply text-xs; }
+    
+    /* Confirm sheet buttons full width */
+    .confirm-actions { @apply flex-col gap-2; }
+    .confirm-actions button { @apply w-full; }
+    
+    /* Pagination smaller on mobile */
+    .pagination { @apply gap-1; }
+    .pagination a, .pagination span { @apply px-2 py-1.5 text-xs; }
+}
+
+/* Tablet improvements */
+@media (min-width: 640px) and (max-width: 1023px) {
+    .grid-responsive-3 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* RTL support for sidebar */
+[dir="rtl"] .sidebar-drawer { left: auto; right: 0; }
+
+/* ============================================
+   COMPREHENSIVE RTL SUPPORT (Pashto / Persian)
+   Flips all physical CSS back to their logical counterparts
+   for side-sheets, FAB menus, toasts, metric tiles,
+   swipe rows, input icons, bottom sheet cards, and chevrons
+   ============================================ */
+
+[dir="rtl"] .fab-menu {
+    left: auto;
+    right: 50%;
+    transform: translate(50%, 0.75rem) scale(0.96);
+    transform-origin: bottom center;
+}
+[dir="rtl"] .fab-menu.open {
+    transform: translate(50%, 0) scale(1);
+}
+
+/* Bottom-sheet handle should be in the same place */
+[dir="rtl"] .bottom-sheet {
+    left: 1rem;
+    right: 1rem;
+}
+
+/* Modal-card alignment */
+[dir="rtl"] .modal-card {
+    left: auto;
+    right: 50%;
+    transform: translate(50%, -46%) scale(0.97);
+}
+[dir="rtl"] .modal-card.open {
+    transform: translate(50%, -50%) scale(1);
+}
+
+/* Skeleton overlay */
+[dir="rtl"] .skeleton-overlay { left: 0; right: 0; }
+
+/* Toast: RTL-friendly */
+[dir="rtl"] .toast-progress {
+    left: auto;
+    right: 0;
+    transform-origin: right;
+}
+
+/* Input-icon: icon is on the right side in RTL */
+[dir="rtl"] .input-icon svg {
+    left: auto;
+    right: 3.5rem;
+    transform: translate(50%, -50%);
+}
+[dir="rtl"] .input-icon input,
+[dir="rtl"] .input-icon select,
+[dir="rtl"] .input-icon textarea {
+    padding-left: 1rem;
+    padding-right: 2.5rem;
+}
+
+/* Metric-tile accent bar flips to right edge */
+[dir="rtl"] .metric-tile::before {
+    left: auto;
+    right: 0;
+    border-radius: 0 3px 3px 0;
+}
+
+/* Card list left-border decorations */
+[dir="rtl"] .section-header .w-1.h-4 {
+    order: -1;
+}
+
+/* FAB plus-menu animation */
+[dir="rtl"] .fab-toggle.open {
+    transform: rotate(-135deg);
+}
+
+/* Swipe row — flip direction in RTL for LTR containers */
+[dir="rtl"] .swipe-row .swipe-content {
+    transform: translateX(0);
+}
+[dir="rtl"] .swipe-row .swipe-actions {
+    left: auto;
+    right: 0;
+    flex-direction: row-reverse;
+}
+html.touch[dir="rtl"] .swipe-content {
+    transform: translateX(0);
+}
+
+/* Search bar */
+[dir="rtl"] .search-bar {
+    flex-direction: row-reverse;
+}
+
+/* Page header chevrons (flip all back/forward) */
+[dir="rtl"] .page-header > a svg,
+[dir="rtl"] .page-header .back-chevron,
+[dir="rtl"] a:has(.back-chevron) svg,
+[dir="rtl"] .list-row svg:last-child {
+    transform: scaleX(-1);
+}
+
+/* Tabs: icon position in RTL is after text */
+[dir="rtl"] .sidebar-link {
+    flex-direction: row-reverse;
+    gap: 0.75rem;
+    text-align: right;
+}
+[dir="rtl"] a.sidebar-link svg:last-child {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+/* Card.action-card right-place in grids */
+[dir="rtl"] .action-card {
+    text-align: right;
+    direction: rtl;
+}
+
+/* FAB icon */
+[dir="rtl"] .fab-menu-item {
+    flex-direction: row-reverse;
+    align-items: center;
+    text-align: right;
+}
+[dir="rtl"] .fab-menu-item span {
+    text-align: right;
+}
+
+/* Bottom-sheet */
+[dir="rtl"] .bottom-sheet .sheet-handle {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Toast / flash */
+[dir="rtl"] .toast-icon {
+    order: -1;
+}
+
+/* Confirm sheet */
+[dir="rtl"] .confirm-actions {
+    flex-direction: row-reverse;
+}
+
+/* badge glow for RTL */
+[dir="rtl"] .badge-glow {
+    animation: badgeGlowRtl 2.5s var(--ease-smooth) infinite;
+}
+@keyframes badgeGlowRtl {
+    50% { box-shadow: 0 0 10px var(--color-primary-400 / 0.25); }
+}
+
+/* Local numbering stays LTR in RTL content */
+[dir="rtl"] .ltr, [dir="rtl"] .tabular-nums {
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
+/* Chart.js tooltip RTL */
+[dir="rtl"] .chart-container canvas {
+    direction: ltr;
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: max(0px)) {
+    .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+    .pt-safe { padding-top: max(1rem, env(safe-area-inset-top)); }
+}
+
+/* Focus visible improvements for keyboard navigation */
+:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface, #fff), 0 0 0 4px var(--color-brand);
+    border-radius: 0.625rem;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
+    }
 }

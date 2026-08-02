@@ -3,7 +3,7 @@
 @section('content')
     <div class="mb-4 page-enter">
         <a href="{{ route('purchases.returns.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
+            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>{{ __('messages.back') }}
         </a>
         <h2 class="text-lg font-bold text-ink-900 dark:text-white mt-2">{{ __('messages.new_purchase_return') }}</h2>
     </div>
@@ -60,7 +60,7 @@
                         <input type="number" name="products[0][quantity]" min="1" value="1" required class="product-qty w-20 form-input text-center">
                         <input type="number" name="products[0][unit_price]" min="0" step="0.01" value="0" required class="product-price w-24 form-input text-center">
                         <button type="button" class="remove-product text-danger-500 p-1 flex-shrink-0">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            <x-icon name="trash" class="w-5 h-5" strokeWidth="2"/>
                         </button>
                     </div>
                 </div>

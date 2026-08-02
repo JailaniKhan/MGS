@@ -183,7 +183,6 @@ class OpenWaInstall extends Command
                 'name' => 'mgs-wa-gateway',
                 'version' => '1.0.0',
                 'private' => true,
-                'type' => 'module',
                 'dependencies' => [
                     '@whiskeysockets/baileys' => '^6.7.0',
                     '@hapi/boom' => '^10.0.0',
@@ -212,6 +211,29 @@ const API_KEY = process.env.API_KEY || "";
 const SESSION_DATA_PATH = process.env.SESSION_DATA_PATH || "./data/sessions";
 const AUTO_START = process.env.AUTO_START_SESSIONS !== "false";
 const sessions = new Map();
+// Diagnostic logger: baileys calls logger.child() internally, so the object
+// must support that. We forward warn/error (and the connection events we
+// log explicitly below) to openwa_app.log so QR/link failures are visible.
+const _logStream = fs.createWriteStream(path.join(__dirname, "baileys.log"), { flags: "a" });
+function _fmt(args) {
+    return args.map(a => {
+        try { return typeof a === "string" ? a : JSON.stringify(a); } catch (e) { return String(a); }
+    }).join(" ");
+}
+function _ts() { return new Date().toISOString(); }
+const logger = {
+    level: "warn",
+    child: function () { return logger; },
+    debug: () => {},
+    info: (...a) => { _logStream.write(`${_ts()} [info] ${_fmt(a)}\n`); },
+    warn: (...a) => { _logStream.write(`${_ts()} [warn] ${_fmt(a)}\n`); },
+    error: (...a) => { _logStream.write(`${_ts()} [error] ${_fmt(a)}\n`); },
+    trace: () => {},
+    fatal: (...a) => { _logStream.write(`${_ts()} [fatal] ${_fmt(a)}\n`); },
+};
+function logEvent(id, msg, extra) {
+    _logStream.write(`${_ts()} [session:${id}] ${msg}${extra ? " " + JSON.stringify(extra) : ""}\n`);
+}
 
 async function getSession(id) {
     if (sessions.has(id)) { const s = sessions.get(id); if (s.status !== "dead") return s; }
@@ -223,19 +245,40 @@ async function startSession(id) {
     if (s.sock) { try { s.sock.end(undefined); } catch (e) {} }
     const authDir = path.join(__dirname, SESSION_DATA_PATH, id);
     fs.mkdirSync(authDir, { recursive: true });
+    // After a logout (401) the stored creds are rejected by WA forever —
+    // wipe them so the next pairing starts from a clean slate.
+    if (s.status === "dead") {
+        try { fs.rmSync(authDir, { recursive: true, force: true }); } catch (e) {}
+        fs.mkdirSync(authDir, { recursive: true });
+    }
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
     const { version } = await fetchLatestBaileysVersion();
     s.status = "initializing"; s.qr = null;
-    const sock = makeWASocket({ version, auth: state, printQRInTerminal: false, generateHighQualityLink: true, logger: { level: "error" }, browser: ["MGS Gateway", "Chrome", "22.14.0"] });
+    const sock = makeWASocket({ version, auth: state, printQRInTerminal: false, generateHighQualityLink: true, logger, browser: ["MGS Gateway", "Chrome", "22.14.0"] });
     s.sock = sock;
     sock.ev.on("creds.update", saveCreds);
     sock.ev.on("connection.update", (upd) => {
-        if (upd.qr) { QR.toDataURL(upd.qr).then(d => { s.qr = d; }).catch(() => {}); s.status = "qr_ready"; }
-        if (upd.connection === "open") { s.status = "ready"; s.qr = null; if (sock.user) s.phone = sock.user.id ? sock.user.id.split(":")[0] : null; }
+        if (upd.qr) { QR.toDataURL(upd.qr).then(d => { s.qr = d; }).catch(() => {}); s.status = "qr_ready"; logEvent(id, "QR generated (first valid ~60s, then rotates every 20s)"); }
+        if (upd.connection === "open") { s.status = "ready"; s.qr = null; if (sock.user) s.phone = sock.user.id ? sock.user.id.split(":")[0] : null; logEvent(id, "CONNECTED", { phone: s.phone }); }
         if (upd.connection === "close") {
             const r = upd.lastDisconnect?.error instanceof Boom ? upd.lastDisconnect.error.output.statusCode : DisconnectReason.restartRequired;
             s.status = r === DisconnectReason.loggedOut ? "dead" : "disconnected";
-            if (r !== DisconnectReason.loggedOut && AUTO_START) setTimeout(() => startSession(id), 5000);
+            s.qr = null;
+            logEvent(id, "connection closed", { reason: r, message: upd.lastDisconnect?.error?.message || null });
+            if (r === DisconnectReason.loggedOut) {
+                // The stored creds were rejected by WA (logout) and are
+                // useless forever — wipe them so the next start re-pairs.
+                try { fs.rmSync(authDir, { recursive: true, force: true }); } catch (e) {}
+            }
+            // Reconnect ONLY when the session is already linked (creds saved):
+            // the post-pairing "restart required" close and ordinary drops
+            // need a fresh connection. While still pairing (no creds yet) we
+            // must NOT restart — a new socket would kill the live QR ~3s after
+            // it appears and every scan fails with "could not link device".
+            const credsPath = path.join(authDir, "creds.json");
+            if (AUTO_START && r !== DisconnectReason.loggedOut && fs.existsSync(credsPath)) {
+                setTimeout(() => startSession(id), 3000);
+            }
         }
     });
 }
@@ -327,12 +370,21 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         }
 
         // For cross-targets (e.g. bundling android-arm64 on a Windows host)
-        // wipe the node/ dir to avoid mixing architectures.
+        // wipe the node/ dir to avoid mixing architectures. Only wipe if it
+        // has no usable lib/*.so from a previous Termux-deps install — those
+        // libs are reusable across reinstalls and shouldn't be discarded on
+        // every --force cycle when there's no node binary to even mismatch
+        // against.
         if (is_dir($nodeDir) && !is_file($existing)) {
-            $this->components->task('Clearing previous Node.js (arch mismatch)', function () use ($nodeDir) {
-                $this->rrmdir($nodeDir);
-                return true;
-            });
+            $hasLibs = is_dir("{$nodeDir}/lib") && count(array_diff(
+                (array)@scandir("{$nodeDir}/lib"), ['.', '..']
+            )) > 0;
+            if (!$hasLibs) {
+                $this->components->task('Clearing previous Node.js (arch mismatch)', function () use ($nodeDir) {
+                    $this->rrmdir($nodeDir);
+                    return true;
+                });
+            }
         }
         if (!is_dir($nodeDir)) {
             mkdir($nodeDir, 0755, true);
@@ -443,12 +495,35 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
 
         foreach ($urls as $name => $url) {
             $debName = basename(parse_url($url, PHP_URL_PATH));
+            // Sanitize the local filename: Termux encodes "epoch:version" as
+            // "1:3.6.3", but ':' is illegal in Windows (and a stream separator
+            // in NTFS). Replace with '-' so the file lands on disk correctly.
+            $debName = str_replace(':', '-', $debName);
             $debPath = "{$dlDir}/termux-{$debName}";
+
+            if (PHP_OS_FAMILY === 'Windows' && $debName === '') {
+                // Defensive: if basename returned nothing on Windows due to
+                // the ':', fall back to an explicit package-name based name.
+                $debName = "termux-{$name}-" . $archShort . ".deb";
+                $debPath = "{$dlDir}/{$debName}";
+            }
 
             if (!is_file($debPath)) {
                 $ok = $this->components->task("Downloading Termux {$name}", fn() => $this->download($url, $debPath));
                 if (!$ok) {
                     $this->warn("Failed to download {$name} — Node may fail to start on Android.");
+                    continue;
+                }
+            }
+
+            // Verify the .deb actually has content — empty downloads can happen
+            // on flaky networks and silently leave the cache "installed".
+            if (is_file($debPath) && filesize($debPath) < 1000) {
+                $this->warn("Termux {$name} deb is suspiciously small (" . filesize($debPath) . " bytes); will redownload.");
+                @unlink($debPath);
+                $redownloaded = $this->components->task("Re-downloading Termux {$name}", fn() => $this->download($url, $debPath));
+                if (!$redownloaded || !is_file($debPath) || filesize($debPath) < 1000) {
+                    $this->warn("Failed to re-download {$name}; Node may fail to start on Android.");
                     continue;
                 }
             }
@@ -512,31 +587,31 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
      */
     protected function termuxDependencyUrls(string $archShort): array
     {
-        // Pinned versions confirmed in the Termux apt repo as of 2026-07.
-        // zlib is intentionally omitted because Android ships its own libz.so
-        // that is compatible enough for Node's usage. If a future Node version
+        // Pinned versions confirmed in the Termux apt repo (2026-07).
+        // zlib is omitted because Android ships its own libz.so that is
+        // compatible enough for Node's usage. If a future Node version
         // requires a newer libz, add `zlib_1.3.1_*` here.
         $packages = [
-            'libc++'   => 'libc++/libc++_29',
-            'openssl'  => 'openssl/openssl_1:3.6.3',
-            'c-ares'   => 'c-ares/c-ares_1.34.8',
-            'libicu'   => 'libicu/libicu_78.3',
-            'libsqlite'=> 'libsqlite/libsqlite_3.53.4',
+            'libc++'    => ['libc++_29',          'libc++'],
+            'openssl'   => ['openssl_1:3.6.3',    'openssl'],
+            'c-ares'    => ['c-ares_1.34.8',      'c-ares'],
+            'libicu'    => ['libicu_78.3',        'libicu'],
+            'libsqlite' => ['libsqlite_3.53.4',  'libsqlite'],
         ];
 
         $base = 'https://packages.termux.dev/apt/termux-main/pool/main';
         $urls = [];
-        foreach ($packages as $name => $pathSuffix) {
-            // Termux encodes the first letter of the package name as the
-            // pool subdir, e.g. `libc++` lives under `libc/`, `openssl` under `o/`.
-            $poolSub = strtolower(substr($name, 0, 1));
-            // `libc++` actually lives under `libc/` (first four chars).
-            // Strip everything after the '+' for the pool-subdir lookup.
-            $cleanName = preg_replace('/\+.*$/', '', $name);
-            if (strlen($cleanName) >= 4) {
-                $poolSub = strtolower(substr($cleanName, 0, 4));
+        foreach ($packages as $name => [$pathSuffix, $dirName]) {
+            // Termux's Debian-style pool layout:
+            //   - packages starting with "lib" use a 4-char prefix subdir
+            //     (e.g. `libs/`, `libc/`, `libi/`)
+            //   - all other packages use a 1-char prefix subdir (`o/`, `c/`)
+            if (str_starts_with($name, 'lib')) {
+                $poolSub = strtolower(substr($name, 0, 4));
+            } else {
+                $poolSub = strtolower(substr($name, 0, 1));
             }
-            $urls[$name] = "{$base}/{$poolSub}/{$name}/" . basename($pathSuffix) . "_{$archShort}.deb";
+            $urls[$name] = "{$base}/{$poolSub}/{$dirName}/{$pathSuffix}_{$archShort}.deb";
         }
         return $urls;
     }
@@ -648,7 +723,14 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         // Find the `node` (or `node.exe`) binary anywhere under $tmp.
         // Works for both the standard node-tarball layout (`node-vX/bin/node`)
         // and the Termux .deb layout (`./data/data/com.termux/files/usr/bin/node`).
-        $nodeBinary = $this->findFileRecursive($tmp, PHP_OS_FAMILY === 'Windows' ? 'node.exe' : 'node');
+        //
+        // CRITICAL: use the TARGET's binary name, not the host's. A Windows
+        // dev box building for android-arm64 must look for `node` (Linux ELF)
+        // inside the Termux deb, NOT for `node.exe` (which is only inside the
+        // Windows nodejs.org zip).
+        $isWindowsTarget = str_starts_with($target, 'win-');
+        $expectedName = $isWindowsTarget ? 'node.exe' : 'node';
+        $nodeBinary = $this->findFileRecursive($tmp, $expectedName);
         if (!$nodeBinary) {
             $this->rrmdir($tmp);
             return false;
@@ -787,31 +869,31 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         // Decompress (if needed) and extract the data.tar archive.
         try {
             if (str_ends_with($dataTarName, '.xz')) {
-                // Try the `xz` binary first; if unavailable, fall back to a pure-PHP decompressor.
-                $decompressed = substr($tmpTar, 0, -3); // strip .xz, leaving .tar
+                // $tmpTar has the form ".../.data.tar.xz.tmp"; we want the
+                // decompressed file to end in ".tar" (PharData/tar binary
+                // both key off the extension). Strip the trailing ".tmp"
+                // and the ".xz" suffix, then append ".tar".
+                $decompressed = preg_replace('/\.xz\.tmp$/', '.tar', $tmpTar);
                 if (!file_exists($decompressed)) {
-                    $xzCode = 255;
-                    if (PHP_OS_FAMILY === 'Windows') {
-                        exec('where xz 2>NUL', $xzWhere, $xzWhereCode);
-                        if ($xzWhereCode === 0) {
-                            exec('xz -d -k -f "' . $tmpTar . '" 2>NUL', $xzOut, $xzCode);
-                        }
-                    } else {
-                        exec('command -v xz >/dev/null 2>&1 && xz -d -k -f "' . $tmpTar . '" 2>/dev/null', $xzOut, $xzCode);
-                    }
-                    if ($xzCode !== 0) {
-                        $this->xzDecompressToFile($tmpTar, $decompressed);
+                    $xzCode = $this->ensureXzDecompress($tmpTar, $decompressed);
+                    if ($xzCode !== 0 && !is_file($decompressed)) {
+                        @unlink($tmpTar);
+                        @unlink($decompressed);
+                        return false;
                     }
                 }
                 if (!file_exists($decompressed)) {
                     @unlink($tmpTar);
                     return false;
                 }
-                $phar = new \PharData($decompressed);
-                $phar->extractTo($destDir, overwrite: true);
+                if (!$this->safeTarExtract($decompressed, $destDir)) {
+                    @unlink($decompressed);
+                    @unlink($tmpTar);
+                    return false;
+                }
                 @unlink($decompressed);
             } else if (str_ends_with($dataTarName, '.gz')) {
-                $decompressed = substr($tmpTar, 0, -3);
+                $decompressed = preg_replace('/\.gz\.tmp$/', '.tar', $tmpTar);
                 if (!file_exists($decompressed)) {
                     $gz = gzopen($tmpTar, 'rb');
                     $out2 = fopen($decompressed, 'wb');
@@ -821,11 +903,14 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
                     gzclose($gz);
                     fclose($out2);
                 }
-                $phar = new \PharData($decompressed);
-                $phar->extractTo($destDir, overwrite: true);
+                if (!$this->safeTarExtract($decompressed, $destDir)) {
+                    @unlink($decompressed);
+                    @unlink($tmpTar);
+                    return false;
+                }
                 @unlink($decompressed);
             } else if (str_ends_with($dataTarName, '.bz2')) {
-                $decompressed = substr($tmpTar, 0, -4); // strip .bz2
+                $decompressed = preg_replace('/\.bz2\.tmp$/', '.tar', $tmpTar);
                 if (!file_exists($decompressed)) {
                     $bz = bzopen($tmpTar, 'r');
                     $out2 = fopen($decompressed, 'wb');
@@ -835,13 +920,18 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
                     bzclose($bz);
                     fclose($out2);
                 }
-                $phar = new \PharData($decompressed);
-                $phar->extractTo($destDir, overwrite: true);
+                if (!$this->safeTarExtract($decompressed, $destDir)) {
+                    @unlink($decompressed);
+                    @unlink($tmpTar);
+                    return false;
+                }
                 @unlink($decompressed);
             } else {
                 // Plain tar.
-                $phar = new \PharData($tmpTar);
-                $phar->extractTo($destDir, overwrite: true);
+                if (!$this->safeTarExtract($tmpTar, $destDir)) {
+                    @unlink($tmpTar);
+                    return false;
+                }
             }
         } catch (\Throwable $e) {
             @unlink($tmpTar);
@@ -853,20 +943,309 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
     }
 
     /**
+     * Safely extract a .tar file. Works around several PharData bugs:
+     *   - On Windows, PharData::extractTo() fails with "Cannot extract '.',
+     *     internal error" because the tar archive contains `.` and `..`
+     *     entries that PharData refuses to write (security protection).
+     *   - On Windows, some PharData builds can't iterate over tar entries
+     *     with `RecursiveIteratorIterator` (`count()` reports 208 but
+     *     `foreach` returns 0 items).
+     *
+     * Strategy (first to succeed wins):
+     *   1. Use `tar` binary if available (Windows ships bsdtar in System32;
+     *      Linux/macOS has GNU tar / BSD tar). Tar natively handles `.` and
+     *      `..` entries correctly.
+     *   2. Fall back to PharData::extractTo() with the third argument set to
+     *      false (don't overwrite, in case the dot-entry is the source of the
+     *      PharException). Skip on the file-by-file loop only if direct
+     *      extractTo succeeds.
+     *
+     * Returns true if extraction produced any files under $destDir.
+     */
+    protected function safeTarExtract(string $tarPath, string $destDir): bool
+    {
+        if (!is_dir($destDir)) {
+            mkdir($destDir, 0755, true);
+        }
+        if (!is_file($tarPath)) {
+            return false;
+        }
+
+        // Strategy 1: invoke the `tar` binary.
+        $tarBin = null;
+        if (PHP_OS_FAMILY === 'Windows') {
+            // Windows 10+ ships System32\tar.exe (bsdtar 3.x).
+            if (@is_file('C:\Windows\System32\tar.exe')) {
+                $tarBin = 'C:\Windows\System32\tar.exe';
+            } else {
+                exec('where tar 2>NUL', $out, $code);
+                if ($code === 0 && !empty($out[0])) {
+                    $tarBin = trim($out[0]);
+                }
+            }
+        } else {
+            exec('command -v tar 2>/dev/null', $out, $code);
+            if ($code === 0 && !empty($out[0])) {
+                $tarBin = trim($out[0]);
+            }
+        }
+
+        if ($tarBin !== null) {
+            $cmd = '"' . $tarBin . '" -xf "' . $tarPath . '" -C "' . $destDir . '"';
+            if (PHP_OS_FAMILY === 'Windows') {
+                $cmd .= ' 2>NUL';
+            } else {
+                $cmd .= ' 2>/dev/null';
+            }
+            exec($cmd, $out, $code);
+            // Tar may exit non-zero on harmless warnings (e.g. unable to
+            // create a symlink on a non-POSIX fs). Check if it actually
+            // extracted anything before deciding success.
+            if ($this->dirHasAnyFile($destDir)) {
+                return true;
+            }
+        }
+
+        // Strategy 2: fall back to PharData.
+        try {
+            $phar = new \PharData($tarPath);
+            $phar->extractTo($destDir, overwrite: true);
+            if ($this->dirHasAnyFile($destDir)) {
+                return true;
+            }
+        } catch (\Throwable $e) {
+            // Swallow; one more fallback below.
+        }
+
+        // Strategy 3: PharData with file-by-file iteration (skip dot entries).
+        try {
+            $phar = new \PharData($tarPath);
+            $count = 0;
+            foreach ($phar as $key => $file) {
+                $count++;
+                if ($key === '.' || $key === '..') continue;
+                // $file is a PharFileInfo (or DirectoryEntry). Use full path.
+                $relative = ltrim((string)$key, './');
+                if ($relative === '' || str_starts_with($relative, '..')) continue;
+                $target = rtrim($destDir, '/\\') . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relative);
+                if ($file->isDir()) {
+                    @mkdir($target, 0755, true);
+                } else {
+                    @mkdir(dirname($target), 0755, true);
+                    copy('phar://' . $tarPath . '/' . ltrim((string)$key, '/'), $target);
+                }
+            }
+            return $this->dirHasAnyFile($destDir);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Returns true if $dir contains at least one file (recursively).
+     */
+    protected function dirHasAnyFile(string $dir): bool
+    {
+        if (!is_dir($dir)) return false;
+        try {
+            $rii = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+            foreach ($rii as $f) {
+                if ($f->isFile()) return true;
+            }
+        } catch (\Throwable $e) {
+        }
+        return false;
+    }
+
+    /**
+     * Decompress a .xz file to a target .tar path using the most reliable
+     * strategy available on this host. Returns 0 on success (xz convention).
+     *
+     * Strategy (first to succeed wins):
+     *   1. PATH-resident `xz` (via `xz -d -k -f -c <in>` to a descriptor pipe).
+     *   2. Git for Windows / MSYS2 / Cygwin bundled xz.exe (tryBundledXz()).
+     *   3. PECL lzma extension if loaded (xzdecrypt()).
+     *   4. Python stdlib lzma module (xzDecompressToFile()), which throws if
+     *      Python is missing — the caller's try/catch surfaces a clean error.
+     *
+     * The output file is always written with a ".tar" suffix so downstream
+     * PharData / tar-binary extraction recognises the format.
+     */
+    protected function ensureXzDecompress(string $xzPath, string $outPath): int
+    {
+        if (is_file($outPath) && filesize($outPath) > 0) {
+            return 0;
+        }
+
+        // Strategy 1: PATH-resident xz (only the redirect form, never in-place,
+        // because in-place destroys the source .xz on hosts where xz literally
+        // removes the input after decompression).
+        if (PHP_OS_FAMILY === 'Windows') {
+            exec('where xz 2>NUL', $xzWhere, $xzWhereCode);
+            if ($xzWhereCode === 0 && !empty($xzWhere[0])) {
+                $xzBin = trim($xzWhere[0]);
+                $code = $this->runXzTo($xzBin, $xzPath, $outPath);
+                if ($code === 0 && is_file($outPath) && filesize($outPath) > 0) {
+                    return 0;
+                }
+            }
+        } else {
+            $xzBin = trim((string)@shell_exec('command -v xz 2>/dev/null'));
+            if ($xzBin !== '') {
+                $code = $this->runXzTo($xzBin, $xzPath, $outPath);
+                if ($code === 0 && is_file($outPath) && filesize($outPath) > 0) {
+                    return 0;
+                }
+            }
+        }
+
+        // Strategy 2: bundled xz.exe (Git for Windows, MSYS2, Cygwin).
+        $code = $this->tryBundledXz($xzPath, $outPath);
+        if ($code === 0 && is_file($outPath) && filesize($outPath) > 0) {
+            return 0;
+        }
+
+        // Strategy 3: PECL lzma extension.
+        if (function_exists('xzdecrypt')) {
+            $data = file_get_contents($xzPath);
+            $dec = $data !== false ? xzdecrypt($data) : false;
+            if ($dec !== false && $dec !== '') {
+                file_put_contents($outPath, $dec);
+                return 0;
+            }
+        }
+
+        // Strategy 4: Python stdlib lzma — throws if Python missing; caller catches.
+        $this->xzDecompressToFile($xzPath, $outPath);
+        return (is_file($outPath) && filesize($outPath) > 0) ? 0 : 1;
+    }
+
+    /**
+     * Run `xz -d -k -f -c <in>` and capture stdout into $outPath.
+     * Returns 0 on success, non-zero otherwise.
+     */
+    protected function runXzTo(string $xzBin, string $inPath, string $outPath): int
+    {
+        $cmd = '"' . $xzBin . '" -d -k -f -c "' . $inPath . '"';
+        $descriptors = [
+            0 => ['file', 'nul', 'r'],
+            1 => ['file', str_replace('/', DIRECTORY_SEPARATOR, $outPath), 'wb'],
+            2 => ['file', 'nul', 'w'],
+        ];
+        $proc = @proc_open($cmd, $descriptors, $pipes);
+        if (!is_resource($proc)) {
+            return 1;
+        }
+        proc_close($proc);
+        return is_file($outPath) && filesize($outPath) > 0 ? 0 : 1;
+    }
+
+    /**
+     * Look for a bundled `xz` executable in well-known locations on Windows
+     * (Git for Windows, MSYS2, Cygwin) and use it to decompress the file.
+     * Returns 0 on success (matching the `xz` exit-code convention so
+     * callers can do `if ($code !== 0)`).
+     */
+    protected function tryBundledXz(string $xzPath, string $outPath): int
+    {
+        if (PHP_OS_FAMILY !== 'Windows') {
+            return 1;
+        }
+        $candidates = [
+            'C:\Program Files\Git\mingw64\bin\xz.exe',
+            'C:\Program Files\Git\usr\bin\xz.exe',
+            'C:\Program Files (x86)\Git\mingw64\bin\xz.exe',
+            'C:\Program Files (x86)\Git\usr\bin\xz.exe',
+            'C:\msys64\usr\bin\xz.exe',
+            'C:\cygwin64\bin\xz.exe',
+            'C:\cygwin\bin\xz.exe',
+        ];
+        foreach ($candidates as $candidate) {
+            if (@is_file($candidate)) {
+                $cmd = '"' . $candidate . '" -d -k -f -c "' . $xzPath . '"';
+                $descriptors = [
+                    0 => ['file', 'nul', 'r'],
+                    1 => ['file', $outPath, 'wb'],
+                    2 => ['file', 'nul', 'w'],
+                ];
+                $proc = @proc_open($cmd, $descriptors, $pipes);
+                if (is_resource($proc)) {
+                    proc_close($proc);
+                    if (is_file($outPath) && filesize($outPath) > 0) {
+                        return 0;
+                    }
+                }
+            }
+        }
+        return 1;
+    }
+
+    /**
      * Pure-PHP XZ decompressor fallback. Reads `.xz` file, writes `.tar`.
-     * Only used when the `xz` binary isn't available on the host.
+     * Used when neither the `xz` binary nor Git's bundled `xz.exe` is
+     * available on the host.
+     *
+     * Strategy (first to succeed wins):
+     *   1. PHP's ext-lzma `xzdecrypt()` function (PECL lzma extension).
+     *   2. Python via `python -c` using the stdlib `lzma` module.
+     *   3. PHP's built-in PharData if PHP was compiled with liblzma.
+     *
+     * Throws RuntimeException if all strategies fail.
      */
     protected function xzDecompressToFile(string $xzPath, string $tarPath): void
     {
-        if (!function_exists('xzdecrypt')) {
-            throw new \RuntimeException('xz binary not available and PHP has no xz extension');
+        // Strategy 1: PHP's ext-lzma (PECL lzma) — usually absent.
+        if (function_exists('xzdecrypt')) {
+            $data = file_get_contents($xzPath);
+            $decompressed = xzdecrypt($data);
+            if ($decompressed !== false && $decompressed !== '') {
+                file_put_contents($tarPath, $decompressed);
+                return;
+            }
         }
-        $data = file_get_contents($xzPath);
-        $decompressed = xzdecrypt($data);
-        if ($decompressed === false) {
-            throw new \RuntimeException('xzdecrypt() returned false');
+
+        // Strategy 2: Python's stdlib `lzma` module — almost always present
+        // on Windows 10+ (Microsoft Store Python) and Linux/macOS.
+        $python = PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3';
+        $pyScript = <<<PY
+import lzma, sys
+with open(sys.argv[1], 'rb') as f_in:
+    with lzma.LZMAFile(f_in) as xz:
+        with open(sys.argv[2], 'wb') as f_out:
+            while True:
+                chunk = xz.read(1 << 20)
+                if not chunk:
+                    break
+                f_out.write(chunk)
+PY;
+        $tmpPy = sys_get_temp_dir() . '/mgs_xz_decompress_' . bin2hex(random_bytes(4)) . '.py';
+        file_put_contents($tmpPy, $pyScript);
+        $cmd = escapeshellarg($python) . ' ' . escapeshellarg($tmpPy) . ' ' . escapeshellarg($xzPath) . ' ' . escapeshellarg($tarPath);
+        $descriptors = [
+            0 => ['file', 'nul', 'r'],
+            1 => ['file', 'nul', 'w'],
+            2 => ['file', 'nul', 'w'],
+        ];
+        $proc = @proc_open($cmd, $descriptors, $pipes);
+        if (is_resource($proc)) {
+            proc_close($proc);
+            @unlink($tmpPy);
+            if (is_file($tarPath) && filesize($tarPath) > 0) {
+                return;
+            }
         }
-        file_put_contents($tarPath, $decompressed);
+        @unlink($tmpPy);
+
+        // Strategy 3: give up with a helpful error.
+        throw new \RuntimeException(
+            'xz decompression failed: could not find `xz` on PATH, in Git for ' .
+            'Windows, or via the Python `lzma` module. To fix this on Windows, ' .
+            'install Git for Windows (https://git-scm.com/win) which ships ' .
+            'xz.exe, or install Python (https://python.org) which provides ' .
+            'the `lzma` stdlib module. Then re-run the command.'
+        );
     }
 
     /**
@@ -888,12 +1267,23 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         return null;
     }
 
+    /**
+     * Locate the installed Node binary in nodeDir. The filename depends on the
+     * TARGET platform, not the host: a Windows dev box cross-compiling for
+     * android-arm64 extracts a Linux ELF named `node`, so checking
+     * PHP_OS_FAMILY here would (incorrectly) look for `node.exe`.
+     * Check for both names; `nodeMatchesTarget()` in the caller validates
+     * that the found binary matches the requested target architecture.
+     */
     protected function findNodeBinary(string $nodeDir): ?string
     {
-        if (PHP_OS_FAMILY === 'Windows') {
-            return is_file("{$nodeDir}/node.exe") ? "{$nodeDir}/node.exe" : null;
+        if (is_file("{$nodeDir}/node")) {
+            return "{$nodeDir}/node";
         }
-        return is_file("{$nodeDir}/node") ? "{$nodeDir}/node" : null;
+        if (is_file("{$nodeDir}/node.exe")) {
+            return "{$nodeDir}/node.exe";
+        }
+        return null;
     }
 
     protected function installOpenwa(): ?string
@@ -1153,6 +1543,13 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
 
         foreach ($replacements as $key => $value) {
             $escaped = str_replace('\\', '\\\\', $value);
+            // Quote values that contain whitespace (e.g. Windows paths like
+            // "D:\Mobile App\MGS\...") — Laravel's Dotenv parser rejects
+            // unquoted whitespace mid-value. Quotes are preserved only when
+            // needed to keep backward compatibility with simple values.
+            if (preg_match('/\s/', $escaped)) {
+                $escaped = '"' . str_replace('"', '\\"', $escaped) . '"';
+            }
             if (preg_match("/^{$key}=.*/m", $envContent)) {
                 $envContent = preg_replace("/^{$key}=.*/m", "{$key}={$escaped}", $envContent);
             } else {

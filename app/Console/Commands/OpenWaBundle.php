@@ -173,22 +173,27 @@ class OpenWaBundle extends Command
             $this->components->twoColumnDetail('Archive', 'already downloaded');
         }
 
-        $ok = $this->components->task('Extracting Node.js binary', function () use ($archive, $buildDir) {
+        // Note: $this->components->task() is void (it doesn't return the
+        // closure's result), so we capture success via a by-ref $ok instead.
+        $ok = false;
+        $this->components->task('Extracting Node.js binary', function () use ($archive, $buildDir, $dest, $libDir, &$ok) {
             $tmp = storage_path('app/openwa/downloads/_node_extract_bundle');
             if (is_dir($tmp)) $this->rrmdir($tmp);
             mkdir($tmp, 0755, true);
 
-            $ok = $this->extractDebInto($archive, $tmp);
-            if (!$ok) {
+            $innerOk = $this->extractDebInto($archive, $tmp);
+            if (!$innerOk) {
                 $this->error("Deb extraction failed for {$archive}");
-                return false;
+                $ok = false;
+                return;
             }
 
             // Locate `node` binary inside the extracted Termux tree.
             $nodeBin = $this->findFileRecursive($tmp, 'node');
             if (!$nodeBin) {
                 $this->error('node binary not found inside extracted .deb');
-                return false;
+                $ok = false;
+                return;
             }
 
             if (!is_dir("{$buildDir}/node")) {
@@ -213,7 +218,7 @@ class OpenWaBundle extends Command
                 }
             }
 
-            return true;
+            $ok = true;
         });
 
         if (!$ok || !is_file($dest)) {
@@ -228,11 +233,17 @@ class OpenWaBundle extends Command
             $urls = $this->termuxDependencyUrls($arch);
             foreach ($urls as $name => $debUrl) {
                 $debName = basename(parse_url($debUrl, PHP_URL_PATH));
+                // Sanitize: Termux encodes "epoch:version" as "1:3.6.3", but
+                // ':' is illegal in Windows filenames. Replace with '-'.
+                $debName = str_replace(':', '-', $debName);
                 $debPath = storage_path("app/openwa/downloads/termux-{$debName}");
 
-                if (!is_file($debPath)) {
+                if (!is_file($debPath) || filesize($debPath) < 1000) {
+                    if (is_file($debPath)) {
+                        @unlink($debPath);
+                    }
                     $downloaded = $this->download($debUrl, $debPath);
-                    if (!$downloaded) {
+                    if (!$downloaded || !is_file($debPath) || filesize($debPath) < 1000) {
                         $this->warn("Failed to download Termux {$name}; node may fail to start.");
                         continue;
                     }
@@ -327,29 +338,30 @@ class OpenWaBundle extends Command
 
         try {
             if (str_ends_with($dataTarName, '.xz')) {
-                $decompressed = substr($tmpTar, 0, -3);
-                $xzCode = 255;
-                if (PHP_OS_FAMILY !== 'Windows' && function_exists('shell_exec')) {
-                    $xzPath = trim((string)shell_exec('command -v xz 2>/dev/null'));
-                    if ($xzPath !== '') {
-                        exec("xz -d -k -f \"{$tmpTar}\" 2>/dev/null", $xzOut, $xzCode);
-                    }
-                }
-                if ($xzCode !== 0 && function_exists('xzdecrypt')) {
-                    $data = file_get_contents($tmpTar);
-                    if ($data !== false) {
-                        file_put_contents($decompressed, xzdecrypt($data) ?: '');
+                // $tmpTar has the form ".../.data.tar.xz.tmp"; produce a .tar
+                // filename so downstream PharData / tar-binary extraction
+                // recognises the format.
+                $decompressed = preg_replace('/\.xz\.tmp$/', '.tar', $tmpTar);
+                if (!file_exists($decompressed)) {
+                    $xzCode = $this->ensureXzDecompress($tmpTar, $decompressed);
+                    if ($xzCode !== 0 && !is_file($decompressed)) {
+                        @unlink($tmpTar);
+                        @unlink($decompressed);
+                        return false;
                     }
                 }
                 if (!file_exists($decompressed)) {
                     @unlink($tmpTar);
                     return false;
                 }
-                $phar = new \PharData($decompressed);
-                $phar->extractTo($destDir, overwrite: true);
+                if (!$this->safeTarExtract($decompressed, $destDir)) {
+                    @unlink($decompressed);
+                    @unlink($tmpTar);
+                    return false;
+                }
                 @unlink($decompressed);
             } else if (str_ends_with($dataTarName, '.gz')) {
-                $decompressed = substr($tmpTar, 0, -3);
+                $decompressed = preg_replace('/\.gz\.tmp$/', '.tar', $tmpTar);
                 if (!file_exists($decompressed)) {
                     $gz = gzopen($tmpTar, 'rb');
                     $out2 = fopen($decompressed, 'wb');
@@ -359,11 +371,14 @@ class OpenWaBundle extends Command
                     gzclose($gz);
                     fclose($out2);
                 }
-                $phar = new \PharData($decompressed);
-                $phar->extractTo($destDir, overwrite: true);
+                if (!$this->safeTarExtract($decompressed, $destDir)) {
+                    @unlink($decompressed);
+                    @unlink($tmpTar);
+                    return false;
+                }
                 @unlink($decompressed);
             } else if (str_ends_with($dataTarName, '.bz2')) {
-                $decompressed = substr($tmpTar, 0, -4);
+                $decompressed = preg_replace('/\.bz2\.tmp$/', '.tar', $tmpTar);
                 if (!file_exists($decompressed)) {
                     $bz = bzopen($tmpTar, 'r');
                     $out2 = fopen($decompressed, 'wb');
@@ -373,12 +388,17 @@ class OpenWaBundle extends Command
                     bzclose($bz);
                     fclose($out2);
                 }
-                $phar = new \PharData($decompressed);
-                $phar->extractTo($destDir, overwrite: true);
+                if (!$this->safeTarExtract($decompressed, $destDir)) {
+                    @unlink($decompressed);
+                    @unlink($tmpTar);
+                    return false;
+                }
                 @unlink($decompressed);
             } else {
-                $phar = new \PharData($tmpTar);
-                $phar->extractTo($destDir, overwrite: true);
+                if (!$this->safeTarExtract($tmpTar, $destDir)) {
+                    @unlink($tmpTar);
+                    return false;
+                }
             }
         } catch (\Throwable $e) {
             @unlink($tmpTar);
@@ -387,6 +407,86 @@ class OpenWaBundle extends Command
 
         @unlink($tmpTar);
         return true;
+    }
+
+    /**
+     * Safely extract a .tar file. Mirror of OpenWaInstall::safeTarExtract().
+     * On Windows, PharData::extractTo() fails on Termux tars that contain
+     * `.` and `..` entries. Try the `tar` binary first.
+     */
+    protected function safeTarExtract(string $tarPath, string $destDir): bool
+    {
+        if (!is_dir($destDir)) {
+            mkdir($destDir, 0755, true);
+        }
+        if (!is_file($tarPath)) {
+            return false;
+        }
+
+        $tarBin = null;
+        if (PHP_OS_FAMILY === 'Windows') {
+            if (@is_file('C:\Windows\System32\tar.exe')) {
+                $tarBin = 'C:\Windows\System32\tar.exe';
+            } else {
+                exec('where tar 2>NUL', $out, $code);
+                if ($code === 0 && !empty($out[0])) {
+                    $tarBin = trim($out[0]);
+                }
+            }
+        } else {
+            exec('command -v tar 2>/dev/null', $out, $code);
+            if ($code === 0 && !empty($out[0])) {
+                $tarBin = trim($out[0]);
+            }
+        }
+
+        if ($tarBin !== null) {
+            $cmd = '"' . $tarBin . '" -xf "' . $tarPath . '" -C "' . $destDir . '"';
+            $cmd .= (PHP_OS_FAMILY === 'Windows') ? ' 2>NUL' : ' 2>/dev/null';
+            exec($cmd, $out, $code);
+            if ($this->dirHasAnyFile($destDir)) return true;
+        }
+
+        try {
+            $phar = new \PharData($tarPath);
+            $phar->extractTo($destDir, overwrite: true);
+            if ($this->dirHasAnyFile($destDir)) return true;
+        } catch (\Throwable $e) {
+        }
+
+        try {
+            $phar = new \PharData($tarPath);
+            foreach ($phar as $key => $file) {
+                if ($key === '.' || $key === '..') continue;
+                $relative = ltrim((string)$key, './');
+                if ($relative === '' || str_starts_with($relative, '..')) continue;
+                $target = rtrim($destDir, '/\\') . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relative);
+                if ($file->isDir()) {
+                    @mkdir($target, 0755, true);
+                } else {
+                    @mkdir(dirname($target), 0755, true);
+                    copy('phar://' . $tarPath . '/' . ltrim((string)$key, '/'), $target);
+                }
+            }
+            return $this->dirHasAnyFile($destDir);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    protected function dirHasAnyFile(string $dir): bool
+    {
+        if (!is_dir($dir)) return false;
+        try {
+            $rii = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+            foreach ($rii as $f) {
+                if ($f->isFile()) return true;
+            }
+        } catch (\Throwable $e) {
+        }
+        return false;
     }
 
     protected function findFileRecursive(string $dir, string $filename): ?string
@@ -404,27 +504,196 @@ class OpenWaBundle extends Command
     }
 
     /**
+     * Decompress a .xz file to a target .tar path using the most reliable
+     * strategy available on this host. Returns 0 on success (xz convention).
+     * Mirror of OpenWaInstall::ensureXzDecompress().
+     */
+    protected function ensureXzDecompress(string $xzPath, string $outPath): int
+    {
+        if (is_file($outPath) && filesize($outPath) > 0) {
+            return 0;
+        }
+
+        // Strategy 1: PATH-resident xz (redirect form, never in-place).
+        if (PHP_OS_FAMILY === 'Windows') {
+            exec('where xz 2>NUL', $xzWhere, $xzWhereCode);
+            if ($xzWhereCode === 0 && !empty($xzWhere[0])) {
+                $xzBin = trim($xzWhere[0]);
+                $code = $this->runXzTo($xzBin, $xzPath, $outPath);
+                if ($code === 0 && is_file($outPath) && filesize($outPath) > 0) {
+                    return 0;
+                }
+            }
+        } else {
+            $xzBin = trim((string)@shell_exec('command -v xz 2>/dev/null'));
+            if ($xzBin !== '') {
+                $code = $this->runXzTo($xzBin, $xzPath, $outPath);
+                if ($code === 0 && is_file($outPath) && filesize($outPath) > 0) {
+                    return 0;
+                }
+            }
+        }
+
+        // Strategy 2: bundled xz.exe (Git for Windows, MSYS2, Cygwin).
+        $code = $this->tryBundledXz($xzPath, $outPath);
+        if ($code === 0 && is_file($outPath) && filesize($outPath) > 0) {
+            return 0;
+        }
+
+        // Strategy 3: PECL lzma extension.
+        if (function_exists('xzdecrypt')) {
+            $data = file_get_contents($xzPath);
+            $dec = $data !== false ? xzdecrypt($data) : false;
+            if ($dec !== false && $dec !== '') {
+                file_put_contents($outPath, $dec);
+                return 0;
+            }
+        }
+
+        // Strategy 4: Python stdlib lzma — throws if Python missing; caller catches.
+        $this->xzDecompressToFile($xzPath, $outPath);
+        return (is_file($outPath) && filesize($outPath) > 0) ? 0 : 1;
+    }
+
+    /**
+     * Run `xz -d -k -f -c <in>` and capture stdout into $outPath.
+     * Mirror of OpenWaInstall::runXzTo().
+     */
+    protected function runXzTo(string $xzBin, string $inPath, string $outPath): int
+    {
+        $cmd = '"' . $xzBin . '" -d -k -f -c "' . $inPath . '"';
+        $descriptors = [
+            0 => ['file', 'nul', 'r'],
+            1 => ['file', str_replace('/', DIRECTORY_SEPARATOR, $outPath), 'wb'],
+            2 => ['file', 'nul', 'w'],
+        ];
+        $proc = @proc_open($cmd, $descriptors, $pipes);
+        if (!is_resource($proc)) {
+            return 1;
+        }
+        proc_close($proc);
+        return is_file($outPath) && filesize($outPath) > 0 ? 0 : 1;
+    }
+
+    /**
+     * Look for a bundled `xz` executable in well-known locations on Windows
+     * (Git for Windows, MSYS2, Cygwin) and use it to decompress the file.
+     * Returns 0 on success. Mirror of OpenWaInstall::tryBundledXz().
+     */
+    protected function tryBundledXz(string $xzPath, string $outPath): int
+    {
+        if (PHP_OS_FAMILY !== 'Windows') {
+            return 1;
+        }
+        $candidates = [
+            'C:\Program Files\Git\mingw64\bin\xz.exe',
+            'C:\Program Files\Git\usr\bin\xz.exe',
+            'C:\Program Files (x86)\Git\mingw64\bin\xz.exe',
+            'C:\Program Files (x86)\Git\usr\bin\xz.exe',
+            'C:\msys64\usr\bin\xz.exe',
+            'C:\cygwin64\bin\xz.exe',
+            'C:\cygwin\bin\xz.exe',
+        ];
+        foreach ($candidates as $candidate) {
+            if (@is_file($candidate)) {
+                $cmd = '"' . $candidate . '" -d -k -f -c "' . $xzPath . '"';
+                $descriptors = [
+                    0 => ['file', 'nul', 'r'],
+                    1 => ['file', $outPath, 'wb'],
+                    2 => ['file', 'nul', 'w'],
+                ];
+                $proc = @proc_open($cmd, $descriptors, $pipes);
+                if (is_resource($proc)) {
+                    proc_close($proc);
+                    if (is_file($outPath) && filesize($outPath) > 0) {
+                        return 0;
+                    }
+                }
+            }
+        }
+        return 1;
+    }
+
+    /**
+     * Pure-PHP XZ decompressor fallback. Mirror of OpenWaInstall::xzDecompressToFile().
+     * Tries (1) ext-lzma `xzdecrypt()`, (2) Python's stdlib `lzma` module,
+     * (3) throws with a helpful message.
+     */
+    protected function xzDecompressToFile(string $xzPath, string $tarPath): void
+    {
+        if (function_exists('xzdecrypt')) {
+            $data = file_get_contents($xzPath);
+            $decompressed = $data !== false ? xzdecrypt($data) : false;
+            if ($decompressed !== false && $decompressed !== '') {
+                file_put_contents($tarPath, $decompressed);
+                return;
+            }
+        }
+
+        $python = PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3';
+        $pyScript = <<<PY
+import lzma, sys
+with open(sys.argv[1], 'rb') as f_in:
+    with lzma.LZMAFile(f_in) as xz:
+        with open(sys.argv[2], 'wb') as f_out:
+            while True:
+                chunk = xz.read(1 << 20)
+                if not chunk:
+                    break
+                f_out.write(chunk)
+PY;
+        $tmpPy = sys_get_temp_dir() . '/mgs_bundle_xz_' . bin2hex(random_bytes(4)) . '.py';
+        file_put_contents($tmpPy, $pyScript);
+        $cmd = escapeshellarg($python) . ' ' . escapeshellarg($tmpPy) . ' ' . escapeshellarg($xzPath) . ' ' . escapeshellarg($tarPath);
+        $descriptors = [
+            0 => ['file', 'nul', 'r'],
+            1 => ['file', 'nul', 'w'],
+            2 => ['file', 'nul', 'w'],
+        ];
+        $proc = @proc_open($cmd, $descriptors, $pipes);
+        if (is_resource($proc)) {
+            proc_close($proc);
+            @unlink($tmpPy);
+            if (is_file($tarPath) && filesize($tarPath) > 0) {
+                return;
+            }
+        }
+        @unlink($tmpPy);
+
+        throw new \RuntimeException(
+            'xz decompression failed: could not find `xz` on PATH, in Git for ' .
+            'Windows, or via the Python `lzma` module. To fix this on Windows, ' .
+            'install Git for Windows (https://git-scm.com/win) which ships ' .
+            'xz.exe, or install Python (https://python.org) which provides ' .
+            'the `lzma` stdlib module. Then re-run the command.'
+        );
+    }
+
+    /**
      * Map of Termux dependency packages required by the nodejs-lts binary.
      * Mirror of OpenWaInstall::termuxDependencyUrls(). Keep in sync.
      */
     protected function termuxDependencyUrls(string $archShort): array
     {
         $packages = [
-            'libc++'    => 'libc++/libc++_29',
-            'openssl'   => 'openssl/openssl_1:3.6.3',
-            'c-ares'    => 'c-ares/c-ares_1.34.8',
-            'libicu'    => 'libicu/libicu_78.3',
-            'libsqlite' => 'libsqlite/libsqlite_3.53.4',
+            'libc++'    => ['libc++_29',          'libc++'],
+            'openssl'   => ['openssl_1:3.6.3',    'openssl'],
+            'c-ares'    => ['c-ares_1.34.8',      'c-ares'],
+            'libicu'    => ['libicu_78.3',        'libicu'],
+            'libsqlite' => ['libsqlite_3.53.4',  'libsqlite'],
         ];
         $base = 'https://packages.termux.dev/apt/termux-main/pool/main';
         $urls = [];
-        foreach ($packages as $name => $pathSuffix) {
-            $poolSub = strtolower(substr($name, 0, 1));
-            $cleanName = preg_replace('/\+.*$/', '', $name);
-            if (strlen($cleanName) >= 4) {
-                $poolSub = strtolower(substr($cleanName, 0, 4));
+        foreach ($packages as $name => [$pathSuffix, $dirName]) {
+            // Termux Debian-style pool layout:
+            //   - `lib*` packages use a 4-char prefix subdir (libs, libc, etc.)
+            //   - other packages use a 1-char prefix subdir (o, c, n, ...)
+            if (str_starts_with($name, 'lib')) {
+                $poolSub = strtolower(substr($name, 0, 4));
+            } else {
+                $poolSub = strtolower(substr($name, 0, 1));
             }
-            $urls[$name] = "{$base}/{$poolSub}/{$name}/" . basename($pathSuffix) . "_{$archShort}.deb";
+            $urls[$name] = "{$base}/{$poolSub}/{$dirName}/{$pathSuffix}_{$archShort}.deb";
         }
         return $urls;
     }

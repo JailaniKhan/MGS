@@ -74,15 +74,57 @@ class SettingsController extends Controller
     public function openwa(\App\Services\WhatsApp\OpenWaService $openWa, OpenWaManager $manager)
     {
         $configured = $openWa->isConfigured();
-        $gatewayRunning = $configured && $manager->isRunning();
-        $status = $configured && $gatewayRunning ? $openWa->sessionStatus() : null;
-        $qr = null;
-
-        if ($status && ($status['status'] ?? null) === 'qr_ready') {
-            $qr = $openWa->qrCode();
-        }
+        ['gatewayRunning' => $gatewayRunning, 'status' => $status, 'qr' => $qr] =
+            $configured
+                ? $this->resolveOpenwaState($openWa, $manager)
+                : ['gatewayRunning' => null, 'status' => null, 'qr' => null];
 
         return view('settings.openwa', compact('configured', 'gatewayRunning', 'status', 'qr'));
+    }
+
+    /**
+     * Resolve the current gateway/session state with the fewest possible
+     * HTTP round-trips. When the gateway is up, each poll does:
+     *   1. one /api/health check (inside isRunning),
+     *   2. one /api/sessions/{id} GET,
+     *   3. one /api/sessions/{id}/qr GET.
+     * The gateway's event loop is busy with Baileys crypto while the QR
+     * rotates, so each call takes ~40-140ms — 4 sequential calls (the old
+     * flow) added up to ~500ms per poll.
+     *
+     * @return array{gateway_running: bool, status: ?array, qr: ?string}
+     */
+    protected function resolveOpenwaState(\App\Services\WhatsApp\OpenWaService $openWa, OpenWaManager $manager): array
+    {
+        if (!$manager->isRunning()) {
+            $manager->ensureStarted();
+        }
+
+        $gatewayRunning = $manager->isRunning();
+        $status = $gatewayRunning ? $openWa->sessionStatus() : null;
+        $state = $status['status'] ?? null;
+
+        // Session is in-memory in the gateway, so a fresh gateway (or one
+        // that crashed and was relaunched) has no session at all. Kick it
+        // only then — never while a QR is waiting, or it would rotate again.
+        // disconnected (QR expired without a scan, socket closed) is also
+        // kickable: the gateway clears s.qr on close, so there is nothing
+        // live to destroy.
+        if ($gatewayRunning && in_array($state, ['not_found', 'dead', 'disconnected'], true)) {
+            $manager->startSession();
+            $status = $openWa->sessionStatus();
+            $state = $status['status'] ?? null;
+        }
+
+        // Try to fetch the QR for any state that isn't connected/dead. The
+        // gateway reports "qr_ready" slightly before the base64 data URL is
+        // ready and keeps a stale QR around after "disconnected", so a
+        // strict status check would hide a perfectly scannable QR.
+        $qr = $status && !in_array($state, ['ready', 'connected', 'dead'], true)
+            ? $openWa->qrCode()
+            : null;
+
+        return compact('gatewayRunning', 'status', 'qr');
     }
 
     /**
@@ -95,13 +137,8 @@ class SettingsController extends Controller
             return response()->json(['configured' => false], 200);
         }
 
-        $gatewayRunning = $manager->isRunning();
-        $status = $gatewayRunning ? $openWa->sessionStatus() : null;
-        $qr = null;
-
-        if ($status && ($status['status'] ?? null) === 'qr_ready') {
-            $qr = $openWa->qrCode();
-        }
+        ['gatewayRunning' => $gatewayRunning, 'status' => $status, 'qr' => $qr] =
+            $this->resolveOpenwaState($openWa, $manager);
 
         return response()->json([
             'configured' => true,

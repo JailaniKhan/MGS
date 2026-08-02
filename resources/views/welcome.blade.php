@@ -6,7 +6,11 @@
     <title>{{ config('app.name', 'MGS') }}</title>
     @fonts
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @if(in_array(app()->getLocale(), ['ps', 'fa']))
+            @vite(['resources/css/app-rtl.css', 'resources/js/app.js'])
+        @else
+            @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @endif
     @endif
 </head>
 <body class="bg-ink-50 dark:bg-ink-900 min-h-screen flex items-center justify-center p-6">

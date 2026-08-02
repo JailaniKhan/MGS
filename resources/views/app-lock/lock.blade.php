@@ -4,7 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>MGS - {{ __('messages.lock_screen') }}</title>
-    @vite(['resources/css/app.css'])
+    @if(in_array(app()->getLocale(), ['ps', 'fa']))
+        @vite(['resources/css/app-rtl.css'])
+    @else
+        @vite(['resources/css/app.css'])
+    @endif
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="bg-ink-900 text-white min-h-screen flex items-center justify-center">
@@ -28,9 +32,7 @@
             <div id="pin-error" class="text-center text-danger-400 text-sm hidden">{{ __('messages.invalid_pin') }}</div>
 
             <button type="submit" class="btn-primary w-full">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/>
-                </svg>
+                <x-icon name="lock-closed" class="w-4 h-4" strokeWidth="2"/>
                 {{ __('messages.unlock') }}
             </button>
         </form>

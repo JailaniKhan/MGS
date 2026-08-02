@@ -10,7 +10,7 @@
             <a href="{{ route('ledger.show', [$person['type'], $person['id']]) }}" class="list-row">
                 <div class="flex items-center gap-3 min-w-0 flex-1">
                     <div class="w-9 h-9 rounded-xl bg-brand text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+                        <x-icon name="user" class="w-4 h-4 text-white"/>
                     </div>
                     <div class="min-w-0">
                         <div class="flex items-center gap-2">

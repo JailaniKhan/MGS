@@ -9,7 +9,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>MGS - {{ __('messages.login') }}</title>
     @fonts
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @if(in_array($locale, ['ps', 'fa']))
+        @vite(['resources/css/app-rtl.css', 'resources/js/app.js'])
+    @else
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @endif
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -36,7 +40,7 @@
                     <input type="tel" id="phone-input" class="form-input" placeholder="+93 XXX XXX XXX" autocomplete="tel">
                 </div>
                 <button onclick="sendOtp()" id="send-otp-btn" class="btn-primary w-full">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/></svg>
+                    <x-icon name="envelope" class="w-4 h-4"/>
                     {{ __('messages.send_otp') }}
                 </button>
             </div>
@@ -47,7 +51,7 @@
                     <input type="text" id="otp-input" class="form-input text-center text-2xl tracking-widest" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code">
                 </div>
                 <button onclick="verifyOtp()" id="verify-otp-btn" class="btn-primary w-full">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"/></svg>
+                    <x-icon name="arrow-right-on-rectangle" class="w-4 h-4"/>
                     {{ __('messages.verify') }}
                 </button>
                 <p class="text-center mt-4">
@@ -57,7 +61,7 @@
 
             <div id="step-success" class="hidden text-center">
                 <div class="w-14 h-14 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mx-auto mb-3">
-                    <svg class="w-7 h-7 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <x-icon name="check-circle" class="w-7 h-7 text-primary-600 dark:text-primary-400" strokeWidth="2"/>
                 </div>
                 <p class="text-sm font-medium text-ink-900 dark:text-white">{{ __('messages.login_successful') }}</p>
             </div>

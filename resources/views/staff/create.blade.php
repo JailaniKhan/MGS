@@ -3,7 +3,7 @@
 @section('content')
     <div class="mb-4 page-enter">
         <a href="{{ route('staff.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
+            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>{{ __('messages.back') }}
         </a>
         <h2 class="text-lg font-bold text-ink-900 dark:text-white mt-2">{{ __('messages.new_staff') }}</h2>
     </div>
@@ -38,7 +38,7 @@
                     <option value="USD">$</option>
                 </select>
             </div>
-            <button type="submit" class="btn-primary w-full"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>{{ __('messages.register') }}</button>
+            <button type="submit" class="btn-primary w-full"><x-icon name="plus" class="w-4 h-4" strokeWidth="2"/>{{ __('messages.register') }}</button>
         </form>
     </div>
 @endsection

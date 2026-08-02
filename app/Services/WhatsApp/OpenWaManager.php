@@ -42,16 +42,34 @@ class OpenWaManager
             }
 
             if ($this->gatewayResponds()) {
+                // Gateway is already up (e.g. left running from a previous
+                // launch, or started outside this process). launch() only
+                // starts the session when it performs the initial start, so
+                // make sure the configured session is alive here — otherwise
+                // the QR flow never begins. startSession() is idempotent: it
+                // first checks the current state and only POSTs /start when
+                // the session is missing/inactive.
+                $this->startSession();
                 return true;
             }
 
-            $this->ensureSymlinks();
-
+            // The health probe failed, but something still owns the port.
+            // Baileys crypto can block the event loop for a couple of seconds
+            // during QR generation, so give the process one more chance
+            // before declaring it dead — killing it here used to wipe the
+            // in-memory session and force a fresh QR every poll cycle.
             $livePid = $this->findPidByPort(self::PORT);
             if ($livePid) {
+                usleep(2_000_000);
+                if ($this->gatewayResponds()) {
+                    $this->startSession();
+                    return true;
+                }
                 $this->killTree($livePid);
                 usleep(500_000);
             }
+
+            $this->ensureSymlinks();
 
             return $this->launch();
         } catch (\Throwable $e) {
@@ -270,7 +288,7 @@ class OpenWaManager
     protected function buildEnvVars(string $appDir, ?string $modulesDir): string
     {
         $vars = [
-            'NODE_OPTIONS' => '--max-old-space-size=4096 --preserve-symlinks',
+            'NODE_OPTIONS' => '--max-old-space-size=2048 --preserve-symlinks',
             'API_KEY' => config('services.openwa.api_key') ?? '',
             'PORT' => (string)self::PORT,
             'SESSION_DATA_PATH' => './data/sessions',
@@ -335,7 +353,12 @@ class OpenWaManager
         $status = $this->http('GET', "/api/sessions/{$sessionId}", 5);
         if ($status && $status['status'] === 200) {
             $currentStatus = $status['json']['status'] ?? null;
-            if (in_array($currentStatus, ['ready', 'connected', 'connecting', 'initializing'], true)) {
+            // qr_ready must count as active — POSTing /start while a QR is
+            // waiting would kill the socket and rotate the QR again.
+            // disconnected must NOT count as active: when the QR expires
+            // without a scan the session sits at disconnected with no QR,
+            // and the only way back to a fresh QR is a manual kick (Refresh).
+            if (in_array($currentStatus, ['ready', 'connected', 'connecting', 'initializing', 'qr_ready'], true)) {
                 Log::info('OpenWaManager: session already active', [
                     'session' => $sessionId,
                     'status' => $currentStatus,
@@ -372,38 +395,54 @@ class OpenWaManager
 
     protected function resolveNodeBinary(): ?string
     {
+        $windows = $this->isWindows();
+
         $configured = config('services.openwa.node_binary');
         if ($configured && file_exists($configured) && is_executable($configured)) {
             return $configured;
         }
 
-        if ($configured && file_exists($configured)) {
+        if ($configured && file_exists($configured) && !$windows) {
             @chmod($configured, 0755);
             if (is_executable($configured)) {
                 return $configured;
             }
         }
 
-        $storageNode = storage_path('app/openwa/node/node');
+        // The bundled runtime at storage/app/openwa/node/node is the
+        // cross-compiled android-arm64 Termux ELF — it can only run on
+        // Android (or a matching Linux host). On Windows it would fail with
+        // "not recognized as an internal or external command", so only the
+        // Windows build (node.exe) is acceptable there.
+        $storageNode = $windows
+            ? storage_path('app/openwa/node/node.exe')
+            : storage_path('app/openwa/node/node');
         if (file_exists($storageNode)) {
-            @chmod($storageNode, 0755);
+            if (!$windows) {
+                @chmod($storageNode, 0755);
+            }
             return $storageNode;
         }
 
         $appDir = config('services.openwa.binary_dir') ?: storage_path('app/openwa/app');
         if ($appDir) {
-            $candidates = [
-                "{$appDir}/../node/node",
-                "{$appDir}/../node/node.exe",
-                "{$appDir}/node",
-                "{$appDir}/node.exe",
-                dirname($appDir) . '/node/node',
-                dirname($appDir) . '/node/node.exe',
-            ];
+            $candidates = $windows
+                ? [
+                    "{$appDir}/../node/node.exe",
+                    "{$appDir}/node.exe",
+                ]
+                : [
+                    "{$appDir}/../node/node",
+                    "{$appDir}/../node/node.exe",
+                    "{$appDir}/node",
+                    "{$appDir}/node.exe",
+                    dirname($appDir) . '/node/node',
+                    dirname($appDir) . '/node/node.exe',
+                ];
             foreach ($candidates as $candidate) {
                 $normalized = realpath($candidate) ?: $candidate;
                 if (file_exists($normalized)) {
-                    if (PHP_OS_FAMILY !== 'Windows' && !is_executable($normalized)) {
+                    if (!$windows && !is_executable($normalized)) {
                         @chmod($normalized, 0755);
                     }
                     return $normalized;
@@ -708,7 +747,10 @@ class OpenWaManager
 
     protected function gatewayResponds(): bool
     {
-        $resp = $this->http('GET', '/api/health', 1);
+        // 3s timeout: the gateway's single-threaded event loop is busy with
+        // Baileys crypto while the QR rotates, so a 1s limit caused false
+        // "down" verdicts → the manager killed a perfectly healthy process.
+        $resp = $this->http('GET', '/api/health', 3);
         if ($resp && in_array($resp['status'], [200, 401, 403, 404], true)) {
             return true;
         }

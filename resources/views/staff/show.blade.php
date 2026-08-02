@@ -3,14 +3,14 @@
 @section('content')
     <div class="mb-4 page-enter">
         <a href="{{ route('staff.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>{{ __('messages.back') }}
+            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>{{ __('messages.back') }}
         </a>
     </div>
 
     <div class="card p-4 mb-4 page-enter" style="animation-delay: 0.05s;">
         <div class="flex items-start gap-3">
             <div class="w-10 h-10 rounded-xl bg-brand text-white flex items-center justify-center shadow-sm flex-shrink-0">
-                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+                <x-icon name="user" class="w-5 h-5 text-white"/>
             </div>
             <div class="flex-1">
                 <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ $employee->name }}</h2>
@@ -46,7 +46,7 @@
                 <label class="form-label">{{ __('messages.notes') }}</label>
                 <input type="text" name="notes" class="form-input">
             </div>
-            <button type="submit" class="btn-primary w-full"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>{{ __('messages.salary_record') }}</button>
+            <button type="submit" class="btn-primary w-full"><x-icon name="plus" class="w-4 h-4" strokeWidth="2"/>{{ __('messages.salary_record') }}</button>
         </form>
     </div>
 

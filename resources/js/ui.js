@@ -72,8 +72,8 @@
    ============================================================ */
 (function () {
     const DURATION = 4500;
-    const CHECK = 'M5 13l4 4L19 7';
-    const X = 'M6 18L18 6M6 6l12 12';
+    const CHECK = 'm4.5 12.75 6 6 9-13.5';
+    const X = 'M6 18 18 6M6 6l12 12';
 
     window.showToast = function (type, message) {
         let stack = document.querySelector('.toast-stack');

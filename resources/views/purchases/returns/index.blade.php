@@ -4,7 +4,7 @@
     <div class="flex items-center justify-between mb-4 page-enter">
         <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ __('messages.purchase_return') }}</h2>
         <a href="{{ route('purchases.returns.create') }}" class="btn-primary btn-sm">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            <x-icon name="plus" class="w-3.5 h-3.5" strokeWidth="2"/>
             {{ __('messages.new_return') }}
         </a>
     </div>
@@ -14,9 +14,7 @@
             <a href="{{ route('purchases.returns.show', $purchaseReturn) }}" class="list-row">
                 <div class="flex items-center gap-3 min-w-0 flex-1">
                     <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-danger-500 to-danger-700 flex items-center justify-center flex-shrink-0 shadow-sm">
-                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/>
-                        </svg>
+                        <x-icon name="arrow-uturn-left" class="w-4 h-4 text-white"/>
                     </div>
                     <div class="min-w-0">
                         <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ __('messages.purchase') }} #{{ $purchaseReturn->purchase_id }} - {{ $purchaseReturn->purchase->party?->name ?? __('messages.unknown') }}</div>
@@ -42,9 +40,7 @@
         @empty
             <div class="empty-state">
                 <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
-                    <svg class="w-6 h-6 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/>
-                    </svg>
+                    <x-icon name="arrow-uturn-left" class="w-6 h-6 text-ink-400"/>
                 </div>
                 <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_purchase_returns') }}</p>
             </div>

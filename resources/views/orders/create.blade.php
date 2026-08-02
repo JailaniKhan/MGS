@@ -3,7 +3,7 @@
 @section('content')
     <div class="mb-4 page-enter">
         <a href="{{ route('orders.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
+            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>
             {{ __('messages.back') }}
         </a>
         <h2 class="text-lg font-bold text-ink-900 dark:text-white mt-2">{{ __('messages.new_order') }}</h2>
@@ -65,7 +65,7 @@
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.products') }}</label>
                 <div id="products-container" class="space-y-2">
-                    <div class="product-row flex items-center gap-2">
+                    <div class="product-row flex items-center gap-2 flex-wrap">
                         <select name="products[0][product_id]" required class="product-select form-select flex-1">
                             <option value=""> {{ __('messages.product') }} </option>
                             @foreach ($products as $product)
@@ -78,9 +78,7 @@
                         <input type="number" name="products[0][quantity]" min="1" value="1" required class="product-qty w-20 form-input text-center">
                         <input type="text" name="products[0][lot_number]" placeholder="{{ __('messages.lot_number') }}" class="product-lot w-24 form-input text-center" list="lot-suggestions">
                         <button type="button" class="remove-product p-2 text-danger-400 hover:text-danger-600 transition-colors">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
+                            <x-icon name="x-mark" class="w-4 h-4" strokeWidth="2"/>
                         </button>
                     </div>
                 </div>
@@ -198,6 +196,9 @@
         newRow.querySelector('.product-qty').value = 1;
         newRow.querySelector('.product-lot').name = `products[${productIndex}][lot_number]`;
         newRow.querySelector('.product-lot').value = '';
+
+        // Ensure flex-wrap is maintained on cloned rows
+        newRow.classList.add('flex-wrap');
 
         newRow.querySelector('.product-select').addEventListener('change', function() {
             applyProductDefaults(this.closest('.product-row'));
