@@ -147,19 +147,22 @@ class PurchaseController extends Controller
         }
 
         if ($status === 'cancelled' && $purchase->status !== 'cancelled') {
-            foreach ($purchase->purchaseItems as $item) {
-                $item->product->decrement('stock', $item->quantity);
+            \DB::transaction(function () use ($purchase) {
+                foreach ($purchase->purchaseItems as $item) {
+                    $product = $item->product()->lockForUpdate()->first();
+                    $product->decrement('stock', $item->quantity);
 
-                StockMovement::create([
-                    'user_id' => Auth::id(),
-                    'product_id' => $item->product_id,
-                    'quantity_change' => -$item->quantity,
-                    'movement_type' => 'purchase_cancelled',
-                    'reference_type' => 'purchase',
-                    'reference_id' => $purchase->id,
-                    'notes' => __('messages.purchase_cancelled'),
-                ]);
-            }
+                    StockMovement::create([
+                        'user_id' => Auth::id(),
+                        'product_id' => $item->product_id,
+                        'quantity_change' => -$item->quantity,
+                        'movement_type' => 'purchase_cancelled',
+                        'reference_type' => 'purchase',
+                        'reference_id' => $purchase->id,
+                        'notes' => __('messages.purchase_cancelled'),
+                    ]);
+                }
+            });
         }
 
         $purchase->update(['status' => $status]);
@@ -184,10 +187,24 @@ class PurchaseController extends Controller
 
     public function destroy(Purchase $purchase)
     {
-        foreach ($purchase->purchaseItems as $item) {
-            $item->product->decrement('stock', $item->quantity);
-        }
-        $purchase->delete();
+        \DB::transaction(function () use ($purchase) {
+            foreach ($purchase->purchaseItems as $item) {
+                $product = $item->product()->lockForUpdate()->first();
+                $product->decrement('stock', $item->quantity);
+
+                // Log stock movement so audit trail exists for the deletion.
+                StockMovement::create([
+                    'user_id' => Auth::id(),
+                    'product_id' => $item->product_id,
+                    'quantity_change' => -$item->quantity,
+                    'movement_type' => 'purchase_deleted',
+                    'reference_type' => 'purchase',
+                    'reference_id' => $purchase->id,
+                    'notes' => __('messages.purchase_deleted'),
+                ]);
+            }
+            $purchase->delete();
+        });
         return redirect()->route('purchases.index')->with('success', __('messages.purchase_deleted'));
     }
 }

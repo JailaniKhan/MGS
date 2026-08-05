@@ -194,6 +194,11 @@ return [
         'storage/framework/cache',
         'storage/framework/testing',
         'storage/logs/laravel.log',
+        // The OpenWA bundle ships via bootstrap/openwa/ (extracted by Kotlin unzip).
+        // storage/app/openwa/* is skipped by LaravelEnvironment.unzip() (it skips
+        // all storage/ entries), so including it here would just bloat the APK
+        // by ~137MB with files that never reach the device.
+        'storage/app/openwa',
     ],
 
     /*
@@ -232,7 +237,13 @@ return [
         | min_sdk:     The minimum Android version your app supports
         | target_sdk:  The SDK version your app is designed and tested for
         |
+        | The NativePHP package's vendor config leaves these keys undefined, so
+        | `config('nativephp.android.min_sdk', 33)` falls back to 33 (Android
+        | 13+). We define them here so the APK installs on Android 9 (API 28)
+        | and below. min_sdk 24 = Android 7.0 (covers ~99% of devices).
+        |
         */
+        'min_sdk' => (int) env('NATIVEPHP_ANDROID_MIN_SDK', 24),
 
         /*
         |--------------------------------------------------------------------------

@@ -11,8 +11,16 @@ return new class extends Migration
     {
         // 1. Build the new orders table with a nullable customer_id so an order can
         //    also be linked to a supplier via person_type / person_id.
+        //
+        //    The earlier 2026_06_19_000200 migration added user_id, uuid and
+        //    journal_entry_id to the orders table; preserve them here so the
+        //    rebuild doesn't silently drop multi-tenancy and double-entry linkage.
         Schema::create('orders_new', function (Blueprint $table) {
             $table->id();
+            // Preserve user_id / uuid / journal_entry_id from 2026_06_19_000200.
+            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
+            $table->uuid('uuid')->nullable();
+            $table->unsignedBigInteger('journal_entry_id')->nullable();
             $table->foreignId('customer_id')->nullable()->constrained()->nullOnDelete();
             $table->string('status')->default('pending');
             $table->decimal('total_amount', 10, 2)->default(0);
@@ -26,11 +34,15 @@ return new class extends Migration
             $table->unsignedBigInteger('person_id')->nullable();
         });
 
-        // 2. Copy existing orders, treating them as customers.
+        // 2. Copy existing orders, treating them as customers. Backfill user_id
+        //    to 1 (the system owner) when missing so BelongsToUser sees the row.
         $orders = DB::table('orders')->get();
         foreach ($orders as $order) {
             DB::table('orders_new')->insert([
                 'id' => $order->id,
+                'user_id' => $order->user_id ?? 1,
+                'uuid' => $order->uuid ?? null,
+                'journal_entry_id' => $order->journal_entry_id ?? null,
                 'customer_id' => $order->customer_id,
                 'status' => $order->status,
                 'total_amount' => $order->total_amount,

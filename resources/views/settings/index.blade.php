@@ -73,27 +73,6 @@
                 </div>
             </div>
 
-            <!-- Reminder / AI Settings -->
-            <div class="mb-6 border-t border-ink-100 dark:border-ink-700/30 pt-5">
-                <h4 class="section-title mb-4">{{ __('messages.reminder_settings') }}</h4>
-                <div class="space-y-4">
-                    <div>
-                        <label class="form-label">{{ __('messages.whatsapp_api_key') }}</label>
-                        <input type="password" name="whatsapp_api_key" value="{{ old('whatsapp_api_key', $settings['whatsapp_api_key']) }}" class="form-input" placeholder="Meta WhatsApp API Token">
-                        <p class="text-[10px] text-ink-400 mt-1">{{ __('messages.whatsapp_api_key_info') }}</p>
-                    </div>
-                    <div>
-                        <label class="form-label">{{ __('messages.whatsapp_phone_number_id') }}</label>
-                        <input type="text" name="whatsapp_phone_number_id" value="{{ old('whatsapp_phone_number_id', $settings['whatsapp_phone_number_id']) }}" class="form-input" placeholder="WhatsApp Phone Number ID">
-                    </div>
-                    <div>
-                        <label class="form-label">{{ __('messages.anthropic_api_key') }}</label>
-                        <input type="password" name="anthropic_api_key" value="{{ old('anthropic_api_key', $settings['anthropic_api_key']) }}" class="form-input" placeholder="Claude API Key">
-                        <p class="text-[10px] text-ink-400 mt-1">{{ __('messages.anthropic_api_key_info') }}</p>
-                    </div>
-                </div>
-            </div>
-
             <!-- Language -->
             <div class="mb-6 border-t border-ink-100 dark:border-ink-700/30 pt-5">
                 <h4 class="section-title mb-4">{{ __('messages.language') }}</h4>

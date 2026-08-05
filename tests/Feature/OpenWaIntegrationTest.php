@@ -148,13 +148,14 @@ class OpenWaIntegrationTest extends TestCase
             ->assertJson(['ok' => true]);
     }
 
-    public function test_webhook_works_without_secret_configured(): void
+    public function test_webhook_rejects_when_secret_missing(): void
     {
+        // Fail-closed: when no webhook secret is configured, the endpoint
+        // must not accept unsigned requests (would allow forged events).
         config(['services.openwa.webhook_secret' => null]);
 
         $this->postJson('/api/webhooks/openwa', ['event' => 'message.received'])
-            ->assertStatus(200)
-            ->assertJson(['ok' => true]);
+            ->assertStatus(404);
     }
 
     /*

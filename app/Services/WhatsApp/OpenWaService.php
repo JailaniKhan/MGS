@@ -59,6 +59,25 @@ class OpenWaService
         return '93' . $phone . '@c.us';
     }
 
+    /**
+     * Reverse a WhatsApp chatId (e.g. "93700123456@c.us") back to a phone
+     * number. Used when handling inbound webhooks where the sender arrives
+     * as a chatId and we need to look up the matching customer record.
+     * Returns digits only (no "+"), or null if the chatId is malformed.
+     */
+    public static function chatIdToPhone(string $chatId): ?string
+    {
+        // Strip the "@c.us" / "@g.us" / "@lid" suffix
+        $atPos = strpos($chatId, '@');
+        if ($atPos !== false) {
+            $chatId = substr($chatId, 0, $atPos);
+        }
+
+        $digits = preg_replace('/[^0-9]/', '', $chatId);
+
+        return $digits !== '' ? $digits : null;
+    }
+
     public function isConfigured(): bool
     {
         return !empty($this->apiKey());

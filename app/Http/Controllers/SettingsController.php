@@ -22,9 +22,6 @@ class SettingsController extends Controller
             'invoice_prefix' => Setting::get('invoice_prefix', 'INV-'),
             'currency' => Setting::get('currency', 'AFN'),
             'language' => Setting::get('language', 'ps'),
-            'whatsapp_api_key' => Setting::get('whatsapp_api_key', ''),
-            'whatsapp_phone_number_id' => Setting::get('whatsapp_phone_number_id', ''),
-            'anthropic_api_key' => Setting::get('anthropic_api_key', ''),
         ];
 
         return view('settings.index', compact('settings'));
@@ -43,9 +40,6 @@ class SettingsController extends Controller
             'invoice_prefix' => 'nullable|string|max:50',
             'currency' => 'nullable|string|max:3',
             'language' => 'nullable|string|in:en,ps,fa',
-            'whatsapp_api_key' => 'nullable|string|max:255',
-            'whatsapp_phone_number_id' => 'nullable|string|max:255',
-            'anthropic_api_key' => 'nullable|string|max:255',
         ]);
 
         foreach ($validated as $key => $value) {

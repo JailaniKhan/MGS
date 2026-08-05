@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUser;
 use Illuminate\Database\Eloquent\Model;
 
 class Purchase extends Model
 {
+    use BelongsToUser;
+
     protected $fillable = ['supplier_id', 'person_type', 'person_id', 'total_amount', 'currency', 'status', 'tax_rate', 'tax_amount', 'subtotal', 'tax_type'];
 
     protected $casts = [

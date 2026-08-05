@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUser;
 use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
+    use BelongsToUser;
+
     protected $fillable = ['customer_id', 'person_type', 'person_id', 'status', 'total_amount', 'currency', 'tax_rate', 'tax_amount', 'subtotal', 'tax_type'];
 
     protected $casts = [

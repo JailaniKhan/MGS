@@ -117,6 +117,23 @@ class OpenWaBundle extends Command
             implode("\n", array_map(fn($k, $v) => "{$k}={$v}", array_keys($config), $config))
         );
 
+        // CRITICAL for on-device startup: the Android runtime resolves the node
+        // binary via `storage_path('app/openwa/node/node')` (the SOURCE tree,
+        // not this build/ tree), and sets LD_LIBRARY_PATH to
+        // `storage_path('app/openwa/node/lib')`. The source tree is created by
+        // `openwa:install` with the raw, nested Termux layout
+        // (`lib/data/data/com.termux/files/usr/lib/*.so`). Flatten it here so
+        // the APK bundle ships a node/lib/ that LD_LIBRARY_PATH can actually
+        // resolve. Without this, node fails to dlopen its .so deps on-device
+        // → gateway never starts → no QR / "WhatsApp not working" in the APK.
+        $sourceNodeLib = "{$runtimeDir}/node/lib";
+        if (is_dir($sourceNodeLib)) {
+            $this->components->task('Flattening source node/lib for APK', function () use ($sourceNodeLib) {
+                $this->flattenTermuxLibs($sourceNodeLib);
+                return true;
+            });
+        }
+
         $this->newLine();
 
         $this->components->twoColumnDetail('Bundle size', $this->formatSize($this->dirSize($buildDir)));
@@ -255,23 +272,44 @@ class OpenWaBundle extends Command
 
         // Files extracted from the Termux deb end up under
         // `libDir/data/data/com.termux/files/usr/lib/*.so`. Flatten them so
-        // LD_LIBRARY_PATH=$libDir alone is sufficient. Also copy them to a
-        // sibling location in case the user inspects the bundle.
-        $this->components->task('Flattening Termux libs', function () use ($libDir) {
-            $candidateRoot = "{$libDir}/data/data/com.termux/files/usr/lib";
-            if (is_dir($candidateRoot)) {
-                foreach (scandir($candidateRoot) as $entry) {
-                    if ($entry === '.' || $entry === '..') continue;
-                    if (!str_ends_with($entry, '.so') && !preg_match('/\.so\.\d+/', $entry)) continue;
-                    copy("{$candidateRoot}/{$entry}", "{$libDir}/{$entry}");
-                }
-            }
-            // Clean up the deeply nested layout we just flattened.
-            $this->rrmdir("{$libDir}/data");
-            return true;
-        });
+        // LD_LIBRARY_PATH=$libDir alone is sufficient.
+        $this->flattenTermuxLibs($libDir);
 
         return true;
+    }
+
+    /**
+     * Copy the .so files from the nested Termux layout
+     * `<libDir>/data/data/com.termux/files/usr/lib/*` directly into
+     * `<libDir>/`, then remove the deeply-nested `data/` subtree so only the
+     * flat libs remain. This MUST be applied to BOTH the build's `node/lib`
+     * and the source `storage/app/openwa/node/lib`, because OpenWaManager on
+     * Android resolves the node binary via `storage_path('app/openwa/node/node')
+     * (the source tree), NOT `build/node/node` — and its buildEnvVars() sets
+     * `LD_LIBRARY_PATH=<thatDir>/lib`. If the source lib/ still has the nested
+     * Termux layout, the dynamic linker finds no .so there and node fails to
+     * start on-device (gateway dead, no QR).
+     */
+    protected function flattenTermuxLibs(string $libDir): void
+    {
+        if (!is_dir($libDir)) {
+            return;
+        }
+        $candidateRoot = "{$libDir}/data/data/com.termux/files/usr/lib";
+        if (is_dir($candidateRoot)) {
+            foreach (scandir($candidateRoot) as $entry) {
+                if ($entry === '.' || $entry === '..') continue;
+                if (!str_ends_with($entry, '.so') && !preg_match('/\.so\.\d+/', $entry)) continue;
+                copy("{$candidateRoot}/{$entry}", "{$libDir}/{$entry}");
+            }
+        }
+        // Remove the deeply nested layout we just flattened. Also drop any
+        // other Termux prefix junk (bin, share, include, man, pkgconfig
+        // mirrors) that came along for the ride — none of it is needed at
+        // runtime, only the flat .so files are.
+        foreach (['data', 'bin', 'share', 'include', 'etc', 'var'] as $junk) {
+            $this->rrmdir("{$libDir}/{$junk}");
+        }
     }
 
     protected function extractDebInto(string $debPath, string $destDir): bool
@@ -746,10 +784,14 @@ PY;
 
     protected function rcopy(string $src, string $dst): void
     {
+        // Skip dev-machine runtime state that must not ship in the APK:
+        // node_modules (copied separately as modules/), the linked session
+        // creds under data/, and diagnostic logs.
+        $skip = ['node_modules', 'data', 'baileys.log', 'openwa_app.log', 'downloads'];
         $dir = opendir($src);
         @mkdir($dst, 0755, true);
         while (($file = readdir($dir)) !== false) {
-            if ($file === '.' || $file === '..' || $file === 'node_modules') continue;
+            if ($file === '.' || $file === '..' || in_array($file, $skip, true)) continue;
             $srcPath = "{$src}/{$file}";
             $dstPath = "{$dst}/{$file}";
             if (is_dir($srcPath)) {

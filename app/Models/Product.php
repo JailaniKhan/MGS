@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUser;
 use Illuminate\Database\Eloquent\Model;
 
 class Product extends Model
 {
+    use BelongsToUser;
+
     protected $fillable = ['name', 'barcode', 'category_id', 'unit_id', 'price', 'stock', 'description'];
 
     public function category()

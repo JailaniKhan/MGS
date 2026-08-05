@@ -321,7 +321,9 @@ class ReportController extends Controller
             ->sortByDesc('created_at');
 
         // Group by date and calculate running balance
-        $openingBalance = $this->balanceService->cashBalance(Auth::id(), $currency, $startDate);
+        // NOTE: BalanceService::cashBalance only accepts 2 args (current balance,
+        // not date-filtered). Drop the third arg to avoid ArgumentCountError.
+        $openingBalance = $this->balanceService->cashBalance(Auth::id(), $currency);
         $runningBalance = (float) $openingBalance;
         $dailyTotals = [];
 
@@ -364,10 +366,22 @@ class ReportController extends Controller
 
         // Customer aging — based on outstanding orders, grouped by customer.
         // Orders with no linked customer are grouped as a "Walk-in" customer so they are not dropped.
+        // NOTE: remaining_amount is an accessor, not a column. Compute it via SQL:
+        // outstanding = total_amount - SUM(payments.amount) - SUM(order_returns.total_amount)
+        // Note: order_returns has no currency column — we trust the parent order's currency.
         $customerOrders = Order::with(['customer', 'payments'])
             ->where('status', '!=', 'cancelled')
             ->where('currency', $currency)
-            ->where('remaining_amount', '>', 0)
+            ->whereRaw(
+                'orders.total_amount > (
+                    COALESCE((SELECT SUM(amount) FROM payments WHERE payments.order_id = orders.id), 0)
+                    +
+                    COALESCE((SELECT SUM(total_amount) FROM order_returns
+                              WHERE order_returns.order_id = orders.id
+                                AND order_returns.status != ?), 0)
+                )',
+                ['cancelled']
+            )
             ->get();
 
         $customerAging = collect();
@@ -412,10 +426,21 @@ class ReportController extends Controller
 
         // Supplier aging — based on outstanding purchases, grouped by supplier.
         // Purchases with no linked supplier are grouped as a "Walk-in" supplier so they are not dropped.
+        // Same accessor-as-column fix as above, mirrored for purchases.
+        // Note: purchase_returns has no currency column — we trust the parent purchase's currency.
         $supplierPurchases = Purchase::with(['supplier', 'purchasePayments'])
             ->where('status', '!=', 'cancelled')
             ->where('currency', $currency)
-            ->where('remaining_amount', '>', 0)
+            ->whereRaw(
+                'purchases.total_amount > (
+                    COALESCE((SELECT SUM(amount) FROM purchase_payments WHERE purchase_payments.purchase_id = purchases.id), 0)
+                    +
+                    COALESCE((SELECT SUM(total_amount) FROM purchase_returns
+                              WHERE purchase_returns.purchase_id = purchases.id
+                                AND purchase_returns.status != ?), 0)
+                )',
+                ['cancelled']
+            )
             ->get();
 
         $supplierAging = collect();

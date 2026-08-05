@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUser;
 use Illuminate\Database\Eloquent\Model;
 
 class Payment extends Model
 {
+    use BelongsToUser;
+
     protected $fillable = ['order_id', 'amount', 'currency', 'notes'];
 
     protected $casts = [

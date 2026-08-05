@@ -242,19 +242,23 @@ class OrderController extends Controller
         }
 
         if ($status === 'cancelled' && $order->status !== 'cancelled') {
-            foreach ($order->orderItems as $item) {
-                $item->product->increment('stock', $item->quantity);
+            \DB::transaction(function () use ($order) {
+                foreach ($order->orderItems as $item) {
+                    // Lock the product row so concurrent updates don't race.
+                    $product = $item->product()->lockForUpdate()->first();
+                    $product->increment('stock', $item->quantity);
 
-                StockMovement::create([
-                    'user_id' => Auth::id(),
-                    'product_id' => $item->product_id,
-                    'quantity_change' => $item->quantity,
-                    'movement_type' => 'order_cancelled',
-                    'reference_type' => 'order',
-                    'reference_id' => $order->id,
-                    'notes' => __('messages.order_cancelled'),
-                ]);
-            }
+                    StockMovement::create([
+                        'user_id' => Auth::id(),
+                        'product_id' => $item->product_id,
+                        'quantity_change' => $item->quantity,
+                        'movement_type' => 'order_cancelled',
+                        'reference_type' => 'order',
+                        'reference_id' => $order->id,
+                        'notes' => __('messages.order_cancelled'),
+                    ]);
+                }
+            });
         }
 
         $order->update(['status' => $status]);
@@ -263,20 +267,23 @@ class OrderController extends Controller
 
     public function destroy(Order $order)
     {
-        foreach ($order->orderItems as $item) {
-            $item->product->increment('stock', $item->quantity);
+        \DB::transaction(function () use ($order) {
+            foreach ($order->orderItems as $item) {
+                $product = $item->product()->lockForUpdate()->first();
+                $product->increment('stock', $item->quantity);
 
-            StockMovement::create([
-                'user_id' => Auth::id(),
-                'product_id' => $item->product_id,
-                'quantity_change' => $item->quantity,
-                'movement_type' => 'order_deleted',
-                'reference_type' => 'order',
-                'reference_id' => $order->id,
-                'notes' => __('messages.order_deleted'),
-            ]);
-        }
-        $order->delete();
+                StockMovement::create([
+                    'user_id' => Auth::id(),
+                    'product_id' => $item->product_id,
+                    'quantity_change' => $item->quantity,
+                    'movement_type' => 'order_deleted',
+                    'reference_type' => 'order',
+                    'reference_id' => $order->id,
+                    'notes' => __('messages.order_deleted'),
+                ]);
+            }
+            $order->delete();
+        });
         return redirect()->route('orders.index')->with('success', __('messages.order_deleted'));
     }
 

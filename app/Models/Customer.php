@@ -2,11 +2,18 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUser;
 use Illuminate\Database\Eloquent\Model;
 
 class Customer extends Model
 {
-    protected $fillable = ['name', 'phone', 'address'];
+    use BelongsToUser;
+
+    protected $fillable = ['name', 'phone', 'address', 'last_contacted_at'];
+
+    protected $casts = [
+        'last_contacted_at' => 'datetime',
+    ];
 
     public function orders()
     {

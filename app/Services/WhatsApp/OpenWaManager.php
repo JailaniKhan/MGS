@@ -90,12 +90,112 @@ class OpenWaManager
         return true;
     }
 
+    /**
+     * On Android, the OpenWA bundle ships inside the APK at
+     * `bootstrap/openwa/` (NOT under `storage/`, because NativePHP's Kotlin
+     * `LaravelEnvironment.unzip()` skips every zip entry prefixed with
+     * `storage/`). On first launch the files haven't been copied to the
+     * runtime `storage_path('app/openwa/')` yet, so we deploy them here.
+     *
+     * This is idempotent: if the runtime copy already exists and contains
+     * `server.js`, we skip the copy. A stale `bootstrap/` from a prior APK
+     * version is always overwritten by the freshly-extracted one on each
+     * new APK install, so re-deploys after an update pick up the new files.
+     */
+    protected function ensureBundleDeployed(): void
+    {
+        if (!$this->isAndroid()) {
+            return;
+        }
+
+        $runtimeDir = storage_path('app/openwa');
+        $bootstrapDir = base_path('bootstrap/openwa');
+
+        // Fast path: runtime copy already has the entry point.
+        if (is_file("{$runtimeDir}/app/server.js")) {
+            return;
+        }
+
+        if (!is_dir($bootstrapDir)) {
+            Log::warning('OpenWaManager: bootstrap/openwa not found — cannot deploy bundle', [
+                'bootstrap' => $bootstrapDir,
+                'runtime' => $runtimeDir,
+            ]);
+            return;
+        }
+
+        Log::info('OpenWaManager: deploying OpenWA bundle from bootstrap to runtime storage', [
+            'from' => $bootstrapDir,
+            'to' => $runtimeDir,
+        ]);
+
+        if (!is_dir($runtimeDir)) {
+            @mkdir($runtimeDir, 0755, true);
+        }
+        @mkdir("{$runtimeDir}/app", 0755, true);
+        @mkdir("{$runtimeDir}/node", 0755, true);
+        @mkdir("{$runtimeDir}/modules", 0755, true);
+
+        // Copy app/, node/, modules/ subdirs.
+        foreach (['app', 'node', 'modules'] as $sub) {
+            $src = "{$bootstrapDir}/{$sub}";
+            $dst = "{$runtimeDir}/{$sub}";
+            if (!is_dir($src)) {
+                continue;
+            }
+            $this->rcopyDir($src, $dst);
+        }
+
+        // Make the node binary executable (Android's unzippers don't
+        // preserve POSIX execute bits — only read/write).
+        $nodeBin = "{$runtimeDir}/node/node";
+        if (is_file($nodeBin)) {
+            @chmod($nodeBin, 0755);
+        }
+
+        Log::info('OpenWaManager: bundle deployed', [
+            'server_js' => is_file("{$runtimeDir}/app/server.js") ? 'present' : 'missing',
+            'node_bin' => is_file($nodeBin) ? 'present' : 'missing',
+            'so_files' => glob("{$runtimeDir}/node/lib/*.so*"),
+        ]);
+    }
+
+    /**
+     * Recursive directory copy that follows symlinks (the bundled `.so`
+     * files are real files, not symlinks, so this is a plain recursive copy).
+     */
+    protected function rcopyDir(string $src, string $dst): void
+    {
+        if (!is_dir($src)) {
+            return;
+        }
+        if (!is_dir($dst)) {
+            @mkdir($dst, 0755, true);
+        }
+        $dir = opendir($src);
+        while (($file = readdir($dir)) !== false) {
+            if ($file === '.' || $file === '..') {
+                continue;
+            }
+            $srcPath = "{$src}/{$file}";
+            $dstPath = "{$dst}/{$file}";
+            if (is_dir($srcPath)) {
+                $this->rcopyDir($srcPath, $dstPath);
+            } else {
+                @copy($srcPath, $dstPath);
+            }
+        }
+        closedir($dir);
+    }
+
     protected function resolveAppDir(): ?string
     {
         $dir = config('services.openwa.binary_dir');
         if ($dir && is_dir($dir)) {
             return $dir;
         }
+
+        $this->ensureBundleDeployed();
 
         $storagePath = storage_path('app/openwa/app');
         if (is_dir($storagePath)) {
@@ -407,6 +507,12 @@ class OpenWaManager
             if (is_executable($configured)) {
                 return $configured;
             }
+        }
+
+        // On Android the bundle lives under bootstrap/openwa/ until the
+        // first-launch migration copies it to the runtime storage dir.
+        if (!$windows) {
+            $this->ensureBundleDeployed();
         }
 
         // The bundled runtime at storage/app/openwa/node/node is the

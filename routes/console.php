@@ -29,7 +29,17 @@ Schedule::call(function () {
     // 4-9 = many failures — likely a real install problem (broken binary,
     //       missing libs, path mismatch). Back off to every ~5 minutes.
     // 10+ = give up until user manually restarts from the settings page.
-    $failures = (int) Cache::get('openwa:health:failures', 0);
+    // Wrap every cache touch in a safe() helper so a database-down scenario
+    // cannot recurse-fail inside the scheduler (CACHE_STORE=database).
+    $safe = static function (callable $fn, mixed $fallback = null): mixed {
+        try {
+            return $fn();
+        } catch (\Throwable $e) {
+            return $fallback;
+        }
+    };
+
+    $failures = (int) $safe(fn() => Cache::get('openwa:health:failures', 0), 0);
 
     if ($failures >= 10) {
         return;
@@ -50,21 +60,21 @@ Schedule::call(function () {
             ]);
             $started = $manager->start();
             if (!$started) {
-                Cache::increment('openwa:health:failures');
+                $safe(fn() => Cache::increment('openwa:health:failures'));
                 Log::error('OpenWA health-check: start failed', [
                     'consecutive_failures' => $failures + 1,
                 ]);
                 return;
             }
 
-            Cache::forget('openwa:health:failures');
+            $safe(fn() => Cache::forget('openwa:health:failures'));
             return;
         }
 
         // Gateway is up — clear the failure counter and make sure the
         // WhatsApp session is also active.
         if ($failures > 0) {
-            Cache::forget('openwa:health:failures');
+            $safe(fn() => Cache::forget('openwa:health:failures'));
         }
 
         $openWa = app(\App\Services\WhatsApp\OpenWaService::class);
@@ -75,7 +85,7 @@ Schedule::call(function () {
             $manager->startSession();
         }
     } catch (\Throwable $e) {
-        Cache::increment('openwa:health:failures');
+        $safe(fn() => Cache::increment('openwa:health:failures'));
         Log::error('OpenWA health-check error', [
             'error' => $e->getMessage(),
             'consecutive_failures' => $failures + 1,

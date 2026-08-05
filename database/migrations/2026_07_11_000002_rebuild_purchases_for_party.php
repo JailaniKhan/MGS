@@ -16,6 +16,10 @@ return new class extends Migration
         // -----------------------------------------------------------------
         Schema::create('purchases_new', function (Blueprint $table) {
             $table->id();
+            // Preserve user_id / uuid / journal_entry_id from 2026_06_19_000200.
+            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
+            $table->uuid('uuid')->nullable();
+            $table->unsignedBigInteger('journal_entry_id')->nullable();
             $table->foreignId('supplier_id')->nullable()->constrained()->nullOnDelete();
             $table->string('status')->default('pending');
             $table->decimal('total_amount', 10, 2)->default(0);
@@ -33,6 +37,9 @@ return new class extends Migration
         foreach ($purchases as $purchase) {
             DB::table('purchases_new')->insert([
                 'id' => $purchase->id,
+                'user_id' => $purchase->user_id ?? 1,
+                'uuid' => $purchase->uuid ?? null,
+                'journal_entry_id' => $purchase->journal_entry_id ?? null,
                 'supplier_id' => $purchase->supplier_id,
                 'status' => $purchase->status,
                 'total_amount' => $purchase->total_amount,
