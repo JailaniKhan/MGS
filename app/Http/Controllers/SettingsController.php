@@ -73,7 +73,9 @@ class SettingsController extends Controller
                 ? $this->resolveOpenwaState($openWa, $manager)
                 : ['gatewayRunning' => null, 'status' => null, 'qr' => null];
 
-        return view('settings.openwa', compact('configured', 'gatewayRunning', 'status', 'qr'));
+        $managerStatus = $manager->status();
+
+        return view('settings.openwa', compact('configured', 'gatewayRunning', 'status', 'qr', 'managerStatus'));
     }
 
     /**
@@ -134,11 +136,22 @@ class SettingsController extends Controller
         ['gatewayRunning' => $gatewayRunning, 'status' => $status, 'qr' => $qr] =
             $this->resolveOpenwaState($openWa, $manager);
 
+        $managerStatus = $manager->status();
+
         return response()->json([
             'configured' => true,
             'gateway_running' => $gatewayRunning,
             'status' => $status['status'] ?? null,
             'qr' => $qr,
+            'last_error' => $gatewayRunning ? null : $managerStatus['last_error'],
+            // Structured reason the session dropped (401 = rejected creds,
+            // 408 = network/DNS or QR-expiry) so the UI can show the right
+            // guidance instead of a generic "connection closed".
+            'last_disconnect' => $status['lastDisconnect'] ?? null,
+            // Current pairing code (if still valid) + expiry so the UI can
+            // count down and auto-refresh instead of showing a dead code.
+            'pairing' => $status['pairing'] ?? null,
+            'baileys_log_tail' => $managerStatus['baileys_log_tail'] ?? '',
         ]);
     }
 
@@ -156,13 +169,35 @@ class SettingsController extends Controller
             'phone' => 'required|string|regex:/^[0-9]{6,15}$/',
         ]);
 
-        $code = $openWa->requestPairingCode($validated['phone']);
+        $pairing = $openWa->requestPairingCode($validated['phone']);
 
-        if (!$code) {
+        if (!$pairing || empty($pairing['pairingCode'])) {
             return response()->json(['error' => 'Could not generate pairing code.'], 422);
         }
 
-        return response()->json(['pairingCode' => $code]);
+        return response()->json([
+            'pairingCode' => $pairing['pairingCode'],
+            'expiresAt' => $pairing['expiresAt'],
+        ]);
+    }
+
+    /**
+     * Poll the current pairing code state (code + expiry). Returns null code
+     * once the code has expired so the page can automatically request a new
+     * one without the user noticing a dead code on screen.
+     */
+    public function openwaPairingStatus(\App\Services\WhatsApp\OpenWaService $openWa)
+    {
+        if (!$openWa->isConfigured()) {
+            return response()->json(['configured' => false], 200);
+        }
+
+        $pairing = $openWa->pairingStatus();
+
+        return response()->json([
+            'pairingCode' => $pairing['pairingCode'] ?? null,
+            'expiresAt' => $pairing['expiresAt'] ?? null,
+        ]);
     }
 
     /**

@@ -58,6 +58,18 @@
                 </div>
             @endif
         </div>
+
+        <div class="flex gap-2 mt-4 pt-4 border-t border-ink-100 dark:border-ink-700/30">
+            <a href="{{ route('purchases.print', $purchase) }}" target="_blank" class="btn-secondary flex-1">
+                <x-icon name="printer" class="w-4 h-4"/>{{ __('messages.print') }}
+            </a>
+            <form action="{{ route('purchases.send-whatsapp', $purchase) }}" method="POST" class="flex-1">
+                @csrf
+                <button type="submit" class="btn-primary w-full">
+                    <x-icon name="chat-bubble-left-right" class="w-4 h-4"/>{{ __('messages.send_via_whatsapp') }}
+                </button>
+            </form>
+        </div>
     </div>
 
     <!-- Purchase Items -->

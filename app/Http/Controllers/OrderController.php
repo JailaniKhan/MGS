@@ -8,6 +8,7 @@ use App\Models\Supplier;
 use App\Models\Product;
 use App\Models\Setting;
 use App\Models\StockMovement;
+use App\Services\Billing\BillService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -177,6 +178,25 @@ class OrderController extends Controller
         $invoicePrefix = Setting::get('invoice_prefix', 'INV-');
         $invoiceNumber = $invoicePrefix . $order->id;
         return view('orders.print', compact('order', 'company', 'invoiceNumber'));
+    }
+
+    public function sendWhatsApp(Order $order, BillService $bills)
+    {
+        $bill = $bills->orderBill($order);
+
+        $result = $bills->send(
+            $order->party,
+            $bill['phone'],
+            $bill['message'],
+            $bill['amount'],
+            $bill['currency'],
+        );
+
+        $message = $result['ok']
+            ? __('messages.bill_sent', ['phone' => $bill['phone']])
+            : $result['error'];
+
+        return back()->with($result['ok'] ? 'success' : 'error', $message);
     }
 
     public function edit(Order $order)

@@ -10,6 +10,29 @@ class OpenWaManager
     private const PORT = 2785;
 
     /**
+     * Cooldown state shared across requests. `php artisan serve` and the
+     * NativePHP persistent runtime both reuse ONE PHP process for every
+     * request, so statics survive between page loads. When the gateway is
+     * down, every page that polls its status used to run the full launch
+     * sequence (2×health probes + 2s wait + launch + 5s port wait) — up to
+     * ~15-30s of blocking per page load. After a failed launch we now hold
+     * a cooldown, so subsequent requests fail fast and report "down"
+     * instead of re-attempting the whole launch dance.
+     */
+    private static ?float $lastLaunchAttemptAt = null;
+    private static bool $lastLaunchSucceeded = false;
+
+    /**
+     * Human-readable description of the most recent launch failure (plus the
+     * tail of the gateway's own log when available), so the Settings page can
+     * show WHY the gateway is down instead of a bare "Stopped".
+     */
+    private static ?string $lastError = null;
+
+    /** Seconds to wait before attempting another gateway launch. */
+    private const LAUNCH_COOLDOWN_SECONDS = 15;
+
+    /**
      * True when running inside a NativePHP Android app process.
      * NativePHP sets the `NATIVEPHP_PLATFORM` env var to `android` via
      * setenv() in the C++ bridge (php_bridge.c) before the Laravel
@@ -33,11 +56,83 @@ class OpenWaManager
         return PHP_OS_FAMILY === 'Linux' && @is_file('/system/build.prop');
     }
 
+    /**
+     * True while a failed launch is still inside its cooldown window.
+     * During cooldown we skip the expensive launch sequence entirely.
+     */
+    protected function launchInCooldown(): bool
+    {
+        if (self::$lastLaunchAttemptAt === null || self::$lastLaunchSucceeded) {
+            return false;
+        }
+        return (microtime(true) - self::$lastLaunchAttemptAt) < self::LAUNCH_COOLDOWN_SECONDS;
+    }
+
+    protected function markLaunchAttempt(bool $succeeded): void
+    {
+        self::$lastLaunchAttemptAt = microtime(true);
+        self::$lastLaunchSucceeded = $succeeded;
+        if ($succeeded) {
+            self::$lastError = null;
+        }
+    }
+
+    /**
+     * Remember the failure reason and write it (with the gateway's own log
+     * tail, if available) to the Laravel log.
+     */
+    protected function recordError(string $message, ?string $logFile = null): void
+    {
+        $tail = $logFile ? $this->logTail($logFile) : '';
+        self::$lastError = $message . ($tail !== '' ? "\n\n--- openwa_app.log tail ---\n" . $tail : '');
+        Log::error('OpenWaManager: ' . $message . ($tail !== '' ? "\n" . $tail : ''));
+    }
+
+    /**
+     * Last N lines of a plain-text log file (gateway stdout/stderr or the
+     * Baileys connection log). Reads only the trailing 64 KB so a large
+     * log doesn't get slurped into memory on every status poll.
+     */
+    protected function logTail(string $file, int $maxLines = 40): string
+    {
+        if (!is_file($file)) {
+            return '';
+        }
+        $size = @filesize($file);
+        if ($size === false || $size === 0) {
+            return '';
+        }
+        $handle = @fopen($file, 'rb');
+        if ($handle === false) {
+            return '';
+        }
+        $chunk = 65536;
+        if ($size > $chunk) {
+            @fseek($handle, $size - $chunk);
+        }
+        $content = stream_get_contents($handle);
+        @fclose($handle);
+        if ($content === false) {
+            return '';
+        }
+        $lines = array_values(array_filter(preg_split('/\r?\n/', $content), fn ($l) => trim((string) $l) !== ''));
+        return trim(implode("\n", array_slice($lines, -$maxLines)));
+    }
+
     public function ensureStarted(): bool
     {
         try {
             if (!$this->isAvailable()) {
                 Log::debug('OpenWaManager: gateway not available, skipping');
+                return false;
+            }
+
+            // A recent launch already failed — don't re-attempt the whole
+            // sequence on every page load (it blocks the request for seconds).
+            // Checked BEFORE the 3s health probe so cooldown requests are
+            // near-instant.
+            if ($this->launchInCooldown()) {
+                Log::debug('OpenWaManager: gateway launch in cooldown, skipping');
                 return false;
             }
 
@@ -73,7 +168,7 @@ class OpenWaManager
 
             return $this->launch();
         } catch (\Throwable $e) {
-            Log::warning('OpenWaManager: error during startup', ['error' => $e->getMessage()]);
+            $this->recordError('error during startup: ' . $e->getMessage());
             return false;
         }
     }
@@ -111,8 +206,18 @@ class OpenWaManager
         $runtimeDir = storage_path('app/openwa');
         $bootstrapDir = base_path('bootstrap/openwa');
 
-        // Fast path: runtime copy already has the entry point.
-        if (is_file("{$runtimeDir}/app/server.js")) {
+        // A `.bundle_version` marker at bootstrap/openwa/ is the source of
+        // truth for what the current APK ships. The fast path below used to
+        // skip the deploy entirely once server.js existed — which meant an
+        // APK update with a fixed server.js never replaced the stale on-device
+        // copy. Bump the marker (via the bundle tooling or manually) whenever
+        // the bundled gateway changes, and the redeploy runs on next launch.
+        $bundleVersion = trim((string) @file_get_contents("{$bootstrapDir}/.bundle_version"));
+        $deployedVersion = trim((string) @file_get_contents("{$runtimeDir}/.bundle_version"));
+
+        // Fast path: runtime copy already has the entry point AND matches the
+        // shipped bundle version.
+        if (is_file("{$runtimeDir}/app/server.js") && $deployedVersion !== '' && $deployedVersion === $bundleVersion) {
             return;
         }
 
@@ -153,6 +258,11 @@ class OpenWaManager
             @chmod($nodeBin, 0755);
         }
 
+        // Record the deployed bundle version so future launches fast-path.
+        if ($bundleVersion !== '') {
+            @file_put_contents("{$runtimeDir}/.bundle_version", $bundleVersion);
+        }
+
         Log::info('OpenWaManager: bundle deployed', [
             'server_js' => is_file("{$runtimeDir}/app/server.js") ? 'present' : 'missing',
             'node_bin' => is_file($nodeBin) ? 'present' : 'missing',
@@ -190,9 +300,15 @@ class OpenWaManager
 
     protected function resolveAppDir(): ?string
     {
-        $dir = config('services.openwa.binary_dir');
-        if ($dir && is_dir($dir)) {
-            return $dir;
+        // On Android, config('services.openwa.binary_dir') can only be a
+        // dev-machine absolute path baked into the APK's embedded .env — it
+        // can never exist on-device. Ignore it entirely and always use the
+        // app-private runtime copy deployed from the bundled bootstrap/.
+        if (!$this->isAndroid()) {
+            $dir = config('services.openwa.binary_dir');
+            if ($dir && is_dir($dir)) {
+                return $dir;
+            }
         }
 
         $this->ensureBundleDeployed();
@@ -210,6 +326,7 @@ class OpenWaManager
         $appDir = $this->resolveAppDir();
         if (!$appDir) {
             Log::info('OpenWaManager: binary_dir not available, skipping local start', ['dir' => config('services.openwa.binary_dir')]);
+            $this->markLaunchAttempt(false);
             return false;
         }
 
@@ -222,18 +339,28 @@ class OpenWaManager
         }
         if (!file_exists($mainJs)) {
             Log::info('OpenWaManager: no entry point found (tried server.js, dist/main.js, main.js), skipping', ['dir' => $appDir]);
-            return false;
-        }
-
-        $nodeBin = $this->resolveNodeBinary();
-        if (!$nodeBin) {
-            Log::error('OpenWaManager: no node binary found');
+            $this->markLaunchAttempt(false);
             return false;
         }
 
         $modulesDir = dirname($appDir) . '/modules';
         $logFile = "{$appDir}/openwa_app.log";
         $pidFile = $this->pidFilePath();
+
+        $nodeBin = $this->resolveNodeBinary();
+        if ($nodeBin && is_file($nodeBin) && !is_executable($nodeBin)) {
+            @chmod($nodeBin, 0755);
+        }
+        if (!$nodeBin) {
+            $this->recordError('no node binary found (resolveNodeBinary returned null)');
+            $this->markLaunchAttempt(false);
+            return false;
+        }
+        if (is_file($nodeBin) && !is_executable($nodeBin)) {
+            $this->recordError("node binary exists but is not executable: {$nodeBin}", $logFile);
+            $this->markLaunchAttempt(false);
+            return false;
+        }
 
         Log::info('OpenWaManager: launching OpenWA gateway', [
             'node' => $nodeBin,
@@ -276,7 +403,11 @@ class OpenWaManager
             $fullCmd = "{$envVars} \"{$nodeBin}\" \"{$mainJs}\"";
             $proc = @proc_open($fullCmd, $descriptors, $pipes, $appDir, $envArray);
             if (!is_resource($proc)) {
-                Log::error('OpenWaManager: proc_open failed on Android', ['cmd' => $fullCmd]);
+                $err = error_get_last();
+                $this->recordError(
+                    'proc_open failed on Android: ' . ($err['message'] ?? 'unknown error'),
+                    $logFile
+                );
                 return false;
             }
             $status = proc_get_status($proc);
@@ -312,6 +443,7 @@ class OpenWaManager
 
         if ($exitCode !== 0) {
             Log::error('OpenWaManager: exec failed to launch', ['exitCode' => $exitCode]);
+            $this->markLaunchAttempt(false);
             return false;
         }
 
@@ -336,10 +468,13 @@ class OpenWaManager
             if (!$sessionStarted) {
                 Log::error('OpenWaManager: gateway started but session start failed');
             }
+            $this->markLaunchAttempt(true);
             return $sessionStarted;
         }
 
         Log::error('OpenWaManager: started but port never came up', ['port' => self::PORT]);
+        $this->recordError('started but port ' . self::PORT . ' never came up (node may have crashed on launch)', $logFile);
+        $this->markLaunchAttempt(false);
         return false;
     }
 
@@ -365,6 +500,11 @@ class OpenWaManager
 
     public function isRunning(): bool
     {
+        // During launch cooldown the gateway is known to be down — return
+        // immediately instead of spending 5s on port+HTTP probes per request.
+        if ($this->launchInCooldown()) {
+            return false;
+        }
         return $this->checkPort(self::PORT, 2) && $this->gatewayResponds();
     }
 
@@ -374,14 +514,23 @@ class OpenWaManager
         $running = $this->isRunning();
         $pid = $running ? ($this->findPidByPort($port) ?: $this->pid) : null;
 
+        $appDir = $this->resolveAppDir();
+
         return [
             'running' => $running,
             'pid' => $pid,
             'port' => $port,
             'binary_dir' => config('services.openwa.binary_dir'),
             'node_binary' => config('services.openwa.node_binary'),
-            'resolved_app_dir' => $this->resolveAppDir(),
+            'resolved_app_dir' => $appDir,
             'resolved_node_binary' => $this->resolveNodeBinary(),
+            'last_error' => self::$lastError,
+            // Baileys connection log (next to server.js): records every
+            // "QR generated" / "CONNECTED" / "connection closed {reason}"
+            // event. This is the key diagnostic when a scan or pairing code
+            // "does nothing" — the reason the WS dropped (or the phone's
+            // link response arrived) is right here.
+            'baileys_log_tail' => $appDir ? $this->logTail("{$appDir}/baileys.log") : '',
         ];
     }
 
@@ -497,7 +646,10 @@ class OpenWaManager
     {
         $windows = $this->isWindows();
 
-        $configured = config('services.openwa.node_binary');
+        // On Android, a configured node_binary path can only have been baked
+        // in from the build machine (e.g. "D:\Mobile App\..."). It will never
+        // be valid on-device, so skip it and always resolve from storage/.
+        $configured = $this->isAndroid() ? null : config('services.openwa.node_binary');
         if ($configured && file_exists($configured) && is_executable($configured)) {
             return $configured;
         }

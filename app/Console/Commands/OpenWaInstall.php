@@ -313,6 +313,16 @@ app.post("/api/sessions/:id/messages/send-document", async (r, s) => {
 http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gateway on http://127.0.0.1:" + PORT));
 ';
 
+            // bootstrap/openwa/app/server.js is the AUTHORITATIVE gateway code
+            // (the dev-machine runtime and the APK bundle read the same file).
+            // Prefer it over the embedded fallback above so a fresh install is
+            // always identical to the code that was actually tested — the
+            // embedded string is only used when the bootstrap copy is missing.
+            $bootstrapServer = base_path('bootstrap/openwa/app/server.js');
+            if (is_file($bootstrapServer)) {
+                $serverCode = file_get_contents($bootstrapServer);
+            }
+
             file_put_contents("{$appDir}/server.js", $serverCode);
             return true;
         });
@@ -588,15 +598,16 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
     protected function termuxDependencyUrls(string $archShort): array
     {
         // Pinned versions confirmed in the Termux apt repo (2026-07).
-        // zlib is omitted because Android ships its own libz.so that is
-        // compatible enough for Node's usage. If a future Node version
-        // requires a newer libz, add `zlib_1.3.1_*` here.
+        // zlib MUST be included: the Termux node binary links against
+        // "libz.so.1", but stock Android only ships libz.so (wrong soname),
+        // so the on-device linker fails with "library libz.so.1 not found".
         $packages = [
             'libc++'    => ['libc++_29',          'libc++'],
             'openssl'   => ['openssl_1:3.6.3',    'openssl'],
             'c-ares'    => ['c-ares_1.34.8',      'c-ares'],
             'libicu'    => ['libicu_78.3',        'libicu'],
             'libsqlite' => ['libsqlite_3.53.4',  'libsqlite'],
+            'zlib'      => ['zlib_1.3.2',         'zlib'],
         ];
 
         $base = 'https://packages.termux.dev/apt/termux-main/pool/main';

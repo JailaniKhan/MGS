@@ -16,6 +16,13 @@
         </div>
     </div>
 
+    <form action="{{ route('cashbook.send-statement', [$personType, $person->id]) }}" method="POST" class="mb-4 page-enter" style="animation-delay: 0.05s;">
+        @csrf
+        <button type="submit" class="btn-primary w-full">
+            <x-icon name="chat-bubble-left-right" class="w-4 h-4"/>{{ __('messages.send_statement') }}
+        </button>
+    </form>
+
     @foreach ($totals as $currency => $total)
         <div class="grid grid-cols-3 gap-3 mb-4 page-enter" style="animation-delay: 0.05s;">
             <div class="metric-tile">

@@ -175,6 +175,12 @@ return [
         // into the APK. If you self-host the gateway on-device, define it
         // through the Settings UI instead.
         'OPENWA_WEBHOOK_SECRET',
+        // OPENWA_BINARY_DIR / OPENWA_NODE_BINARY hold dev-machine absolute
+        // paths (e.g. "D:\Mobile App\...") that are meaningless on-device.
+        // OpenWaManager auto-resolves them via storage_path() on Android;
+        // baking the Windows paths into the APK only causes failed lookups.
+        'OPENWA_BINARY_DIR',
+        'OPENWA_NODE_BINARY',
         'GOOGLE_CLIENT_SECRET',
     ],
 
@@ -199,6 +205,33 @@ return [
         // all storage/ entries), so including it here would just bloat the APK
         // by ~137MB with files that never reach the device.
         'storage/app/openwa',
+        // .kilo contains local AI-tool git worktree backups — never needed at
+        // runtime, adds ~50MB of bloat to the APK.
+        '.kilo',
+        // Dev-machine artifacts that must never ship in the APK:
+        // previous APKs (283MB+ bloat), the signing keystore, local dev DB,
+        // build logs/scripts, and one-off diagnostic/test files at the root.
+        'MGS-release-signed.apk',
+        'credentials',
+        'data',
+        'logs',
+        '.idea',
+        'Error .txt',
+        'gradle_build.log',
+        'package_build.log',
+        'gradle_build_run.bat',
+        'package_build_run.bat',
+        'session.html',
+        'openwa_test.php',
+        'tmp_check_auth.php',
+        'tmp_test.php',
+        'qr_test.txt',
+        // 'native' was removed: the root-level `native` file was a duplicate
+        // of vendor/nativephp/mobile/bin/native (both the same 188-byte PHP
+        // CLI wrapper). A zip-time "-xr!native" pattern matches ANY path
+        // component named "native", which would also strip
+        // vendor/nativephp/mobile/bin/native from the bundle.
+        'Error.txt',
     ],
 
     /*

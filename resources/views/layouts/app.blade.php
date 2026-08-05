@@ -136,6 +136,10 @@ use App\Models\Setting;
                     <x-icon name="chat-bubble-left-right" class="w-5 h-5"/>
                     <span>{{ __('messages.whatsapp_gateway') }}</span>
                 </a>
+                <a href="{{ route('whatsapp.chats.index') }}" class="sidebar-link {{ request()->routeIs('whatsapp.chats.*') ? 'sidebar-link-active' : '' }}">
+                    <x-icon name="chat-bubble-oval-left-ellipsis" class="w-5 h-5"/>
+                    <span>{{ __('messages.whatsapp_chats') }}</span>
+                </a>
             </nav>
         </aside>
 

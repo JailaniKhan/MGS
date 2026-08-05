@@ -7,6 +7,7 @@ use App\Models\JournalEntry;
 use App\Models\Supplier;
 use App\Services\Accounting\BalanceService;
 use App\Services\Accounting\TransactionService;
+use App\Services\Billing\BillService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -84,6 +85,11 @@ class CashbookController extends Controller
     }
 
     public function person($type, $id)
+    {
+        return view('cashbook.person', $this->personData($type, $id));
+    }
+
+    private function personData($type, $id)
     {
         abort_if(! in_array($type, ['customer', 'supplier'], true), 404);
 
@@ -182,14 +188,40 @@ class CashbookController extends Controller
             $purchaseTotals[$currency] = (float) $purchases->where('currency', $currency)->sum('remaining_amount');
         }
 
-        return view('cashbook.person', [
+        return [
             'person' => $person,
             'personType' => $type,
             'transactions' => $transactions,
             'totals' => $totals,
             'orderTotals' => $orderTotals,
             'purchaseTotals' => $purchaseTotals,
-        ]);
+        ];
+    }
+
+    public function sendStatement($type, $id, BillService $bills)
+    {
+        $data = $this->personData($type, $id);
+
+        $bill = $bills->personStatement(
+            $data['personType'],
+            $data['person'],
+            $data['totals'],
+            $data['transactions'],
+        );
+
+        $result = $bills->send(
+            $data['person'],
+            $bill['phone'],
+            $bill['message'],
+            $bill['amount'],
+            $bill['currency'],
+        );
+
+        $message = $result['ok']
+            ? __('messages.bill_sent', ['phone' => $bill['phone']])
+            : $result['error'];
+
+        return back()->with($result['ok'] ? 'success' : 'error', $message);
     }
 
     public function create()

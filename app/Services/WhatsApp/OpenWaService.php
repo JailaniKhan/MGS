@@ -191,9 +191,10 @@ class OpenWaService
      * Request an 8-character pairing code to link the session by phone number
      * (alternative to scanning the QR code).
      *
-     * @return string|null The pairing code, or null on failure.
+     * @return array{pairingCode: string, expiresAt: int}|null The code plus
+     *         its expiry timestamp (ms epoch), or null on failure.
      */
-    public function requestPairingCode(string $phone): ?string
+    public function requestPairingCode(string $phone): ?array
     {
         if (!$this->isConfigured()) {
             return null;
@@ -230,7 +231,43 @@ class OpenWaService
 
         $data = $response->json();
 
-        return $data['pairingCode'] ?? $data['pairing_code'] ?? null;
+        return [
+            'pairingCode' => $data['pairingCode'] ?? $data['pairing_code'] ?? null,
+            'expiresAt' => $data['expiresAt'] ?? null,
+        ];
+    }
+
+    /**
+     * Poll the gateway for the CURRENT pairing code. Returns the code +
+     * expiry (ms epoch) while it is still valid, or null when it has expired
+     * (or the session was restarted) so the UI can auto-request a fresh one.
+     *
+     * @return array{pairingCode: string, expiresAt: int}|null
+     */
+    public function pairingStatus(): ?array
+    {
+        if (!$this->isConfigured()) {
+            return null;
+        }
+
+        try {
+            $response = $this->client()->get("/api/sessions/{$this->session()}/pairing-code");
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::warning('OpenWA unreachable (pairing status)', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        if (!$response->successful()) {
+            return null;
+        }
+
+        $data = $response->json();
+
+        return [
+            'pairingCode' => $data['pairingCode'] ?? null,
+            'expiresAt' => $data['expiresAt'] ?? null,
+        ];
     }
 
     /**

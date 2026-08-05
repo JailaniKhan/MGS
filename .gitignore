@@ -29,3 +29,6 @@ Thumbs.db
 
 # Credential files (keystores, private keys, etc.)
 /credentials/
+
+# OpenWA runtime bundle (node_modules, node binary, env secrets) - extracted by native build
+/bootstrap/openwa/

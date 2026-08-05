@@ -84,6 +84,11 @@ class OpenWaBundle extends Command
         if (!is_dir("{$buildDir}/modules")) {
             $missing[] = 'modules/ (npm dependencies)';
         }
+        // An EMPTY modules dir still passes is_dir() — count actual files so a
+        // cleared source tree can't silently ship a broken bundle.
+        if (is_dir("{$buildDir}/modules") && $this->countFiles("{$buildDir}/modules") === 0) {
+            $missing[] = 'modules/ is empty (source storage/app/openwa/modules has no files)';
+        }
 
         if (!empty($missing)) {
             $this->newLine();
@@ -116,6 +121,26 @@ class OpenWaBundle extends Command
             "# OpenWaManager picks them up from storage_path() automatically on-device.\n" .
             implode("\n", array_map(fn($k, $v) => "{$k}={$v}", array_keys($config), $config))
         );
+
+        // Bundle version marker: OpenWaManager compares the marker SHIPPED in
+        // the APK (bootstrap/openwa/.bundle_version) against the on-device
+        // runtime copy to decide whether the bundle must be re-deployed.
+        // Without it, an APK update with a fixed server.js never replaced the
+        // stale on-device gateway, because the deploy fast-path skipped once
+        // server.js existed.
+        //
+        // The marker must therefore be written to bootstrap/openwa/ (which
+        // ships inside the APK), NOT only into build/ — otherwise every build
+        // ships the same marker and upgrades never redeploy. Previously the
+        // marker was only generated in build/, so successive APKs carried an
+        // unchanged bootstrap marker.
+        $bundleVersion = gmdate('YmdHis') . '-' . substr(md5(random_bytes(16)), 0, 8);
+        file_put_contents("{$buildDir}/.bundle_version", $bundleVersion);
+        $shippedMarkerDir = base_path('bootstrap/openwa');
+        if (!is_dir($shippedMarkerDir)) {
+            mkdir($shippedMarkerDir, 0755, true);
+        }
+        file_put_contents("{$shippedMarkerDir}/.bundle_version", $bundleVersion);
 
         // CRITICAL for on-device startup: the Android runtime resolves the node
         // binary via `storage_path('app/openwa/node/node')` (the SOURCE tree,
@@ -275,7 +300,55 @@ class OpenWaBundle extends Command
         // LD_LIBRARY_PATH=$libDir alone is sufficient.
         $this->flattenTermuxLibs($libDir);
 
+        // The Termux .deb packages ship soname symlinks (libz.so.1 ->
+        // libz.so.1.3.2, libsqlite3.so -> libsqlite3.so.3.53.4, ...). Windows
+        // tar / PharData rarely preserves symlinks, so those alias names are
+        // missing after extraction. The on-device Android linker resolves
+        // DT_NEEDED by the EXACT filename (e.g. "libicuuc.so.78"), so every
+        // short name must exist as a real file. Materialize them as copies.
+        $this->materializeSonameAliases($libDir);
+
         return true;
+    }
+
+    /**
+     * For every versioned shared library (matching `libX.so.[0-9]+...`),
+     * create real copies for the soname forms the on-device linker requests:
+     *   libicui18n.so.78.3   -> libicui18n.so.78   (major-only soname)
+     *   libicudata.so.78.3   -> libicudata.so.78   (transitive dep)
+     *   libz.so.1.3.2        -> libz.so.1
+     *   libsqlite3.so.3.53.4 -> libsqlite3.so.3, libsqlite3.so (node links
+     *                           the unversioned name)
+     * We deliberately do NOT create a blanket unversioned alias for every
+     * library (that would duplicate ~60MB of ICU data files); only sqlite's
+     * unversioned name is required by the node binary.
+     */
+    protected function materializeSonameAliases(string $libDir): void
+    {
+        if (!is_dir($libDir)) {
+            return;
+        }
+        foreach (scandir($libDir) as $entry) {
+            if ($entry === '.' || $entry === '..') continue;
+            $path = "{$libDir}/{$entry}";
+            if (!is_file($path)) continue;
+            // lib<name>.so.<major>.<minor>.<patch? ...>
+            if (!preg_match('/^(.+\.so)\.([0-9]+)(\.[0-9]+)*$/', $entry, $m)) {
+                continue;
+            }
+            $base = $m[1];
+            $major = $m[2];
+            $aliases = ["{$base}.{$major}"];
+            if ($base === 'libsqlite3.so') {
+                $aliases[] = $base;
+            }
+            foreach ($aliases as $alias) {
+                if ($alias === $entry || file_exists("{$libDir}/{$alias}")) {
+                    continue;
+                }
+                @copy($path, "{$libDir}/{$alias}");
+            }
+        }
     }
 
     /**
@@ -713,12 +786,17 @@ PY;
      */
     protected function termuxDependencyUrls(string $archShort): array
     {
+        // Pinned versions confirmed in the Termux apt repo (2026-07).
+        // zlib MUST be included: the Termux node binary links against
+        // "libz.so.1", but stock Android only ships libz.so (wrong soname),
+        // so the on-device linker fails with "library libz.so.1 not found".
         $packages = [
             'libc++'    => ['libc++_29',          'libc++'],
             'openssl'   => ['openssl_1:3.6.3',    'openssl'],
             'c-ares'    => ['c-ares_1.34.8',      'c-ares'],
             'libicu'    => ['libicu_78.3',        'libicu'],
             'libsqlite' => ['libsqlite_3.53.4',  'libsqlite'],
+            'zlib'      => ['zlib_1.3.2',         'zlib'],
         ];
         $base = 'https://packages.termux.dev/apt/termux-main/pool/main';
         $urls = [];
@@ -787,7 +865,7 @@ PY;
         // Skip dev-machine runtime state that must not ship in the APK:
         // node_modules (copied separately as modules/), the linked session
         // creds under data/, and diagnostic logs.
-        $skip = ['node_modules', 'data', 'baileys.log', 'openwa_app.log', 'downloads'];
+        $skip = ['node_modules', 'data', 'baileys.log', 'openwa_app.log', 'openwa_app_err.log', 'downloads'];
         $dir = opendir($src);
         @mkdir($dst, 0755, true);
         while (($file = readdir($dir)) !== false) {
@@ -841,6 +919,23 @@ PY;
             }
         }
         return $size;
+    }
+
+    protected function countFiles(string $dir): int
+    {
+        if (!is_dir($dir)) {
+            return 0;
+        }
+        $count = 0;
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+        foreach ($items as $item) {
+            if ($item->isFile()) {
+                $count++;
+            }
+        }
+        return $count;
     }
 
     protected function formatSize(int $bytes): string

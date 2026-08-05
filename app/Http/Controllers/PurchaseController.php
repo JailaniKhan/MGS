@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\PurchasePayment;
 use App\Models\Setting;
 use App\Models\StockMovement;
+use App\Services\Billing\BillService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -133,6 +134,40 @@ class PurchaseController extends Controller
             'tax_id' => Setting::get('tax_id', ''),
         ];
         return view('purchases.show', compact('purchase', 'company'));
+    }
+
+    public function print(Purchase $purchase)
+    {
+        $purchase->load('supplier', 'purchaseItems.product.unit', 'purchasePayments');
+        $company = [
+            'name' => Setting::get('company_name', 'My Business'),
+            'address' => Setting::get('company_address', ''),
+            'phone' => Setting::get('company_phone', ''),
+            'email' => Setting::get('company_email', ''),
+            'tax_id' => Setting::get('tax_id', ''),
+        ];
+        $billPrefix = Setting::get('purchase_prefix', 'PUR-');
+        $billNumber = $billPrefix . $purchase->id;
+        return view('purchases.print', compact('purchase', 'company', 'billNumber'));
+    }
+
+    public function sendWhatsApp(Purchase $purchase, BillService $bills)
+    {
+        $bill = $bills->purchaseBill($purchase);
+
+        $result = $bills->send(
+            $purchase->party,
+            $bill['phone'],
+            $bill['message'],
+            $bill['amount'],
+            $bill['currency'],
+        );
+
+        $message = $result['ok']
+            ? __('messages.bill_sent', ['phone' => $bill['phone']])
+            : $result['error'];
+
+        return back()->with($result['ok'] ? 'success' : 'error', $message);
     }
 
     public function status(Purchase $purchase, $status)

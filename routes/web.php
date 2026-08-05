@@ -39,6 +39,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/openwa', [App\Http\Controllers\SettingsController::class, 'openwa'])->name('settings.openwa');
     Route::get('/settings/openwa/qr', [App\Http\Controllers\SettingsController::class, 'openwaQr'])->name('settings.openwa.qr');
     Route::post('/settings/openwa/pairing-code', [App\Http\Controllers\SettingsController::class, 'openwaPairingCode'])->name('settings.openwa.pairing');
+    Route::get('/settings/openwa/pairing-status', [App\Http\Controllers\SettingsController::class, 'openwaPairingStatus'])->name('settings.openwa.pairing-status');
     Route::post('/settings/openwa/test-send', [App\Http\Controllers\SettingsController::class, 'openwaTestSend'])->name('settings.openwa.test');
     Route::post('/settings/openwa/restart', [App\Http\Controllers\SettingsController::class, 'openwaRestart'])->name('settings.openwa.restart');
 
@@ -59,10 +60,13 @@ Route::middleware('auth')->group(function () {
     Route::resource('purchases', PurchaseController::class)->except(['edit', 'update']);
     Route::post('/purchases/{purchase}/status/{status}', [PurchaseController::class, 'status'])->name('purchases.status');
     Route::post('/purchases/payment', [PurchaseController::class, 'paymentStore'])->name('purchases.payment.store');
+    Route::get('/purchases/{purchase}/print', [PurchaseController::class, 'print'])->name('purchases.print');
+    Route::post('/purchases/{purchase}/send-whatsapp', [PurchaseController::class, 'sendWhatsApp'])->name('purchases.send-whatsapp');
     Route::resource('orders', OrderController::class)->except(['show']);
 
     Route::get('/orders/{order}/show', [OrderController::class, 'show'])->name('orders.show');
     Route::get('/orders/{order}/print', [OrderController::class, 'print'])->name('orders.print');
+    Route::post('/orders/{order}/send-whatsapp', [OrderController::class, 'sendWhatsApp'])->name('orders.send-whatsapp');
     Route::post('/orders/{order}/status/{status}', [OrderController::class, 'status'])->name('orders.status');
     Route::get('/orders/product-price/{product}', [OrderController::class, 'getProductPrice'])->name('orders.product-price');
 
@@ -109,6 +113,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/cashbook/create', [CashbookController::class, 'create'])->name('cashbook.create');
     Route::post('/cashbook', [CashbookController::class, 'store'])->name('cashbook.store');
     Route::get('/cashbook/{type}/{id}', [CashbookController::class, 'person'])->name('cashbook.person');
+    Route::post('/cashbook/person/{type}/{id}/send-statement', [CashbookController::class, 'sendStatement'])->name('cashbook.send-statement')->where('type', 'customer|supplier');
 
     // Staff
     Route::resource('staff', StaffController::class);
@@ -118,6 +123,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/reminders/customer/{customer}', [App\Http\Controllers\ReminderController::class, 'sendCustomerReminder'])->name('reminders.customer');
     Route::post('/reminders/supplier/{supplier}', [App\Http\Controllers\ReminderController::class, 'sendSupplierReminder'])->name('reminders.supplier');
     Route::get('/reminders', [App\Http\Controllers\ReminderController::class, 'history'])->name('reminders.history');
+
+    // WhatsApp chats (reminder messages in a WhatsApp-style UI)
+    Route::get('/whatsapp-chats', [App\Http\Controllers\WhatsAppChatController::class, 'index'])->name('whatsapp.chats.index');
+    Route::get('/whatsapp-chats/{type}/{id}', [App\Http\Controllers\WhatsAppChatController::class, 'show'])->name('whatsapp.chats.show')->where('type', 'customer|supplier');
 
     // Digital Passbook
     Route::get('/passbook', [App\Http\Controllers\PassbookController::class, 'index'])->name('passbook.index');
