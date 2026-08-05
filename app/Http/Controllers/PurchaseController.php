@@ -12,6 +12,7 @@ use App\Models\StockMovement;
 use App\Services\Billing\BillService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class PurchaseController extends Controller
 {
