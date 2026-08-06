@@ -25,7 +25,15 @@ class ProductController extends Controller
     {
         $categories = Category::orderBy('name')->get();
         $units = Unit::orderBy('name')->get();
-        return view('products.create', compact('categories', 'units'));
+        $categoryOptions = $categories->map(fn ($category) => [
+            'value' => $category->id,
+            'label' => $category->name,
+        ])->values()->all();
+        $unitOptions = $units->map(fn ($unit) => [
+            'value' => $unit->id,
+            'label' => $unit->name . ($unit->short_name ? ' (' . $unit->short_name . ')' : ''),
+        ])->values()->all();
+        return view('products.create', compact('categories', 'units', 'categoryOptions', 'unitOptions'));
     }
 
     public function store(Request $request)
@@ -33,12 +41,15 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'barcode' => 'nullable|string|max:255|unique:products,barcode',
+            'lot_number' => 'nullable|string|max:255',
             'category_id' => 'required|exists:categories,id',
             'unit_id' => 'nullable|exists:units,id',
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
             'description' => 'nullable|string',
         ]);
+
+        $validated['lot_number'] = $this->resolveLotNumber($validated['lot_number'] ?? null);
 
         Product::create($validated);
 
@@ -49,7 +60,15 @@ class ProductController extends Controller
     {
         $categories = Category::orderBy('name')->get();
         $units = Unit::orderBy('name')->get();
-        return view('products.edit', compact('product', 'categories', 'units'));
+        $categoryOptions = $categories->map(fn ($category) => [
+            'value' => $category->id,
+            'label' => $category->name,
+        ])->values()->all();
+        $unitOptions = $units->map(fn ($unit) => [
+            'value' => $unit->id,
+            'label' => $unit->name . ($unit->short_name ? ' (' . $unit->short_name . ')' : ''),
+        ])->values()->all();
+        return view('products.edit', compact('product', 'categories', 'units', 'categoryOptions', 'unitOptions'));
     }
 
     public function update(Request $request, Product $product)
@@ -57,12 +76,18 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'barcode' => 'nullable|string|max:255|unique:products,barcode,' . $product->id,
+            'lot_number' => 'nullable|string|max:255',
             'category_id' => 'required|exists:categories,id',
             'unit_id' => 'nullable|exists:units,id',
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
             'description' => 'nullable|string',
         ]);
+
+        // Keep the current lot when the field is left empty on edit.
+        if (trim($validated['lot_number'] ?? '') === '') {
+            unset($validated['lot_number']);
+        }
 
         $oldStock = $product->stock;
         $product->update($validated);
@@ -88,5 +113,14 @@ class ProductController extends Controller
     {
         $product->delete();
         return redirect()->route('products.index')->with('success', __('messages.product_deleted'));
+    }
+
+    private function resolveLotNumber(?string $lotNumber): string
+    {
+        if ($lotNumber !== null && trim($lotNumber) !== '') {
+            return trim($lotNumber);
+        }
+
+        return 'LOT-' . now()->format('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(4));
     }
 }

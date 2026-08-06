@@ -44,36 +44,68 @@
             </div>
         </div>
 
-        <div class="px-4 py-2 bg-primary-50 dark:bg-primary-900/10 text-xs font-semibold text-primary-700 dark:text-primary-300">{{ __('messages.receivables') }}</div>
-        @forelse ($receivables as $order)
+        <div class="px-4 py-2 bg-primary-50 dark:bg-primary-900/10 text-xs font-semibold text-primary-700 dark:text-primary-300">{{ __('messages.receivables') }} &middot; {{ __('messages.afn') }}</div>
+        @forelse ($receivablesAFN as $order)
             <a href="{{ route('orders.show', $order) }}" class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0">
                 <div class="min-w-0">
                     <div class="text-sm font-medium text-ink-800 dark:text-ink-200 truncate">{{ $order->party?->name ?? __('messages.unknown') }} — {{ __('messages.order') }} #{{ $order->id }}</div>
                     <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$order->display_status) }}</div>
                 </div>
-                <span class="text-sm font-bold flex-shrink-0 ml-3 text-primary-600 dark:text-primary-400">{{ number_format($order->remaining_amount, 2) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</span>
+                <span class="text-sm font-bold flex-shrink-0 ml-3 text-primary-600 dark:text-primary-400">{{ number_format($order->remaining_amount, 2) }} {{ __('messages.afn') }}</span>
             </a>
         @empty
             <div class="px-4 py-3 text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_outstanding') }}</div>
         @endforelse
-        @if ($receivables->hasPages())
-            <div class="px-4 py-2">{{ $receivables->links() }}</div>
+        @if ($receivablesAFN->hasPages())
+            <div class="px-4 py-2">{{ $receivablesAFN->links() }}</div>
         @endif
 
-        <div class="px-4 py-2 bg-danger-50 dark:bg-danger-900/10 text-xs font-semibold text-danger-700 dark:text-danger-300 border-t border-ink-100 dark:border-ink-700/30">{{ __('messages.payables') }}</div>
-        @forelse ($payables as $purchase)
+        <div class="px-4 py-2 bg-primary-50 dark:bg-primary-900/10 text-xs font-semibold text-primary-700 dark:text-primary-300">{{ __('messages.receivables') }} &middot; {{ __('messages.usd') }}</div>
+        @forelse ($receivablesUSD as $order)
+            <a href="{{ route('orders.show', $order) }}" class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0">
+                <div class="min-w-0">
+                    <div class="text-sm font-medium text-ink-800 dark:text-ink-200 truncate">{{ $order->party?->name ?? __('messages.unknown') }} — {{ __('messages.order') }} #{{ $order->id }}</div>
+                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$order->display_status) }}</div>
+                </div>
+                <span class="text-sm font-bold flex-shrink-0 ml-3 text-primary-600 dark:text-primary-400">{{ number_format($order->remaining_amount, 2) }} $</span>
+            </a>
+        @empty
+            <div class="px-4 py-3 text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_outstanding') }}</div>
+        @endforelse
+        @if ($receivablesUSD->hasPages())
+            <div class="px-4 py-2">{{ $receivablesUSD->links() }}</div>
+        @endif
+
+        <div class="px-4 py-2 bg-danger-50 dark:bg-danger-900/10 text-xs font-semibold text-danger-700 dark:text-danger-300 border-t border-ink-100 dark:border-ink-700/30">{{ __('messages.payables') }} &middot; {{ __('messages.afn') }}</div>
+        @forelse ($payablesAFN as $purchase)
             <a href="{{ route('purchases.show', $purchase) }}" class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0">
                 <div class="min-w-0">
                     <div class="text-sm font-medium text-ink-800 dark:text-ink-200 truncate">{{ $purchase->party?->name ?? __('messages.unknown') }} — {{ __('messages.purchase') }} #{{ $purchase->id }}</div>
                     <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$purchase->display_status) }}</div>
                 </div>
-                <span class="text-sm font-bold flex-shrink-0 ml-3 text-danger-600 dark:text-danger-400">{{ number_format($purchase->remaining_amount, 2) }} {{ $purchase->currency === 'USD' ? '$' : __('messages.afn') }}</span>
+                <span class="text-sm font-bold flex-shrink-0 ml-3 text-danger-600 dark:text-danger-400">{{ number_format($purchase->remaining_amount, 2) }} {{ __('messages.afn') }}</span>
             </a>
         @empty
             <div class="px-4 py-3 text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_outstanding') }}</div>
         @endforelse
-        @if ($payables->hasPages())
-            <div class="px-4 py-2">{{ $payables->links() }}</div>
+        @if ($payablesAFN->hasPages())
+            <div class="px-4 py-2">{{ $payablesAFN->links() }}</div>
+        @endif
+
+        <div class="px-4 py-2 bg-danger-50 dark:bg-danger-900/10 text-xs font-semibold text-danger-700 dark:text-danger-300 border-t border-ink-100 dark:border-ink-700/30">{{ __('messages.payables') }} &middot; {{ __('messages.usd') }}</div>
+        @forelse ($payablesUSD as $purchase)
+            <a href="{{ route('purchases.show', $purchase) }}" class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0">
+                <div class="min-w-0">
+                    <div class="text-sm font-medium text-ink-800 dark:text-ink-200 truncate">{{ $purchase->party?->name ?? __('messages.unknown') }} — {{ __('messages.purchase') }} #{{ $purchase->id }}</div>
+                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$purchase->display_status) }}</div>
+                </div>
+                <span class="text-sm font-bold flex-shrink-0 ml-3 text-danger-600 dark:text-danger-400">{{ number_format($purchase->remaining_amount, 2) }} $</span>
+            </a>
+        @empty
+            <div class="px-4 py-3 text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_outstanding') }}</div>
+        @endforelse
+        @if ($payablesUSD->hasPages())
+            <div class="px-4 py-2">{{ $payablesUSD->links() }}</div>
         @endif
     </div>
 
@@ -84,8 +116,14 @@
                 <h3 class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.recent_transactions') }}</h3>
             </div>
         </div>
+        <div id="pay-tx-tabs" class="flex gap-2 px-4 py-2.5 border-b border-ink-100 dark:border-ink-700/30">
+            <button type="button" data-filter="all" class="tab-btn px-3.5 py-1.5 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer bg-primary-600 text-white shadow-sm shadow-primary-600/30">{{ __('messages.all') }}</button>
+            <button type="button" data-filter="AFN" class="tab-btn px-3.5 py-1.5 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer bg-ink-100 dark:bg-ink-800 text-ink-500 dark:text-ink-400">{{ __('messages.afn') }}</button>
+            <button type="button" data-filter="USD" class="tab-btn px-3.5 py-1.5 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer bg-ink-100 dark:bg-ink-800 text-ink-500 dark:text-ink-400">{{ __('messages.usd') }}</button>
+        </div>
+        <div id="pay-tx-list">
         @forelse ($transactions as $tx)
-            <div class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0" data-currency="{{ $tx['currency'] }}">
                 <div class="flex items-center gap-3 min-w-0">
                     <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 {{ $tx['type'] === 'incoming' ? 'bg-primary-100 dark:bg-primary-900/30' : 'bg-danger-100 dark:bg-danger-900/30' }}">
                         @if ($tx['type'] === 'incoming')
@@ -104,8 +142,46 @@
         @empty
             <div class="empty-state"><p class="text-sm text-ink-500 dark:text-ink-400">{{ __('messages.no_transactions') }}</p></div>
         @endforelse
+        </div>
+        <div id="pay-tx-empty" class="empty-state" style="display:none;"><p class="text-sm text-ink-500 dark:text-ink-400">{{ __('messages.no_transactions') }}</p></div>
     </div>
     @if ($transactions->hasPages())
         <div class="mt-4">{{ $transactions->links() }}</div>
     @endif
 @endsection
+
+@push('scripts')
+    @once
+        <script>
+            (function () {
+                const tabs = document.querySelectorAll('#pay-tx-tabs [data-filter]');
+                if (!tabs.length) return;
+                const ACTIVE = ['bg-primary-600', 'text-white', 'shadow-sm', 'shadow-primary-600/30'];
+                const INACTIVE = ['bg-ink-100', 'dark:bg-ink-800', 'text-ink-500', 'dark:text-ink-400'];
+                tabs.forEach(function (tab) {
+                    tab.addEventListener('click', function () {
+                        const filter = tab.dataset.filter;
+                        tabs.forEach(function (t) {
+                            if (t === tab) {
+                                ACTIVE.forEach(function (c) { t.classList.add(c); });
+                                INACTIVE.forEach(function (c) { t.classList.remove(c); });
+                            } else {
+                                INACTIVE.forEach(function (c) { t.classList.add(c); });
+                                ACTIVE.forEach(function (c) { t.classList.remove(c); });
+                            }
+                        });
+                        document.querySelectorAll('#pay-tx-list [data-currency]').forEach(function (row) {
+                            row.style.display = (filter === 'all' || row.dataset.currency === filter) ? '' : 'none';
+                        });
+                        const rows = document.querySelectorAll('#pay-tx-list [data-currency]');
+                        const visible = Array.prototype.filter.call(rows, function (row) {
+                            return row.style.display !== 'none';
+                        }).length;
+                        const empty = document.getElementById('pay-tx-empty');
+                        if (empty) { empty.style.display = visible === 0 ? '' : 'none'; }
+                    });
+                });
+            })();
+        </script>
+    @endonce
+@endpush

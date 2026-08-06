@@ -9,7 +9,7 @@ class Product extends Model
 {
     use BelongsToUser;
 
-    protected $fillable = ['name', 'barcode', 'category_id', 'unit_id', 'price', 'stock', 'description'];
+    protected $fillable = ['name', 'barcode', 'lot_number', 'category_id', 'unit_id', 'price', 'stock', 'description'];
 
     public function category()
     {

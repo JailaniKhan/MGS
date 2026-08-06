@@ -14,19 +14,7 @@
             @csrf
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.customer') }}</label>
-                <select name="person" required class="form-select">
-                    <option value="">-- {{ __('messages.select_customer') }}</option>
-                    <optgroup label="{{ __('messages.customers') }}">
-                        @foreach ($customers as $customer)
-                            <option value="customer:{{ $customer->id }}" {{ old('person') == 'customer:'.$customer->id ? 'selected' : '' }}>{{ $customer->name }} ({{ $customer->phone }})</option>
-                        @endforeach
-                    </optgroup>
-                    <optgroup label="{{ __('messages.suppliers') }}">
-                        @foreach ($suppliers as $supplier)
-                            <option value="supplier:{{ $supplier->id }}" {{ old('person') == 'supplier:'.$supplier->id ? 'selected' : '' }}>{{ $supplier->name }} ({{ $supplier->phone ?? '' }})</option>
-                        @endforeach
-                    </optgroup>
-                </select>
+                <x-searchable-select name="person" required placeholder="{{ __('messages.select_customer') }}" :selected="old('person')" :options="$personOptions" />
                 @error('person') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
 
@@ -66,14 +54,9 @@
                 <label class="form-label">{{ __('messages.products') }}</label>
                 <div id="products-container" class="space-y-2">
                     <div class="product-row flex items-center gap-2 flex-wrap">
-                        <select name="products[0][product_id]" required class="product-select form-select flex-1">
-                            <option value=""> {{ __('messages.product') }} </option>
-                            @foreach ($products as $product)
-                                <option value="{{ $product->id }}" data-price="{{ $product->price }}" data-stock="{{ $product->stock }}">
-                                    {{ $product->name }} ({{ __('messages.stock') }}: {{ $product->stock }}@if($product->unit) {{ $product->unit->short_name ?? $product->unit->name }}@endif)
-                                </option>
-                            @endforeach
-                        </select>
+                        <div class="flex-1 min-w-[180px]">
+                            <x-searchable-select name="products[0][product_id]" required select-class="product-select" placeholder="{{ __('messages.product') }}" :options="$productOptions" />
+                        </div>
                         <input type="number" name="products[0][unit_price]" min="0.01" step="0.01" value="" placeholder="{{ __('messages.price') }}" required class="product-price w-24 form-input text-center">
                         <input type="number" name="products[0][quantity]" min="1" value="1" required class="product-qty w-20 form-input text-center">
                         <input type="text" name="products[0][lot_number]" placeholder="{{ __('messages.lot_number') }}" class="product-lot w-24 form-input text-center" list="lot-suggestions">
@@ -128,7 +111,15 @@
                 priceInput.value = isNaN(price) ? '' : price;
             }
 
+            const productLot = select.options[select.selectedIndex].dataset.lot;
+            if (productLot && ! lotInput.value) {
+                lotInput.value = productLot;
+            }
+
             const lots = productLots[select.value] || [];
+            if (productLot && ! lots.includes(productLot)) {
+                lots.unshift(productLot);
+            }
             const datalist = document.getElementById('lot-suggestions');
             datalist.innerHTML = lots.map(l => `<option value="${l}">`).join('');
             if (lots.length) {
@@ -197,8 +188,13 @@
         newRow.querySelector('.product-lot').name = `products[${productIndex}][lot_number]`;
         newRow.querySelector('.product-lot').value = '';
 
-        // Ensure flex-wrap is maintained on cloned rows
         newRow.classList.add('flex-wrap');
+
+        const searchable = newRow.querySelector('[data-searchable]');
+        if (searchable) {
+            delete searchable.dataset.searchableInitialized;
+            initSearchableSelect(searchable);
+        }
 
         newRow.querySelector('.product-select').addEventListener('change', function() {
             applyProductDefaults(this.closest('.product-row'));

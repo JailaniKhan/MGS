@@ -47,7 +47,35 @@ class OrderController extends Controller
 
         $defaultTaxRate = Setting::get('default_tax_rate', '0');
         $defaultTaxType = Setting::get('default_tax_type', 'exclusive');
-        return view('orders.create', compact('customers', 'suppliers', 'products', 'productLots', 'defaultTaxRate', 'defaultTaxType'));
+
+        $personOptions = collect($customers)
+            ->map(fn ($customer) => [
+                'value' => 'customer:' . $customer->id,
+                'label' => $customer->name,
+                'sublabel' => $customer->phone,
+                'group' => __('messages.customers'),
+            ])
+            ->concat($suppliers->map(fn ($supplier) => [
+                'value' => 'supplier:' . $supplier->id,
+                'label' => $supplier->name,
+                'sublabel' => $supplier->phone,
+                'group' => __('messages.suppliers'),
+            ]))
+            ->values()
+            ->all();
+
+        $productOptions = $products
+            ->map(fn ($product) => [
+                'value' => $product->id,
+                'label' => $product->name,
+                'sublabel' => __('messages.stock') . ': ' . $product->stock . ($product->unit ? ' ' . ($product->unit->short_name ?? $product->unit->name) : ''),
+                'price' => number_format((float) $product->price),
+                'lot' => $product->lot_number,
+            ])
+            ->values()
+            ->all();
+
+        return view('orders.create', compact('customers', 'suppliers', 'products', 'productLots', 'defaultTaxRate', 'defaultTaxType', 'personOptions', 'productOptions'));
     }
 
     public function store(Request $request)

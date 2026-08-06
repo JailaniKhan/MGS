@@ -33,7 +33,35 @@ class PurchaseController extends Controller
         $products = Product::with('category', 'unit')->orderBy('name')->get();
         $defaultTaxRate = Setting::get('default_tax_rate', '0');
         $defaultTaxType = Setting::get('default_tax_type', 'exclusive');
-        return view('purchases.create', compact('suppliers', 'customers', 'products', 'defaultTaxRate', 'defaultTaxType'));
+
+        $personOptions = collect($suppliers)
+            ->map(fn ($supplier) => [
+                'value' => 'supplier:' . $supplier->id,
+                'label' => $supplier->name,
+                'sublabel' => $supplier->phone,
+                'group' => __('messages.suppliers'),
+            ])
+            ->concat($customers->map(fn ($customer) => [
+                'value' => 'customer:' . $customer->id,
+                'label' => $customer->name,
+                'sublabel' => $customer->phone,
+                'group' => __('messages.customers'),
+            ]))
+            ->values()
+            ->all();
+
+        $productOptions = $products
+            ->map(fn ($product) => [
+                'value' => $product->id,
+                'label' => $product->name,
+                'sublabel' => __('messages.stock') . ': ' . $product->stock . ($product->unit ? ' ' . ($product->unit->short_name ?? $product->unit->name) : ''),
+                'price' => number_format((float) $product->price),
+                'lot' => $product->lot_number,
+            ])
+            ->values()
+            ->all();
+
+        return view('purchases.create', compact('suppliers', 'customers', 'products', 'defaultTaxRate', 'defaultTaxType', 'personOptions', 'productOptions'));
     }
 
     public function store(Request $request)
@@ -109,6 +137,15 @@ class PurchaseController extends Controller
         ]);
 
         $purchase->purchaseItems()->createMany($purchaseItems);
+
+        // A purchase with a lot number sets the product's current lot forward.
+        foreach ($purchaseItems as $item) {
+            if (! empty($item['lot_number'])) {
+                Product::where('id', $item['product_id'])
+                    ->where('lot_number', '<>', $item['lot_number'])
+                    ->update(['lot_number' => $item['lot_number']]);
+            }
+        }
 
         foreach ($purchaseItems as $item) {
             StockMovement::create([

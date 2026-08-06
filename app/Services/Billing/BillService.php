@@ -204,7 +204,7 @@ class BillService
             'remindable_type' => $party ? get_class($party) : null,
             'remindable_id' => $party?->id,
             'amount' => $amount,
-            'currency' => $currency,
+            'currency' => $currency ?: 'AFN',
             'channel' => 'whatsapp',
             'message' => $message,
             'status' => 'pending',

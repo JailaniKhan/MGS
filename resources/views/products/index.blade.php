@@ -19,7 +19,12 @@
                         </div>
                         <div class="min-w-0">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $product->name }}</div>
-                            <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $product->category->name }}</div>
+                            <div class="text-[11px] text-ink-500 dark:text-ink-400">
+                                {{ $product->category->name }}
+                                @if($product->lot_number)
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-full bg-ink-100 dark:bg-ink-800 text-[10px] font-semibold text-ink-500 dark:text-ink-400 ms-1">{{ __('messages.lot_number') }}: {{ $product->lot_number }}</span>
+                                @endif
+                            </div>
                         </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0 ml-3">

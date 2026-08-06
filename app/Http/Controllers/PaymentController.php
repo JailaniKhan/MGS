@@ -60,31 +60,49 @@ class PaymentController extends Controller
                 ];
             });
 
-        $outgoingTransactions = PurchasePayment::with(['purchase.customer', 'purchase.supplier'])
-            ->latest()
-            ->limit($feedLimit)
-            ->get()
-            ->map(function ($p) {
-                return [
-                    'type' => 'outgoing',
-                    'amount' => $p->amount,
-                    'currency' => $p->currency,
-                    'description' => ($p->purchase?->party?->name ?? __('messages.unknown')) . ' - ' . __('messages.purchase') . ' #' . $p->purchase_id,
-                    'notes' => $p->notes,
-                    'date' => $p->created_at,
-                ];
-            });
+        $outgoingTransactions = PurchasePayment::latest()->limit($feedLimit)->get();
 
-        // Ledger transactions
+        // Party names resolve without user scopes: purchase payments and ledger
+        // payments are shop-wide (no user_id), so the people they reference may
+        // belong to any user. Load names once for both feeds.
+        $purchases = Purchase::withoutGlobalScopes()
+            ->whereIn('id', $outgoingTransactions->pluck('purchase_id')->unique())
+            ->get(['id', 'person_type', 'person_id']);
+
+        $purchaseParty = $purchases->mapWithKeys(function ($purchase) {
+            return [$purchase->id => ['type' => $purchase->person_type, 'id' => $purchase->person_id]];
+        });
+
         $ledgerEntries = PartyPayment::latest()->limit($feedLimit)->get();
-        // Load person names efficiently based on person_type
-        $customerIds = $ledgerEntries->where('person_type', 'customer')->pluck('person_id')->unique();
-        $supplierIds = $ledgerEntries->where('person_type', 'supplier')->pluck('person_id')->unique();
-        $customerNames = Customer::whereIn('id', $customerIds)->pluck('name', 'id');
-        $supplierNames = Supplier::whereIn('id', $supplierIds)->pluck('name', 'id');
-        
+
+        $customerIds = $purchases->where('person_type', 'customer')->pluck('person_id')
+            ->concat($ledgerEntries->where('person_type', 'customer')->pluck('person_id'))
+            ->unique();
+        $supplierIds = $purchases->where('person_type', 'supplier')->pluck('person_id')
+            ->concat($ledgerEntries->where('person_type', 'supplier')->pluck('person_id'))
+            ->unique();
+        $customerNames = Customer::withoutGlobalScopes()->whereIn('id', $customerIds)->pluck('name', 'id');
+        $supplierNames = Supplier::withoutGlobalScopes()->whereIn('id', $supplierIds)->pluck('name', 'id');
+
+        $purchasePartyNames = $purchaseParty->map(function ($ref) use ($customerNames, $supplierNames) {
+            return $ref['type'] === 'customer'
+                ? ($customerNames[$ref['id']] ?? null)
+                : ($supplierNames[$ref['id']] ?? null);
+        });
+
+        $outgoingTransactions = $outgoingTransactions->map(function ($p) use ($purchasePartyNames) {
+            return [
+                'type' => 'outgoing',
+                'amount' => $p->amount,
+                'currency' => $p->currency,
+                'description' => ($purchasePartyNames[$p->purchase_id] ?? __('messages.unknown')) . ' - ' . __('messages.purchase') . ' #' . $p->purchase_id,
+                'notes' => $p->notes,
+                'date' => $p->created_at,
+            ];
+        });
+
         $ledgerTransactions = $ledgerEntries->map(function ($entry) use ($customerNames, $supplierNames) {
-            $personName = $entry->person_type === 'customer' 
+            $personName = $entry->person_type === 'customer'
                 ? ($customerNames[$entry->person_id] ?? __('messages.unknown'))
                 : ($supplierNames[$entry->person_id] ?? __('messages.unknown'));
             $typeLabel = $entry->type === 'payment_received' ? 'incoming' : 'outgoing';
@@ -93,7 +111,7 @@ class PaymentController extends Controller
                 'amount' => $entry->amount,
                 'currency' => $entry->currency,
                 'description' => $personName . ' (' . __('messages.ledger_close') . ')',
-                'notes' => ($entry->notes ? $entry->notes : '') . ' - ' . __('messages.ledger'),
+                'notes' => $entry->notes,
                 'date' => $entry->created_at,
             ];
         });
@@ -107,30 +125,43 @@ class PaymentController extends Controller
         $transactions = $this->paginateCollection($allTransactions, self::PER_PAGE, 'tx_page');
 
         // Outstanding balances: receivables (orders — both customer and supplier) and
-        // payables (purchases). These were previously absent from the payments page, so
-        // supplier-created orders never showed up here.
-        $receivables = $this->paginateCollection(
-            Order::with(['customer', 'supplier'])
-                ->where('status', '!=', 'cancelled')
-                ->latest()
-                ->limit(100)
-                ->get()
-                ->filter(fn ($o) => $o->remaining_amount > 0)
-                ->values(),
+        // payables (purchases), split per currency so the page can show them separately.
+        $outstandingOrders = Order::with(['customer', 'supplier'])
+            ->where('status', '!=', 'cancelled')
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->filter(fn ($o) => $o->remaining_amount > 0);
+
+        $receivablesAFN = $this->paginateCollection(
+            $outstandingOrders->filter(fn ($o) => $o->currency === 'AFN')->values(),
             self::PER_PAGE,
-            'recv_page'
+            'recv_afn_page'
         );
 
-        $payables = $this->paginateCollection(
-            Purchase::with(['customer', 'supplier'])
-                ->where('status', '!=', 'cancelled')
-                ->latest()
-                ->limit(100)
-                ->get()
-                ->filter(fn ($p) => $p->remaining_amount > 0)
-                ->values(),
+        $receivablesUSD = $this->paginateCollection(
+            $outstandingOrders->filter(fn ($o) => $o->currency === 'USD')->values(),
             self::PER_PAGE,
-            'pay_page'
+            'recv_usd_page'
+        );
+
+        $outstandingPurchases = Purchase::with(['customer', 'supplier'])
+            ->where('status', '!=', 'cancelled')
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->filter(fn ($p) => $p->remaining_amount > 0);
+
+        $payablesAFN = $this->paginateCollection(
+            $outstandingPurchases->filter(fn ($p) => $p->currency === 'AFN')->values(),
+            self::PER_PAGE,
+            'pay_afn_page'
+        );
+
+        $payablesUSD = $this->paginateCollection(
+            $outstandingPurchases->filter(fn ($p) => $p->currency === 'USD')->values(),
+            self::PER_PAGE,
+            'pay_usd_page'
         );
 
         return view('payments.index', compact(
@@ -138,7 +169,8 @@ class PaymentController extends Controller
             'outgoingAFN', 'outgoingUSD',
             'balanceAFN', 'balanceUSD',
             'transactions',
-            'receivables', 'payables'
+            'receivablesAFN', 'receivablesUSD',
+            'payablesAFN', 'payablesUSD'
         ));
     }
 

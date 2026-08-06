@@ -35,14 +35,11 @@ class CashbookController extends Controller
         });
 
         // Group the cashbook entries by the person they reference so the page
-        // can show one clickable row per customer/supplier. Entries without a
-        // linked person are kept separate in `$uncategorized`.
+        // can show one clickable row per customer/supplier.
         $people = [];
-        $uncategorized = collect();
 
         foreach ($journals as $journal) {
             if (! $journal->reference_type || ! $journal->reference) {
-                $uncategorized->push($journal);
                 continue;
             }
 
@@ -77,7 +74,6 @@ class CashbookController extends Controller
 
         return view('cashbook.index', [
             'people' => $people,
-            'uncategorized' => $uncategorized,
             'cashAFN' => $cashAFN,
             'cashUSD' => $cashUSD,
             'cashUnbalanced' => bccomp($cashAFN, '0', 2) === -1 || bccomp($cashUSD, '0', 2) === -1,
@@ -150,6 +146,7 @@ class CashbookController extends Controller
         foreach ($orders as $order) {
             $transactions->push((object) [
                 'kind' => 'order',
+                'id' => $order->id,
                 'direction' => 'in',
                 'label' => __('messages.order') . ' #' . $order->id,
                 'date' => $order->created_at,
@@ -162,6 +159,7 @@ class CashbookController extends Controller
         foreach ($purchases as $purchase) {
             $transactions->push((object) [
                 'kind' => 'purchase',
+                'id' => $purchase->id,
                 'direction' => 'out',
                 'label' => __('messages.purchase') . ' #' . $purchase->id,
                 'date' => $purchase->created_at,

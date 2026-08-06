@@ -6,13 +6,19 @@
         <div class="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-white/10"></div>
         <div class="absolute -right-2 top-10 w-16 h-16 rounded-full bg-white/5"></div>
         <p class="relative text-[11px] font-semibold uppercase tracking-wider text-white/80">{{ __('messages.net_balance') }}</p>
-        <p class="relative text-3xl font-extrabold tabular-nums mt-1">
-            {{ number_format(($totalRevenueAFN + $totalRevenueUSD * $rate) - ($totalExpenseAFN + $totalExpenseUSD * $rate)) }}
-            <span class="text-base font-bold text-white/70">{{ __('messages.afn') }}</span>
-        </p>
-        <div class="relative flex items-center gap-4 mt-4 text-[11px] font-medium text-white/90">
-            <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-white/80"></span>{{ __('messages.revenue') }}: {{ number_format($totalRevenueAFN + $totalRevenueUSD * $rate) }}</span>
-            <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-white/50"></span>{{ __('messages.expenses') }}: {{ number_format($totalExpenseAFN + $totalExpenseUSD * $rate) }}</span>
+        <div class="relative flex items-end gap-6 mt-2">
+            <div>
+                <p class="text-3xl font-extrabold tabular-nums">{{ number_format($totalRevenueAFN - $totalExpenseAFN) }}</p>
+                <p class="text-[11px] font-semibold text-white/70 mt-0.5">{{ __('messages.afn') }}</p>
+            </div>
+            <div>
+                <p class="text-3xl font-extrabold tabular-nums">{{ number_format($totalRevenueUSD - $totalExpenseUSD) }}</p>
+                <p class="text-[11px] font-semibold text-white/70 mt-0.5">{{ __('messages.usd') }}</p>
+            </div>
+        </div>
+        <div class="relative mt-4 space-y-1.5 text-[11px] font-medium text-white/90">
+            <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-white/80"></span>{{ __('messages.revenue') }}: {{ number_format($totalRevenueAFN) }} {{ __('messages.afn') }} &middot; {{ number_format($totalRevenueUSD) }} {{ __('messages.usd') }}</span>
+            <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-white/50"></span>{{ __('messages.expenses') }}: {{ number_format($totalExpenseAFN) }} {{ __('messages.afn') }} &middot; {{ number_format($totalExpenseUSD) }} {{ __('messages.usd') }}</span>
         </div>
     </div>
 
@@ -39,14 +45,24 @@
     <!-- Summary Metrics -->
     <div class="grid-responsive-3 mb-6">
         <div class="metric-tile">
-            <span class="metric-label">{{ __('messages.revenue') }}</span>
-            <span class="metric-value text-primary-600 dark:text-primary-400">{{ number_format($totalRevenueAFN + $totalRevenueUSD * $rate) }}</span>
+            <span class="metric-label">{{ __('messages.revenue') }} &middot; {{ __('messages.afn') }}</span>
+            <span class="metric-value text-primary-600 dark:text-primary-400">{{ number_format($totalRevenueAFN) }}</span>
             <span class="text-[9px] text-ink-400">{{ __('messages.afn') }}</span>
         </div>
         <div class="metric-tile">
-            <span class="metric-label">{{ __('messages.expenses') }}</span>
-            <span class="metric-value text-danger-500">{{ number_format($totalExpenseAFN + $totalExpenseUSD * $rate) }}</span>
+            <span class="metric-label">{{ __('messages.revenue') }} &middot; {{ __('messages.usd') }}</span>
+            <span class="metric-value text-primary-600 dark:text-primary-400">{{ number_format($totalRevenueUSD) }}</span>
+            <span class="text-[9px] text-ink-400">{{ __('messages.usd') }}</span>
+        </div>
+        <div class="metric-tile">
+            <span class="metric-label">{{ __('messages.expenses') }} &middot; {{ __('messages.afn') }}</span>
+            <span class="metric-value text-danger-500">{{ number_format($totalExpenseAFN) }}</span>
             <span class="text-[9px] text-ink-400">{{ __('messages.afn') }}</span>
+        </div>
+        <div class="metric-tile">
+            <span class="metric-label">{{ __('messages.expenses') }} &middot; {{ __('messages.usd') }}</span>
+            <span class="metric-value text-danger-500">{{ number_format($totalExpenseUSD) }}</span>
+            <span class="text-[9px] text-ink-400">{{ __('messages.usd') }}</span>
         </div>
         <div class="metric-tile">
             <span class="metric-label">{{ __('messages.pending') }}</span>
@@ -110,7 +126,7 @@
                             <x-icon name="user" class="w-4 h-4 text-secondary-600 dark:text-secondary-400"/>
                         </div>
                         <div class="min-w-0">
-                            <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $order->party?->name }}</div>
+                            <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $order->party?->name ?? __('messages.unknown') }}</div>
                             <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $order->created_at->format('d M') }}</div>
                         </div>
                     </div>
@@ -143,31 +159,45 @@
     <div class="card overflow-hidden mb-3">
         <div class="section-header">
             <div class="w-1 h-4 rounded-full bg-primary-500"></div>
-            <span class="section-header-title">{{ __('messages.top_debtors') }}</span>
+            <span class="section-header-title">{{ __('messages.top_debtors_creditors') }}</span>
             <a href="{{ route('ledger.index') }}" class="ml-auto text-[10px] font-bold text-primary-600 dark:text-primary-400">
                 {{ __('messages.view_all') }}
             </a>
         </div>
         <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
             @forelse ($topDebtors as $debtor)
-                <a href="{{ route('ledger.show', ['customer', $debtor->id]) }}" class="list-row">
+                @php
+                    $overall = $debtor->pending_afn + $debtor->pending_usd * $rate;
+                    $isDebtor = $overall >= 0;
+                @endphp
+                <a href="{{ route('ledger.show', [$debtor->type, $debtor->id]) }}" class="list-row">
                     <div class="flex items-center gap-3 min-w-0">
-                        <div class="w-8 h-8 rounded-lg bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center flex-shrink-0">
-                            <x-icon name="user" class="w-4 h-4 text-danger-600 dark:text-danger-400"/>
+                        <div class="w-8 h-8 rounded-lg {{ $isDebtor ? 'bg-danger-100 dark:bg-danger-900/30' : 'bg-accent-100 dark:bg-accent-900/30' }} flex items-center justify-center flex-shrink-0">
+                            <x-icon name="user" class="w-4 h-4 {{ $isDebtor ? 'text-danger-600 dark:text-danger-400' : 'text-accent-600 dark:text-accent-400' }}"/>
                         </div>
                         <div class="min-w-0">
-                            <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $debtor->name }}</div>
+                            <div class="flex items-center gap-1.5">
+                                <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $debtor->name }}</div>
+                                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-ink-100 dark:bg-ink-800 text-ink-500 dark:text-ink-400 capitalize">{{ $debtor->type }}</span>
+                            </div>
                             <div class="flex items-center gap-2 text-[11px] text-ink-500 dark:text-ink-400">
-                                @if ($debtor->pending_afn > 0)
-                                    <span class="text-danger-600 dark:text-danger-400 font-semibold">{{ number_format($debtor->pending_afn) }} {{ __('messages.afn') }}</span>
+                                @if ($debtor->pending_afn != 0)
+                                    <span class="font-semibold {{ $debtor->pending_afn > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-accent-600 dark:text-accent-400' }}">
+                                        {{ $debtor->pending_afn > 0 ? '+' : '-' }}{{ number_format(abs($debtor->pending_afn)) }} {{ __('messages.afn') }}
+                                    </span>
                                 @endif
-                                @if ($debtor->pending_usd > 0)
-                                    <span class="text-danger-600 dark:text-danger-400 font-semibold">{{ number_format($debtor->pending_usd) }}$</span>
+                                @if ($debtor->pending_usd != 0)
+                                    <span class="font-semibold {{ $debtor->pending_usd > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-accent-600 dark:text-accent-400' }}">
+                                        {{ $debtor->pending_usd > 0 ? '+' : '-' }}{{ number_format(abs($debtor->pending_usd)) }}$
+                                    </span>
                                 @endif
                             </div>
                         </div>
                     </div>
-                    <x-icon name="chevron-right" class="w-4 h-4 text-ink-400 flex-shrink-0" strokeWidth="2"/>
+                    <div class="flex items-center gap-2 flex-shrink-0 ml-3">
+                        <span class="badge {{ $isDebtor ? 'badge-danger' : 'badge-warning' }}">{{ __($isDebtor ? 'messages.owes_you' : 'messages.you_owe') }}</span>
+                        <x-icon name="chevron-right" class="w-4 h-4 text-ink-400 flex-shrink-0" strokeWidth="2"/>
+                    </div>
                 </a>
             @empty
                 <x-empty-state description="{{ __('messages.all_settled') }}">
@@ -318,34 +348,64 @@
         revenueGradient.addColorStop(0, 'rgba(15, 157, 114, 0.22)');
         revenueGradient.addColorStop(1, 'rgba(15, 157, 114, 0)');
 
+        const usdGradient = revenueCtx.createLinearGradient(0, 0, 0, 160);
+        usdGradient.addColorStop(0, 'rgba(59, 130, 246, 0.18)');
+        usdGradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+
         new Chart(revenueCtx, {
             type: 'line',
             data: {
                 labels: @json($weeklyRevenue['labels']),
-                datasets: [{
-                    label: '{{ __('messages.revenue') }} ({{ __('messages.afn') }})',
-                    data: @json($weeklyRevenue['datasets'][0]['data']),
-                    backgroundColor: revenueGradient,
-                    borderColor: '#0F9D72',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true,
-                    pointBackgroundColor: '#0F9D72',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
-                }]
+                datasets: [
+                    {
+                        label: '{{ __('messages.revenue') }} ({{ __('messages.afn') }})',
+                        data: @json($weeklyRevenue['data_afn']),
+                        backgroundColor: revenueGradient,
+                        borderColor: '#0F9D72',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#0F9D72',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: '{{ __('messages.revenue') }} ({{ __('messages.usd') }})',
+                        data: @json($weeklyRevenue['data_usd']),
+                        backgroundColor: usdGradient,
+                        borderColor: '#3B82F6',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: false,
+                        pointBackgroundColor: '#3B82F6',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    }
+                ]
             },
             options: {
                 ...commonOptions,
                 plugins: {
                     ...commonOptions.plugins,
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            boxWidth: 8,
+                            boxHeight: 8,
+                            usePointStyle: true,
+                            font: { size: 9 }
+                        }
+                    },
                     tooltip: {
                         ...commonOptions.plugins.tooltip,
                         callbacks: {
                             label: function(context) {
-                                return context.parsed.y.toLocaleString() + ' {{ __('messages.afn') }}';
+                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
                             }
                         }
                     }
@@ -359,32 +419,44 @@
             type: 'bar',
             data: {
                 labels: @json($weeklyExpenses['labels']),
-                datasets: [{
-                    label: '{{ __('messages.expenses') }} ({{ __('messages.afn') }})',
-                    data: @json($weeklyExpenses['datasets'][0]['data']),
-                    backgroundColor: [
-                        'rgba(239, 68, 68, 0.6)',
-                        'rgba(239, 68, 68, 0.4)',
-                        'rgba(239, 68, 68, 0.3)',
-                        'rgba(239, 68, 68, 0.5)',
-                        'rgba(239, 68, 68, 0.6)',
-                        'rgba(239, 68, 68, 0.3)',
-                        'rgba(239, 68, 68, 0.5)'
-                    ],
-                    borderColor: '#ef4444',
-                    borderWidth: 0,
-                    borderRadius: 3
-                }]
+                datasets: [
+                    {
+                        label: '{{ __('messages.expenses') }} ({{ __('messages.afn') }})',
+                        data: @json($weeklyExpenses['data_afn']),
+                        backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                        borderColor: '#ef4444',
+                        borderWidth: 0,
+                        borderRadius: 3
+                    },
+                    {
+                        label: '{{ __('messages.expenses') }} ({{ __('messages.usd') }})',
+                        data: @json($weeklyExpenses['data_usd']),
+                        backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                        borderColor: '#3B82F6',
+                        borderWidth: 0,
+                        borderRadius: 3
+                    }
+                ]
             },
             options: {
                 ...commonOptions,
                 plugins: {
                     ...commonOptions.plugins,
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            boxWidth: 8,
+                            boxHeight: 8,
+                            usePointStyle: true,
+                            font: { size: 9 }
+                        }
+                    },
                     tooltip: {
                         ...commonOptions.plugins.tooltip,
                         callbacks: {
                             label: function(context) {
-                                return context.parsed.y.toLocaleString() + ' {{ __('messages.afn') }}';
+                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
                             }
                         }
                     }

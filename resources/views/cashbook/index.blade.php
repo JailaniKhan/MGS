@@ -75,38 +75,4 @@
 @if ($people->hasPages())
     <div class="mt-3 mb-4">{{ $people->links() }}</div>
 @endif
-
-@if($uncategorized->isNotEmpty())
-    <h3 class="text-xs font-semibold uppercase tracking-wide text-ink-500 dark:text-ink-400 mt-4 mb-2 page-enter">{{ __('messages.uncategorized') }}</h3>
-    <div class="card overflow-hidden page-enter" style="animation-delay: 0.1s;">
-        @foreach ($uncategorized as $journal)
-            <div class="list-row">
-                <div class="flex items-center gap-3 min-w-0 flex-1">
-                    <div class="w-9 h-9 rounded-xl {{ $journal->type === 'in' ? 'bg-primary-500 text-white' : 'bg-danger-500 text-white' }} flex items-center justify-center flex-shrink-0 shadow-sm">
-                        @if($journal->type === 'in')
-                        <x-icon name="plus" class="w-4 h-4 text-white"/>
-                        @else
-                        <x-icon name="minus" class="w-4 h-4 text-white"/>
-                        @endif
-                    </div>
-                    <div class="min-w-0">
-                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $journal->description }}</div>
-                        <div class="text-[11px] text-ink-500 dark:text-ink-400">
-                            {{ $journal->transaction_date->format('d M Y') }}
-                        </div>
-                        @if($journal->notes)
-                            <div class="text-[10px] text-ink-400 mt-0.5">{{ $journal->notes }}</div>
-                        @endif
-                    </div>
-                </div>
-                <div class="text-right flex-shrink-0 ml-3">
-                    <div class="text-sm font-bold {{ $journal->type === 'in' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">
-                        {{ $journal->type === 'in' ? '+' : '-' }}{{ number_format((float) $journal->total_amount, 2) }}
-                    </div>
-                    <div class="text-[10px] text-ink-400">{{ $journal->currency }}</div>
-                </div>
-            </div>
-        @endforeach
-    </div>
-@endif
 @endsection

@@ -138,6 +138,10 @@ class LedgerController extends Controller
             'notes' => 'nullable|string|max:500',
         ]);
 
+        $person = $type === 'customer'
+            ? Customer::findOrFail($id)
+            : Supplier::findOrFail($id);
+
         $entryType = $type === 'customer' ? 'payment_received' : 'payment_made';
 
         PartyPayment::create([

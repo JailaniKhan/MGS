@@ -29,23 +29,19 @@
                 @error('barcode') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
             <div class="mb-4">
+                <label class="form-label">{{ __('messages.lot_number') }}</label>
+                <input type="text" name="lot_number" value="{{ old('lot_number') }}" class="form-input" placeholder="{{ __('messages.lot_auto_generate') }}">
+                <p class="text-[10px] text-ink-400 mt-1">{{ __('messages.lot_help') }}</p>
+                @error('lot_number') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+            </div>
+            <div class="mb-4">
                 <label class="form-label">{{ __('messages.category') }}</label>
-                <select name="category_id" required class="form-select">
-                    <option value="">{{ __('messages.select_option') }}</option>
-                    @foreach ($categories as $category)
-                        <option value="{{ $category->id }}" {{ old('category_id') == $category->id ? 'selected' : '' }}>{{ $category->name }}</option>
-                    @endforeach
-                </select>
+                <x-searchable-select name="category_id" required placeholder="{{ __('messages.select_option') }}" :selected="old('category_id')" :options="$categoryOptions" />
                 @error('category_id') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.unit') }}</label>
-                <select name="unit_id" class="form-select">
-                    <option value="">{{ __('messages.select_option') }}</option>
-                    @foreach ($units as $unit)
-                        <option value="{{ $unit->id }}" {{ old('unit_id') == $unit->id ? 'selected' : '' }}>{{ $unit->name }} @if($unit->short_name)({{ $unit->short_name }})@endif</option>
-                    @endforeach
-                </select>
+                <x-searchable-select name="unit_id" placeholder="{{ __('messages.select_option') }}" :selected="old('unit_id')" :options="$unitOptions" />
                 @error('unit_id') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
             <div class="grid grid-cols-2 gap-3 mb-4">
