@@ -32,3 +32,17 @@ Thumbs.db
 
 # OpenWA runtime bundle (node_modules, node binary, env secrets) - extracted by native build
 /bootstrap/openwa/
+
+# Built release artifacts
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Local scratch / build scripts
+/*.bat
+/*.html
+/.Error*.txt
+/massage*.txt
+/tmp_*.php
+/openwa_test.php
