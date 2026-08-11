@@ -2,13 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\OrderReturn;
 use App\Models\Order;
-use App\Models\OrderReturnItem;
-use App\Models\Product;
-use App\Models\StockMovement;
+use App\Models\OrderReturn;
+use App\Models\Setting;
+use App\Services\Sales\ReturnService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class OrderReturnController extends Controller
 {
@@ -25,10 +23,11 @@ class OrderReturnController extends Controller
     public function create()
     {
         $orders = Order::with('orderItems.product')->orderBy('created_at', 'desc')->get();
+
         return view('orders.returns.create', compact('orders'));
     }
 
-    public function store(Request $request)
+    public function store(Request $request, ReturnService $returnService)
     {
         $validated = $request->validate([
             'order_id' => 'required|exists:orders,id',
@@ -43,48 +42,14 @@ class OrderReturnController extends Controller
 
         $order = Order::with('orderItems.product')->findOrFail($validated['order_id']);
 
-        $subtotal = 0;
-        $returnItems = [];
-
-        foreach ($validated['products'] as $item) {
-            $product = Product::findOrFail($item['product_id']);
-            $lineTotal = $item['unit_price'] * $item['quantity'];
-            $subtotal += $lineTotal;
-
-            $returnItems[] = [
-                'product_id' => $product->id,
-                'quantity' => $item['quantity'],
-                'unit_price' => $item['unit_price'],
-                'subtotal' => $lineTotal,
-            ];
-
-            $product->increment('stock', $item['quantity']);
-        }
-
-        $orderReturn = OrderReturn::create([
-            'order_id' => $validated['order_id'],
-            'customer_id' => $order->customer_id,
-            'return_date' => $validated['return_date'],
-            'reason' => $validated['reason'],
-            'total_amount' => $subtotal,
-            'status' => $validated['status'],
-            'currency' => $order->currency,
-            'user_id' => Auth::id(),
-        ]);
-
-        $orderReturn->items()->createMany($returnItems);
-
-        foreach ($returnItems as $item) {
-            StockMovement::create([
-                'user_id' => Auth::id(),
-                'product_id' => $item['product_id'],
-                'quantity_change' => $item['quantity'],
-                'movement_type' => 'return',
-                'reference_type' => 'order_return',
-                'reference_id' => $orderReturn->id,
-                'notes' => __('messages.return'),
-            ]);
-        }
+        $returnService->createReturn(
+            direction: 'order',
+            parent: $order,
+            items: $validated['products'],
+            returnDate: $validated['return_date'],
+            reason: $validated['reason'] ?? null,
+            status: $validated['status'],
+        );
 
         return redirect()->route('orders.returns.index')->with('success', __('messages.order_return_created'));
     }
@@ -93,11 +58,11 @@ class OrderReturnController extends Controller
     {
         $orderReturn->load('order.customer', 'items.product.unit');
         $company = [
-            'name' => \App\Models\Setting::get('company_name', 'My Business'),
-            'address' => \App\Models\Setting::get('company_address', ''),
-            'phone' => \App\Models\Setting::get('company_phone', ''),
-            'tax_id' => \App\Models\Setting::get('tax_id', ''),
+            'name' => Setting::get('company_name', 'My Business'),
+            'address' => Setting::get('company_address', ''),
+            'phone' => Setting::get('company_phone', ''),
         ];
+
         return view('orders.returns.show', compact('orderReturn', 'company'));
     }
 
@@ -117,6 +82,7 @@ class OrderReturnController extends Controller
             ]);
         }
         $orderReturn->delete();
+
         return redirect()->route('orders.returns.index')->with('success', __('messages.order_return_deleted'));
     }
 }

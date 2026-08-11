@@ -265,6 +265,7 @@ return [
     'order_return' => 'د امر راستنېدنه',
     'order_return_created' => 'د امر راستنېدنه په بریالیتوب سره ثبت شوه',
     'order_return_deleted' => 'د امر راستنېدنه په بریالیتوب سره ړنګه شوه',
+    'return_exceeds_returnable' => 'د :product راستنېدنه اندازه تر مجاز حد زیاته ده (:returnable پاتې).',
     'order_status_changed' => 'د امر حالت بدل شو',
     'order_total' => 'د امر ټوله بیه',
     'order_updated' => 'امر په بریالیتوب سره سم شو',

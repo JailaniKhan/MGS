@@ -265,6 +265,7 @@ return [
     'order_return' => 'برگشت سفارش',
     'order_return_created' => 'برگشت سفارش با موفقیت ثبت شد.',
     'order_return_deleted' => 'برگشت سفارش با موفقیت حذف شد.',
+    'return_exceeds_returnable' => 'مقدار برگشتی :product از مقدار مجاز بیشتر است (:returnable باقی مانده).',
     'order_status_changed' => 'وضعیت سفارش تغییر کرد.',
     'order_total' => 'مجموع سفارش',
     'order_updated' => 'سفارش با موفقیت بروزرسانی شد.',

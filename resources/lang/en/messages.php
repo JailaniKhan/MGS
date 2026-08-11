@@ -265,6 +265,7 @@ return [
     'order_return' => 'Order Return',
     'order_return_created' => 'Order return created.',
     'order_return_deleted' => 'Order return deleted.',
+    'return_exceeds_returnable' => 'Returned quantity of :product exceeds returnable amount (:returnable remaining).',
     'order_status_changed' => 'Order status changed.',
     'order_total' => 'Order Total',
     'order_updated' => 'Order updated successfully.',
