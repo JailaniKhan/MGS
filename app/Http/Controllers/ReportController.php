@@ -2,27 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Order;
-use App\Models\Purchase;
-use App\Models\Payment;
-use App\Models\PurchasePayment;
-use App\Models\PartyPayment;
-use App\Models\Account;
-use App\Models\Product;
-use App\Models\Setting;
-use App\Models\Customer;
-use App\Models\Supplier;
 use App\Models\CashbookEntry;
-use App\Models\SalaryPayment;
-use App\Models\PurchaseItem;
-use App\Models\OrderItem;
-use App\Models\OrderReturn;
-use App\Models\PurchaseReturn;
+use App\Models\Customer;
 use App\Models\Expense;
+use App\Models\Order;
+use App\Models\OrderReturn;
+use App\Models\PartyPayment;
+use App\Models\Payment;
+use App\Models\Product;
+use App\Models\Purchase;
+use App\Models\PurchasePayment;
+use App\Models\PurchaseReturn;
+use App\Models\SalaryPayment;
+use App\Models\Setting;
+use App\Models\Supplier;
 use App\Services\Accounting\BalanceService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
@@ -119,21 +117,32 @@ class ReportController extends Controller
         $cashBalance = bcsub($cashIn, $cashOut, 2);
 
         // Accounts Receivable (what customers owe us) = sum of order remaining_amount per currency.
-        $receivables = '0.00';
-        foreach (Order::where('currency', $currency)->where('status', '!=', 'cancelled')->get() as $order) {
-            $receivables = bcadd($receivables, (string) $order->remaining_amount, 2);
-        }
+        // Single grouped SQL: each order's remaining is computed via subselects, clamped to 0 per row,
+        // then the outer query sums. One round trip instead of two SQL per order.
+        $receivableRow = DB::query()->fromSub(function ($q) use ($currency) {
+            $q->from('orders')
+                ->selectRaw("MAX(orders.total_amount - COALESCE((SELECT SUM(amount) FROM payments WHERE payments.order_id = orders.id), 0) - COALESCE((SELECT SUM(total_amount) FROM order_returns WHERE order_returns.order_id = orders.id AND order_returns.status != 'cancelled' AND order_returns.currency = orders.currency), 0), 0) AS remaining")
+                ->where('orders.currency', $currency)
+                ->where('orders.status', '!=', 'cancelled');
+        }, 'per_order')->sum('remaining');
+        $receivables = bcadd('0.00', (string) ($receivableRow ?: '0'), 2);
 
-        // Inventory Value (stock * average purchase price)
-        $inventoryValue = 0;
-        $products = Product::all();
-        foreach ($products as $product) {
-            $avgPurchasePrice = PurchaseItem::where('product_id', $product->id)
-                ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
-                ->where('purchases.currency', $currency)
-                ->where('purchases.status', '!=', 'cancelled')
-                ->avg('purchase_items.unit_price') ?? 0;
-            $inventoryValue += $product->stock * $avgPurchasePrice;
+        // Inventory Value (stock * average purchase price). One grouped AVG per product_id over
+        // purchase_items joined to parent currency+status, instead of one AVG query per product.
+        $avgPurchaseByProduct = DB::table('purchase_items')
+            ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
+            ->where('purchases.currency', $currency)
+            ->where('purchases.status', '!=', 'cancelled')
+            ->select('purchase_items.product_id', DB::raw('AVG(purchase_items.unit_price) as avg_price'))
+            ->groupBy('purchase_items.product_id')
+            ->pluck('avg_price', 'product_id')
+            ->map(fn ($v) => number_format((float) $v, 2, '.', ''));
+
+        $inventoryValue = '0.00';
+        foreach (Product::select('id', 'stock')->get() as $product) {
+            $avgPrice = $avgPurchaseByProduct[$product->id] ?? '0.00';
+            $lineValue = bcmul((string) $product->stock, $avgPrice, 2);
+            $inventoryValue = bcadd($inventoryValue, $lineValue, 2);
         }
 
         $totalAssets = bcadd($cashBalance, $receivables, 2);
@@ -141,10 +150,13 @@ class ReportController extends Controller
 
         // LIABILITIES
         // Accounts Payable (what we owe suppliers) = sum of purchase remaining_amount per currency.
-        $payables = '0.00';
-        foreach (Purchase::where('currency', $currency)->where('status', '!=', 'cancelled')->get() as $purchase) {
-            $payables = bcadd($payables, (string) $purchase->remaining_amount, 2);
-        }
+        $payableRow = DB::query()->fromSub(function ($q) use ($currency) {
+            $q->from('purchases')
+                ->selectRaw("MAX(purchases.total_amount - COALESCE((SELECT SUM(amount) FROM purchase_payments WHERE purchase_payments.purchase_id = purchases.id), 0) - COALESCE((SELECT SUM(total_amount) FROM purchase_returns WHERE purchase_returns.purchase_id = purchases.id AND purchase_returns.status != 'cancelled' AND purchase_returns.currency = purchases.currency), 0), 0) AS remaining")
+                ->where('purchases.currency', $currency)
+                ->where('purchases.status', '!=', 'cancelled');
+        }, 'per_purchase')->sum('remaining');
+        $payables = bcadd('0.00', (string) ($payableRow ?: '0'), 2);
 
         // EQUITY
         // Retained Earnings = lifetime revenue (net of returns) - lifetime expenses.
@@ -196,22 +208,33 @@ class ReportController extends Controller
         $currency = $request->get('currency', 'AFN');
         $minStockThreshold = Setting::get('min_stock_threshold', 10);
 
-        $products = Product::with('category')->get();
+        $products = Product::select('id', 'name', 'stock', 'category_id')->with('category:id,name')->get();
 
-        $stockData = $products->map(function ($product) use ($currency, $minStockThreshold) {
-            $avgPurchasePrice = PurchaseItem::where('product_id', $product->id)
-                ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
-                ->where('purchases.currency', $currency)
-                ->where('purchases.status', '!=', 'cancelled')
-                ->avg('purchase_items.unit_price') ?? 0;
+        // One grouped query per relation (not one per product), mapped back per product_id.
+        $avgPurchaseByProduct = DB::table('purchase_items')
+            ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
+            ->where('purchases.currency', $currency)
+            ->where('purchases.status', '!=', 'cancelled')
+            ->select('purchase_items.product_id', DB::raw('AVG(purchase_items.unit_price) as avg_price'))
+            ->groupBy('purchase_items.product_id')
+            ->pluck('avg_price', 'product_id')
+            ->map(fn ($v) => number_format((float) $v, 2, '.', ''));
 
-            $avgSalePrice = OrderItem::where('product_id', $product->id)
-                ->join('orders', 'order_items.order_id', '=', 'orders.id')
-                ->where('orders.currency', $currency)
-                ->where('orders.status', '!=', 'cancelled')
-                ->avg('order_items.unit_price') ?? 0;
+        $avgSaleByProduct = DB::table('order_items')
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->where('orders.currency', $currency)
+            ->where('orders.status', '!=', 'cancelled')
+            ->select('order_items.product_id', DB::raw('AVG(order_items.unit_price) as avg_price'))
+            ->groupBy('order_items.product_id')
+            ->pluck('avg_price', 'product_id')
+            ->map(fn ($v) => number_format((float) $v, 2, '.', ''));
 
-            $stockValue = $product->stock * $avgPurchasePrice;
+        $stockData = $products->map(function ($product) use ($minStockThreshold, $avgPurchaseByProduct, $avgSaleByProduct) {
+            $avgPurchasePrice = $avgPurchaseByProduct[$product->id] ?? '0.00';
+            $avgSalePrice = $avgSaleByProduct[$product->id] ?? '0.00';
+
+            // bcmul returns a string; keep it string to preserve precision up to the view layer.
+            $stockValue = bcmul((string) $product->stock, $avgPurchasePrice, 2);
 
             return [
                 'product' => $product,
@@ -222,8 +245,12 @@ class ReportController extends Controller
             ];
         });
 
-        $lowStockProducts = $stockData->filter(fn($item) => $item['is_low_stock']);
-        $totalStockValue = $stockData->sum('stock_value');
+        $lowStockProducts = $stockData->filter(fn ($item) => $item['is_low_stock']);
+
+        $totalStockValue = '0.00';
+        foreach ($stockData as $item) {
+            $totalStockValue = bcadd($totalStockValue, $item['stock_value'], 2);
+        }
 
         $selectedCurrency = $currency;
 
@@ -252,7 +279,7 @@ class ReportController extends Controller
                 return [
                     'date' => $order->created_at->toDateString(),
                     'type' => 'sale',
-                    'description' => __('messages.sales_dash') . optional($order->customer)->name,
+                    'description' => __('messages.sales_dash').optional($order->customer)->name,
                     'in_amount' => 0,
                     'out_amount' => 0,
                     'created_at' => $order->created_at,
@@ -268,7 +295,7 @@ class ReportController extends Controller
                 return [
                     'date' => $payment->created_at->toDateString(),
                     'type' => 'purchase_payment',
-                    'description' => __('messages.pending_purchase_dash') . optional($payment->purchase)->party?->name,
+                    'description' => __('messages.pending_purchase_dash').optional($payment->purchase)->party?->name,
                     'in_amount' => 0,
                     'out_amount' => (float) $payment->amount,
                     'created_at' => $payment->created_at,
@@ -284,7 +311,7 @@ class ReportController extends Controller
                 return [
                     'date' => $payment->created_at->toDateString(),
                     'type' => 'customer_payment',
-                    'description' => __('messages.supplier_delivery_dash') . optional($payment->order->customer)->name,
+                    'description' => __('messages.supplier_delivery_dash').optional($payment->order->customer)->name,
                     'in_amount' => (float) $payment->amount,
                     'out_amount' => 0,
                     'created_at' => $payment->created_at,
@@ -298,8 +325,8 @@ class ReportController extends Controller
             ->map(function ($entry) {
                 return [
                     'date' => $entry->entry_date,
-                    'type' => 'cash_' . $entry->type,
-                    'description' => __('messages.cashbook_section') . ': ' . ($entry->type === 'in' ? __('messages.income') : __('messages.expense_out')) . ($entry->notes ? ' - ' . $entry->notes : ''),
+                    'type' => 'cash_'.$entry->type,
+                    'description' => __('messages.cashbook_section').': '.($entry->type === 'in' ? __('messages.income') : __('messages.expense_out')).($entry->notes ? ' - '.$entry->notes : ''),
                     'in_amount' => $entry->type === 'in' ? (float) $entry->amount : 0,
                     'out_amount' => $entry->type === 'out' ? (float) $entry->amount : 0,
                     'created_at' => $entry->created_at,
@@ -329,7 +356,7 @@ class ReportController extends Controller
 
         foreach ($transactions as $tx) {
             $date = $tx['date'];
-            if (!isset($dailyTotals[$date])) {
+            if (! isset($dailyTotals[$date])) {
                 $dailyTotals[$date] = [
                     'date' => $date,
                     'in_total' => 0,
@@ -349,6 +376,7 @@ class ReportController extends Controller
         $dailyTotals = $dailyTotals->map(function ($day) use (&$runningBalance) {
             $runningBalance += $day['in_total'] - $day['out_total'];
             $day['running_balance'] = $runningBalance;
+
             return $day;
         });
 
@@ -385,7 +413,7 @@ class ReportController extends Controller
             ->get();
 
         $customerAging = collect();
-        foreach ($customerOrders->groupBy(fn($o) => $o->customer_id ?? 'walkin') as $key => $orderGroup) {
+        foreach ($customerOrders->groupBy(fn ($o) => $o->customer_id ?? 'walkin') as $key => $orderGroup) {
             $customer = $key === 'walkin'
                 ? (object) ['name' => __('messages.walk_in_customer')]
                 : ($orderGroup->first()->customer ?? (object) ['name' => __('messages.walk_in_customer')]);
@@ -415,13 +443,13 @@ class ReportController extends Controller
                 'total_outstanding' => array_sum($bucketTotals),
             ]);
         }
-        $customerAging = $customerAging->filter(fn($item) => $item['total_outstanding'] > 0)->values();
+        $customerAging = $customerAging->filter(fn ($item) => $item['total_outstanding'] > 0)->values();
 
         $customerBucketTotal = [
-            '0-30' => $customerAging->sum(fn($c) => $c['bucket_totals']['0-30']),
-            '31-60' => $customerAging->sum(fn($c) => $c['bucket_totals']['31-60']),
-            '61-90' => $customerAging->sum(fn($c) => $c['bucket_totals']['61-90']),
-            '90+' => $customerAging->sum(fn($c) => $c['bucket_totals']['90+']),
+            '0-30' => $customerAging->sum(fn ($c) => $c['bucket_totals']['0-30']),
+            '31-60' => $customerAging->sum(fn ($c) => $c['bucket_totals']['31-60']),
+            '61-90' => $customerAging->sum(fn ($c) => $c['bucket_totals']['61-90']),
+            '90+' => $customerAging->sum(fn ($c) => $c['bucket_totals']['90+']),
         ];
 
         // Supplier aging — based on outstanding purchases, grouped by supplier.
@@ -444,7 +472,7 @@ class ReportController extends Controller
             ->get();
 
         $supplierAging = collect();
-        foreach ($supplierPurchases->groupBy(fn($p) => $p->supplier_id ?? 'walkin') as $key => $purchaseGroup) {
+        foreach ($supplierPurchases->groupBy(fn ($p) => $p->supplier_id ?? 'walkin') as $key => $purchaseGroup) {
             $supplier = $key === 'walkin'
                 ? (object) ['name' => __('messages.walk_in_supplier')]
                 : ($purchaseGroup->first()->supplier ?? (object) ['name' => __('messages.walk_in_supplier')]);
@@ -474,13 +502,13 @@ class ReportController extends Controller
                 'total_outstanding' => array_sum($bucketTotals),
             ]);
         }
-        $supplierAging = $supplierAging->filter(fn($item) => $item['total_outstanding'] > 0)->values();
+        $supplierAging = $supplierAging->filter(fn ($item) => $item['total_outstanding'] > 0)->values();
 
         $supplierBucketTotal = [
-            '0-30' => $supplierAging->sum(fn($s) => $s['bucket_totals']['0-30']),
-            '31-60' => $supplierAging->sum(fn($s) => $s['bucket_totals']['31-60']),
-            '61-90' => $supplierAging->sum(fn($s) => $s['bucket_totals']['61-90']),
-            '90+' => $supplierAging->sum(fn($s) => $s['bucket_totals']['90+']),
+            '0-30' => $supplierAging->sum(fn ($s) => $s['bucket_totals']['0-30']),
+            '31-60' => $supplierAging->sum(fn ($s) => $s['bucket_totals']['31-60']),
+            '61-90' => $supplierAging->sum(fn ($s) => $s['bucket_totals']['61-90']),
+            '90+' => $supplierAging->sum(fn ($s) => $s['bucket_totals']['90+']),
         ];
 
         $selectedCurrency = $currency;
