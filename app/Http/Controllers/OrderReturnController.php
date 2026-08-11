@@ -3,12 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
-use App\Models\Order;
 use App\Models\OrderReturn;
-use App\Models\StockMovement;
+use App\Models\Setting;
 use App\Services\Sales\ReturnService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class OrderReturnController extends Controller
 {
@@ -68,23 +66,10 @@ class OrderReturnController extends Controller
         return view('orders.returns.show', compact('orderReturn', 'company'));
     }
 
-    public function destroy(OrderReturn $orderReturn)
+    public function destroy(OrderReturn $orderReturn, ReturnService $returnService)
     {
-        foreach ($orderReturn->items as $item) {
-            $item->product->decrement('stock', $item->quantity);
+        $returnService->revertReturn($orderReturn);
 
-            StockMovement::create([
-                'user_id' => Auth::id(),
-                'product_id' => $item->product_id,
-                'quantity_change' => -$item->quantity,
-                'movement_type' => 'return_cancelled',
-                'reference_type' => 'order_return',
-                'reference_id' => $orderReturn->id,
-                'notes' => __('messages.return_cancelled'),
-            ]);
-        }
-        $orderReturn->delete();
-
-        return redirect()->route('orders.returns.index')->with('success', __('messages.order_return_deleted'));
+        return redirect()->route('orders.returns.index')->with('success', __('messages.return_cancelled'));
     }
 }

@@ -164,4 +164,53 @@ class ReturnService
             ->map(fn ($qty) => (int) $qty)
             ->all();
     }
+
+    public function revertReturn(Model $return): void
+    {
+        $direction = $return instanceof OrderReturn ? 'order' : ($return instanceof PurchaseReturn ? 'purchase' : null);
+
+        if ($direction === null) {
+            throw new LogicException('ReturnService::revertReturn only accepts OrderReturn or PurchaseReturn.');
+        }
+
+        if ($return->status === 'cancelled') {
+            return;
+        }
+
+        $spec = $this->specForCancel($direction);
+
+        DB::transaction(function () use ($return, $spec) {
+            foreach ($return->items as $item) {
+                $product = Product::where('id', $item->product_id)->lockForUpdate()->firstOrFail();
+
+                if ($spec['stock_delta'] > 0) {
+                    $product->decrement('stock', $item->quantity);
+                } else {
+                    $product->increment('stock', $item->quantity);
+                }
+
+                StockMovement::create([
+                    'user_id' => Auth::id(),
+                    'product_id' => $item->product_id,
+                    'quantity_change' => -$spec['stock_delta'] * $item->quantity,
+                    'movement_type' => $spec['cancelled_movement_type'],
+                    'reference_type' => $spec['reference_type'],
+                    'reference_id' => $return->id,
+                    'notes' => __($spec['cancelled_translation_key']),
+                ]);
+            }
+
+            $return->update(['status' => 'cancelled']);
+        });
+    }
+
+    private function specForCancel(string $direction): array
+    {
+        return [
+            'stock_delta' => $direction === 'order' ? +1 : -1,
+            'cancelled_movement_type' => $direction === 'order' ? 'return_cancelled' : 'purchase_return_cancelled',
+            'reference_type' => $direction === 'order' ? 'order_return' : 'purchase_return',
+            'cancelled_translation_key' => $direction === 'order' ? 'messages.return_cancelled' : 'messages.purchase_return_cancelled',
+        ];
+    }
 }

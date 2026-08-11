@@ -5,10 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Purchase;
 use App\Models\PurchaseReturn;
 use App\Models\Setting;
-use App\Models\StockMovement;
 use App\Services\Sales\ReturnService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class PurchaseReturnController extends Controller
 {
@@ -68,23 +66,10 @@ class PurchaseReturnController extends Controller
         return view('purchases.returns.show', compact('purchaseReturn', 'company'));
     }
 
-    public function destroy(PurchaseReturn $purchaseReturn)
+    public function destroy(PurchaseReturn $purchaseReturn, ReturnService $returnService)
     {
-        foreach ($purchaseReturn->items as $item) {
-            $item->product->increment('stock', $item->quantity);
+        $returnService->revertReturn($purchaseReturn);
 
-            StockMovement::create([
-                'user_id' => Auth::id(),
-                'product_id' => $item->product_id,
-                'quantity_change' => $item->quantity,
-                'movement_type' => 'purchase_return_cancelled',
-                'reference_type' => 'purchase_return',
-                'reference_id' => $purchaseReturn->id,
-                'notes' => __('messages.purchase_return_cancelled'),
-            ]);
-        }
-        $purchaseReturn->delete();
-
-        return redirect()->route('purchases.returns.index')->with('success', __('messages.purchase_return_deleted'));
+        return redirect()->route('purchases.returns.index')->with('success', __('messages.purchase_return_cancelled'));
     }
 }

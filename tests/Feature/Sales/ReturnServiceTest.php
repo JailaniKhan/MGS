@@ -438,4 +438,135 @@ class ReturnServiceTest extends TestCase
 
         return $purchase->fresh();
     }
+
+    public function test_revert_return_restores_stock_and_flips_status(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $customer = Customer::create(['name' => 'Revert Customer', 'phone' => '0700000005']);
+        $category = Category::create(['name' => 'Revert Category']);
+        $product = Product::create([
+            'name' => 'Revertable Widget',
+            'category_id' => $category->id,
+            'price' => '55.00',
+            'stock' => 4,
+        ]);
+
+        $order = $this->makeOrderWithItems($user, $customer, 'AFN', [
+            ['product' => $product, 'unit_price' => '55.00', 'quantity' => 4],
+        ]);
+
+        $service = app(ReturnService::class);
+        $return = $service->createReturn(
+            direction: 'order',
+            parent: $order,
+            items: [
+                ['product_id' => $product->id, 'quantity' => 2, 'unit_price' => '55.00'],
+            ],
+            returnDate: '2026-08-10',
+        );
+
+        $this->assertSame(6, (int) Product::find($product->id)->stock);
+        $this->assertSame('completed', $return->fresh()->status);
+
+        $service->revertReturn($return->fresh());
+
+        $this->assertSame(4, (int) Product::find($product->id)->stock);
+        $this->assertSame('cancelled', $return->fresh()->status);
+
+        $cancelMovement = StockMovement::where('movement_type', 'return_cancelled')
+            ->where('reference_id', $return->id)
+            ->first();
+
+        $this->assertNotNull($cancelMovement);
+        $this->assertSame(-2, (int) $cancelMovement->quantity_change);
+        $this->assertSame($product->id, $cancelMovement->product_id);
+    }
+
+    public function test_revert_return_for_purchase_restocks_and_flips_status(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $supplier = \App\Models\Supplier::create(['name' => 'Revert Supplier', 'phone' => '0700000014']);
+        $category = Category::create(['name' => 'Purchase Revert Category']);
+        $product = Product::create([
+            'name' => 'Purchase Revert Widget',
+            'category_id' => $category->id,
+            'price' => '80.00',
+            'stock' => 5,
+        ]);
+
+        $purchase = $this->makePurchaseWithItems($user, $supplier, 'AFN', [
+            ['product' => $product, 'unit_price' => '80.00', 'quantity' => 3],
+        ]);
+
+        $service = app(ReturnService::class);
+        $return = $service->createReturn(
+            direction: 'purchase',
+            parent: $purchase,
+            items: [
+                ['product_id' => $product->id, 'quantity' => 2, 'unit_price' => '80.00'],
+            ],
+            returnDate: '2026-08-10',
+        );
+
+        $this->assertSame(3, (int) Product::find($product->id)->stock);
+        $this->assertSame('completed', $return->fresh()->status);
+
+        $service->revertReturn($return->fresh());
+
+        $this->assertSame(5, (int) Product::find($product->id)->stock);
+        $this->assertSame('cancelled', $return->fresh()->status);
+
+        $cancelMovement = StockMovement::where('movement_type', 'purchase_return_cancelled')
+            ->where('reference_id', $return->id)
+            ->first();
+
+        $this->assertNotNull($cancelMovement);
+        $this->assertSame(2, (int) $cancelMovement->quantity_change);
+        $this->assertSame($product->id, $cancelMovement->product_id);
+    }
+
+    public function test_revert_return_is_idempotent_when_called_twice(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $customer = Customer::create(['name' => 'Idempotent Customer', 'phone' => '0700000006']);
+        $category = Category::create(['name' => 'Idempotent Category']);
+        $product = Product::create([
+            'name' => 'Idempotent Widget',
+            'category_id' => $category->id,
+            'price' => '12.00',
+            'stock' => 8,
+        ]);
+
+        $order = $this->makeOrderWithItems($user, $customer, 'AFN', [
+            ['product' => $product, 'unit_price' => '12.00', 'quantity' => 8],
+        ]);
+
+        $service = app(ReturnService::class);
+        $return = $service->createReturn(
+            direction: 'order',
+            parent: $order,
+            items: [
+                ['product_id' => $product->id, 'quantity' => 2, 'unit_price' => '12.00'],
+            ],
+            returnDate: '2026-08-10',
+        );
+
+        $service->revertReturn($return->fresh());
+        $service->revertReturn($return->fresh());
+
+        $this->assertSame(8, (int) Product::find($product->id)->stock);
+        $this->assertSame('cancelled', $return->fresh()->status);
+
+        $cancelCount = StockMovement::where('movement_type', 'return_cancelled')
+            ->where('reference_id', $return->id)
+            ->count();
+
+        $this->assertSame(1, $cancelCount);
+    }
 }
