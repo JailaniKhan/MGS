@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\PurchaseReturn;
 use App\Models\Purchase;
-use App\Models\PurchaseReturnItem;
-use App\Models\Product;
+use App\Models\PurchaseReturn;
+use App\Models\Setting;
 use App\Models\StockMovement;
+use App\Services\Sales\ReturnService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -25,10 +25,11 @@ class PurchaseReturnController extends Controller
     public function create()
     {
         $purchases = Purchase::with('purchaseItems.product')->orderBy('created_at', 'desc')->get();
+
         return view('purchases.returns.create', compact('purchases'));
     }
 
-    public function store(Request $request)
+    public function store(Request $request, ReturnService $returnService)
     {
         $validated = $request->validate([
             'purchase_id' => 'required|exists:purchases,id',
@@ -43,48 +44,14 @@ class PurchaseReturnController extends Controller
 
         $purchase = Purchase::with('purchaseItems.product')->findOrFail($validated['purchase_id']);
 
-        $subtotal = 0;
-        $returnItems = [];
-
-        foreach ($validated['products'] as $item) {
-            $product = Product::findOrFail($item['product_id']);
-            $lineTotal = $item['unit_price'] * $item['quantity'];
-            $subtotal += $lineTotal;
-
-            $returnItems[] = [
-                'product_id' => $product->id,
-                'quantity' => $item['quantity'],
-                'unit_price' => $item['unit_price'],
-                'subtotal' => $lineTotal,
-            ];
-
-            $product->decrement('stock', $item['quantity']);
-        }
-
-        $purchaseReturn = PurchaseReturn::create([
-            'purchase_id' => $validated['purchase_id'],
-            'supplier_id' => $purchase->supplier_id,
-            'return_date' => $validated['return_date'],
-            'reason' => $validated['reason'],
-            'total_amount' => $subtotal,
-            'status' => $validated['status'],
-            'currency' => $purchase->currency,
-            'user_id' => Auth::id(),
-        ]);
-
-        $purchaseReturn->items()->createMany($returnItems);
-
-        foreach ($returnItems as $item) {
-            StockMovement::create([
-                'user_id' => Auth::id(),
-                'product_id' => $item['product_id'],
-                'quantity_change' => -$item['quantity'],
-                'movement_type' => 'purchase_return',
-                'reference_type' => 'purchase_return',
-                'reference_id' => $purchaseReturn->id,
-                'notes' => __('messages.purchase_return'),
-            ]);
-        }
+        $returnService->createReturn(
+            direction: 'purchase',
+            parent: $purchase,
+            items: $validated['products'],
+            returnDate: $validated['return_date'],
+            reason: $validated['reason'] ?? null,
+            status: $validated['status'],
+        );
 
         return redirect()->route('purchases.returns.index')->with('success', __('messages.purchase_return_created'));
     }
@@ -93,11 +60,11 @@ class PurchaseReturnController extends Controller
     {
         $purchaseReturn->load('purchase.supplier', 'items.product.unit');
         $company = [
-            'name' => \App\Models\Setting::get('company_name', 'My Business'),
-            'address' => \App\Models\Setting::get('company_address', ''),
-            'phone' => \App\Models\Setting::get('company_phone', ''),
-            'tax_id' => \App\Models\Setting::get('tax_id', ''),
+            'name' => Setting::get('company_name', 'My Business'),
+            'address' => Setting::get('company_address', ''),
+            'phone' => Setting::get('company_phone', ''),
         ];
+
         return view('purchases.returns.show', compact('purchaseReturn', 'company'));
     }
 
@@ -117,6 +84,7 @@ class PurchaseReturnController extends Controller
             ]);
         }
         $purchaseReturn->delete();
+
         return redirect()->route('purchases.returns.index')->with('success', __('messages.purchase_return_deleted'));
     }
 }

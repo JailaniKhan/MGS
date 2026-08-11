@@ -5,6 +5,8 @@ namespace App\Services\Sales;
 use App\Models\Order;
 use App\Models\OrderReturn;
 use App\Models\Product;
+use App\Models\Purchase;
+use App\Models\PurchaseReturn;
 use App\Models\StockMovement;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
@@ -21,21 +23,16 @@ class ReturnService
         string $returnDate,
         ?string $reason = null,
         string $status = 'completed',
-    ): OrderReturn {
-        if ($direction !== 'order') {
-            throw new LogicException('ReturnService::createReturn currently supports only the order direction. Supplier returns are a follow-up.');
-        }
-        if (! $parent instanceof Order) {
-            throw new LogicException('ReturnService::createReturn for direction=order requires an Order parent.');
-        }
+    ): Model {
+        $spec = $this->specFor($direction, $parent);
 
-        return DB::transaction(function () use ($parent, $items, $returnDate, $reason, $status) {
-            $this->validateReturnableQuantities($parent, $items);
+        return DB::transaction(function () use ($spec, $parent, $items, $returnDate, $reason, $status) {
+            $this->validateReturnableQuantities($spec, $parent, $items);
 
-            $return = OrderReturn::create([
+            $return = $spec['return_model']::create([
                 'user_id' => Auth::id(),
-                'order_id' => $parent->id,
-                'customer_id' => $parent->customer_id,
+                $spec['parent_fk'] => $parent->id,
+                $spec['party_fk'] => $parent->person_id,
                 'return_date' => $returnDate,
                 'reason' => $reason,
                 'total_amount' => '0.00',
@@ -45,6 +42,7 @@ class ReturnService
 
             $total = '0.00';
             $returnItems = [];
+            $delta = $spec['stock_delta'];
 
             foreach ($items as $item) {
                 $product = Product::where('id', $item['product_id'])->lockForUpdate()->firstOrFail();
@@ -59,7 +57,11 @@ class ReturnService
                     'subtotal' => $lineTotal,
                 ];
 
-                $product->increment('stock', $item['quantity']);
+                if ($delta > 0) {
+                    $product->increment('stock', $item['quantity']);
+                } else {
+                    $product->decrement('stock', $item['quantity']);
+                }
             }
 
             $return->items()->createMany($returnItems);
@@ -69,11 +71,11 @@ class ReturnService
                 StockMovement::create([
                     'user_id' => Auth::id(),
                     'product_id' => $item['product_id'],
-                    'quantity_change' => $item['quantity'],
-                    'movement_type' => 'return',
-                    'reference_type' => 'order_return',
+                    'quantity_change' => $delta * $item['quantity'],
+                    'movement_type' => $spec['movement_type'],
+                    'reference_type' => $spec['reference_type'],
                     'reference_id' => $return->id,
-                    'notes' => __('messages.return'),
+                    'notes' => __($spec['translation_key']),
                 ]);
             }
 
@@ -81,16 +83,49 @@ class ReturnService
         });
     }
 
-    protected function validateReturnableQuantities(Order $order, array $items): void
+    private function specFor(string $direction, Model $parent): array
     {
-        $soldQuantities = $order->orderItems()
+        return match ($direction) {
+            'order' => $parent instanceof Order ? [
+                'return_model' => OrderReturn::class,
+                'parent_fk' => 'order_id',
+                'party_fk' => 'customer_id',
+                'sold_relation' => 'orderItems',
+                'return_fk' => 'order_id',
+                'return_item_table' => 'order_return_items',
+                'return_item_fk' => 'order_return_id',
+                'stock_delta' => +1,
+                'movement_type' => 'return',
+                'reference_type' => 'order_return',
+                'translation_key' => 'messages.return',
+            ] : throw new LogicException('CreateReturn of order direction requires an Order parent.'),
+            'purchase' => $parent instanceof Purchase ? [
+                'return_model' => PurchaseReturn::class,
+                'parent_fk' => 'purchase_id',
+                'party_fk' => 'supplier_id',
+                'sold_relation' => 'purchaseItems',
+                'return_fk' => 'purchase_id',
+                'return_item_table' => 'purchase_return_items',
+                'return_item_fk' => 'purchase_return_id',
+                'stock_delta' => -1,
+                'movement_type' => 'purchase_return',
+                'reference_type' => 'purchase_return',
+                'translation_key' => 'messages.purchase_return',
+            ] : throw new LogicException('CreateReturn of purchase direction requires a Purchase parent.'),
+            default => throw new LogicException("Unknown direction '{$direction}'. Expected 'order' or 'purchase'."),
+        };
+    }
+
+    protected function validateReturnableQuantities(array $spec, Model $parent, array $items): void
+    {
+        $soldQuantities = $parent->{$spec['sold_relation']}()
             ->selectRaw('product_id, SUM(quantity) as qty')
             ->groupBy('product_id')
             ->pluck('qty', 'product_id')
             ->map(fn ($qty) => (int) $qty)
             ->all();
 
-        $alreadyReturned = $this->returnedQuantities($order);
+        $alreadyReturned = $this->returnedQuantities($spec, $parent);
 
         foreach ($items as $item) {
             $productId = $item['product_id'];
@@ -111,9 +146,9 @@ class ReturnService
         }
     }
 
-    protected function returnedQuantities(Order $order): array
+    protected function returnedQuantities(array $spec, Model $parent): array
     {
-        $returnIds = OrderReturn::where('order_id', $order->id)
+        $returnIds = $spec['return_model']::where($spec['return_fk'], $parent->id)
             ->where('status', '!=', 'cancelled')
             ->pluck('id');
 
@@ -121,9 +156,9 @@ class ReturnService
             return [];
         }
 
-        return DB::table('order_return_items')
+        return DB::table($spec['return_item_table'])
             ->selectRaw('product_id, SUM(quantity) as qty')
-            ->whereIn('order_return_id', $returnIds)
+            ->whereIn($spec['return_item_fk'], $returnIds)
             ->groupBy('product_id')
             ->pluck('qty', 'product_id')
             ->map(fn ($qty) => (int) $qty)

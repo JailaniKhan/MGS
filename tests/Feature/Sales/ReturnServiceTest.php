@@ -9,7 +9,12 @@ use App\Models\OrderItem;
 use App\Models\OrderReturn;
 use App\Models\OrderReturnItem;
 use App\Models\Product;
+use App\Models\Purchase;
+use App\Models\PurchaseItem;
+use App\Models\PurchaseReturn;
+use App\Models\PurchaseReturnItem;
 use App\Models\StockMovement;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Sales\ReturnService;
 use Illuminate\Database\Events\QueryExecuted;
@@ -290,5 +295,147 @@ class ReturnServiceTest extends TestCase
             $hasLockIfSupported || ! in_array(config('database.default'), ['mysql', 'pgsql'], true),
             'On locking-capable drivers (MySQL, PostgreSQL), createReturn must take row locks on products.'
         );
+    }
+
+    public function test_create_return_for_purchase_writes_return_items_and_moves_stock_out(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $supplier = Supplier::create(['name' => 'Test Supplier', 'phone' => '0700000010']);
+        $category = Category::create(['name' => 'Purchase Category']);
+        $product = Product::create([
+            'name' => 'Supplied Widget',
+            'category_id' => $category->id,
+            'price' => '40.00',
+            'stock' => 10,
+        ]);
+
+        $purchase = $this->makePurchaseWithItems($user, $supplier, 'USD', [
+            ['product' => $product, 'unit_price' => '40.00', 'quantity' => 4],
+        ]);
+
+        $service = app(ReturnService::class);
+        $return = $service->createReturn(
+            direction: 'purchase',
+            parent: $purchase,
+            items: [
+                ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => '40.00'],
+            ],
+            returnDate: '2026-08-10',
+            reason: 'defective',
+            status: 'completed',
+        );
+
+        $this->assertInstanceOf(PurchaseReturn::class, $return);
+        $this->assertSame('USD', $return->currency);
+        $this->assertSame('40.00', $return->total_amount);
+        $this->assertSame('defective', $return->reason);
+        $this->assertSame('completed', $return->status);
+        $this->assertSame($supplier->id, $return->supplier_id);
+
+        $this->assertDatabaseHas('purchase_return_items', [
+            'purchase_return_id' => $return->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'unit_price' => '40.00',
+            'subtotal' => '40.00',
+        ]);
+
+        $this->assertSame(9, (int) Product::find($product->id)->stock);
+
+        $this->assertDatabaseHas('stock_movements', [
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'quantity_change' => -1,
+            'movement_type' => 'purchase_return',
+            'reference_type' => 'purchase_return',
+            'reference_id' => $return->id,
+        ]);
+
+        $movement = StockMovement::where('reference_id', $return->id)->first();
+        $this->assertNull($movement->journal_entry_id);
+    }
+
+    public function test_create_return_for_purchase_rejects_phantom_returns_with_no_state_written(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $supplier = Supplier::create(['name' => 'Phantom Supplier', 'phone' => '0700000011']);
+        $category = Category::create(['name' => 'Phantom Purchase Category']);
+        $product = Product::create([
+            'name' => 'Phantom Supplied Widget',
+            'category_id' => $category->id,
+            'price' => '30.00',
+            'stock' => 0,
+        ]);
+
+        $purchase = $this->makePurchaseWithItems($user, $supplier, 'AFN', [
+            ['product' => $product, 'unit_price' => '30.00', 'quantity' => 2],
+        ]);
+
+        PurchaseReturn::create([
+            'purchase_id' => $purchase->id,
+            'supplier_id' => $supplier->id,
+            'return_date' => '2026-08-09',
+            'reason' => 'first purchase return',
+            'total_amount' => '60.00',
+            'status' => 'completed',
+            'currency' => 'AFN',
+        ])->items()->createMany([
+            ['product_id' => $product->id, 'quantity' => 2, 'unit_price' => '30.00', 'subtotal' => '60.00'],
+        ]);
+
+        $service = app(ReturnService::class);
+
+        try {
+            $service->createReturn(
+                direction: 'purchase',
+                parent: $purchase,
+                items: [
+                    ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => '30.00'],
+                ],
+                returnDate: '2026-08-10',
+            );
+            $this->fail('Expected ValidationException for phantom purchase return was not thrown.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('Phantom Supplied Widget', implode(' ', $e->validator->getMessageBag()->all()));
+        }
+
+        $this->assertSame(1, PurchaseReturn::where('purchase_id', $purchase->id)->count());
+        $this->assertSame(1, PurchaseReturnItem::count());
+        $this->assertSame(0, StockMovement::where('movement_type', 'purchase_return')->count());
+    }
+
+    private function makePurchaseWithItems(User $user, Supplier $supplier, string $currency, array $lines): Purchase
+    {
+        $purchase = Purchase::create([
+            'supplier_id' => $supplier->id,
+            'person_type' => 'supplier',
+            'person_id' => $supplier->id,
+            'status' => 'completed',
+            'subtotal' => '0.00',
+            'total_amount' => '0.00',
+            'currency' => $currency,
+        ]);
+
+        $subtotal = '0.00';
+        foreach ($lines as $line) {
+            $lineTotal = bcmul((string) $line['unit_price'], (string) $line['quantity'], 2);
+            $subtotal = bcadd($subtotal, $lineTotal, 2);
+
+            PurchaseItem::create([
+                'purchase_id' => $purchase->id,
+                'product_id' => $line['product']->id,
+                'quantity' => $line['quantity'],
+                'unit_price' => $line['unit_price'],
+                'subtotal' => $lineTotal,
+            ]);
+        }
+
+        $purchase->update(['subtotal' => $subtotal, 'total_amount' => $subtotal]);
+
+        return $purchase->fresh();
     }
 }
