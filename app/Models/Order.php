@@ -46,20 +46,24 @@ class Order extends Model
 
     public function getPaidAmountAttribute()
     {
-        return (float) $this->payments()->sum('amount');
+        return bcadd('0.00', (string) ($this->payments()->sum('amount') ?: '0'), 2);
     }
 
     public function getReturnedAmountAttribute()
     {
-        return (float) OrderReturn::where('order_id', $this->id)
+        return bcadd('0.00', (string) (OrderReturn::where('order_id', $this->id)
             ->where('status', '!=', 'cancelled')
             ->where('currency', $this->currency)
-            ->sum('total_amount');
+            ->sum('total_amount') ?: '0'), 2);
     }
 
     public function getRemainingAmountAttribute()
     {
-        return max(0, $this->total_amount - $this->paid_amount - $this->returned_amount);
+        // Use bcmath: total_amount is a decimal string, paid/returned are canonical strings.
+        $afterPaid = bcsub((string) $this->total_amount, $this->paid_amount, 2);
+        $afterReturned = bcsub($afterPaid, $this->returned_amount, 2);
+        // Clamp at zero.
+        return bccomp($afterReturned, '0', 2) >= 0 ? $afterReturned : '0.00';
     }
 
     public function getIsFullyPaidAttribute()

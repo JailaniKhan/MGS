@@ -569,4 +569,47 @@ class ReturnServiceTest extends TestCase
 
         $this->assertSame(1, $cancelCount);
     }
+
+    public function test_order_remaining_amount_returns_canonical_decimal_string(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $customer = Customer::create(['name' => 'BC Customer', 'phone' => '0700000007']);
+        $category = Category::create(['name' => 'BC Category']);
+        $product = Product::create([
+            'name' => 'BC Widget',
+            'category_id' => $category->id,
+            'price' => '99.99',
+            'stock' => 10,
+        ]);
+
+        $order = $this->makeOrderWithItems($user, $customer, 'AFN', [
+            ['product' => $product, 'unit_price' => '99.99', 'quantity' => 5],
+        ]);
+
+        $this->assertSame('499.95', $order->remaining_amount);
+        $this->assertSame('0.00', $order->paid_amount);
+        $this->assertSame('0.00', $order->returned_amount);
+
+        $service = app(ReturnService::class);
+
+        $return = $service->createReturn(
+            direction: 'order',
+            parent: $order,
+            items: [
+                ['product_id' => $product->id, 'quantity' => 2, 'unit_price' => '99.99'],
+            ],
+            returnDate: '2026-08-10',
+        );
+
+        $order->refresh();
+        $this->assertSame('199.98', $order->returned_amount);
+        $this->assertSame('299.97', $order->remaining_amount);
+
+        $service->revertReturn($return->fresh());
+        $order->refresh();
+        $this->assertSame('0.00', $order->returned_amount);
+        $this->assertSame('499.95', $order->remaining_amount);
+    }
 }
