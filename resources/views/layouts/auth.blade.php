@@ -1,56 +1,80 @@
 @php
     use App\Models\Setting;
     $locale = Setting::get('language', app()->getLocale());
+    $isRtl = in_array($locale, ['ps', 'fa']);
 @endphp
 <!DOCTYPE html>
-<html lang="{{ $locale }}" dir="{{ in_array($locale, ['ps', 'fa']) ? 'rtl' : 'ltr' }}">
+<html lang="{{ $locale }}" dir="{{ $isRtl ? 'rtl' : 'ltr' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>MGS - @yield('title', __('messages.login'))</title>
+    <script>
+        try {
+            const t = localStorage.getItem('mgs-theme');
+            const d = t === 'dark' || ((!t || t === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (d) document.documentElement.classList.add('dark');
+        } catch (e) {}
+    </script>
     @fonts
-    @if(in_array($locale, ['ps', 'fa']))
+    @if($isRtl)
         @vite(['resources/css/app-rtl.css', 'resources/js/app.js'])
     @else
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     @endif
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 </head>
-<body class="bg-ink-50 dark:bg-[#0b0c0e] min-h-screen flex items-center justify-center p-4 font-sans antialiased">
-    <div class="w-full max-w-sm">
-        <!-- Language switch (guests included) -->
-        <div class="flex justify-end mb-3">
-            <select onchange="changeAuthLanguage(this.value)"
-                class="text-[11px] bg-white/80 dark:bg-[#16181c] border border-ink-200 dark:border-ink-700 rounded-xl px-2.5 py-2
-                       appearance-none cursor-pointer transition-all duration-200 hover:border-primary-300 dark:hover:border-primary-600
-                       focus:outline-none focus:ring-2 focus:ring-primary-500/30 font-semibold text-ink-700 dark:text-ink-300">
-                <option value="ps" {{ $locale === 'ps' ? 'selected' : '' }}>{{ __('messages.pashto') }}</option>
-                <option value="fa" {{ $locale === 'fa' ? 'selected' : '' }}>{{ __('messages.persian') }}</option>
-                <option value="en" {{ $locale === 'en' ? 'selected' : '' }}>{{ __('messages.english') }}</option>
-            </select>
-        </div>
+<body class="bg-ink-50 dark:bg-[#0b0c0e] min-h-screen font-sans antialiased text-ink-700 dark:text-ink-200">
+    <div class="auth-ambient" aria-hidden="true"></div>
 
-        <!-- Brand -->
-        <div class="text-center mb-6">
-            <div class="w-16 h-16 rounded-2xl brand-grad text-white flex items-center justify-center mx-auto shadow-lg shadow-primary-500/30 mb-3">
-                <span class="text-white font-bold text-2xl">M</span>
+    <div class="relative z-10 min-h-screen flex flex-col p-5 pb-8">
+        <!-- Top row: language switch -->
+        <div class="flex justify-end">
+            <div class="relative">
+                <span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-ink-400 dark:text-ink-500">
+                    <x-icon name="language" class="w-3.5 h-3.5"/>
+                </span>
+                <select onchange="changeAuthLanguage(this.value)" aria-label="{{ __('messages.language') }}"
+                    class="text-[11px] ps-8 pe-2.5 py-2 rounded-full appearance-none cursor-pointer font-semibold
+                           bg-white/90 dark:bg-[#16181c] text-ink-700 dark:text-ink-300
+                           border border-ink-200 dark:border-ink-700
+                           shadow-card backdrop-blur-sm
+                           transition-all duration-200
+                           hover:border-primary-300 dark:hover:border-primary-600
+                           focus:outline-none focus:ring-2 focus:ring-primary-500/30">
+                    <option value="ps" {{ $locale === 'ps' ? 'selected' : '' }}>{{ __('messages.pashto') }}</option>
+                    <option value="fa" {{ $locale === 'fa' ? 'selected' : '' }}>{{ __('messages.persian') }}</option>
+                    <option value="en" {{ $locale === 'en' ? 'selected' : '' }}>{{ __('messages.english') }}</option>
+                </select>
             </div>
-            <h1 class="text-xl font-bold text-ink-900 dark:text-white">MGS</h1>
-            <p class="text-sm text-ink-500 dark:text-ink-400 mt-1">{{ __('messages.business_mgmt_system') }}</p>
         </div>
 
-        <div class="bg-white dark:bg-[#16181c] rounded-2xl border border-ink-100 dark:border-white/[0.06] p-6 shadow-card">
-            @if (session('success'))
-                <div class="flex items-center gap-2.5 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800/50 rounded-xl px-3.5 py-2.5 mb-5">
-                    <x-icon name="check-circle" class="w-4 h-4 text-primary-600 dark:text-primary-400 flex-shrink-0" strokeWidth="2"/>
-                    <p class="text-xs font-medium text-primary-700 dark:text-primary-300">{{ session('success') }}</p>
+        <!-- Content column -->
+        <div class="flex-1 flex flex-col items-center justify-center w-full max-w-sm mx-auto">
+            <!-- Brand lockup -->
+            <div class="flex items-center gap-3 mb-7">
+                <div class="w-12 h-12 rounded-2xl brand-grad text-white flex items-center justify-center shadow-fab">
+                    <x-icon name="app-icon" class="w-6 h-6"/>
                 </div>
-            @endif
-            @yield('content')
+                <div>
+                    <h1 class="text-xl font-extrabold tracking-tight text-ink-900 dark:text-white leading-none">MGS</h1>
+                    <p class="text-[11px] font-medium text-ink-500 dark:text-ink-400 mt-1">{{ __('messages.business_mgmt_system') }}</p>
+                </div>
+            </div>
+
+            <div class="w-full bg-white dark:bg-[#16181c] rounded-[1.5rem] border border-ink-100 dark:border-white/[0.06] p-6 pt-7 shadow-card">
+                @if (session('success'))
+                    <div class="flex items-center gap-2.5 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800/50 rounded-xl px-3.5 py-2.5 mb-5">
+                        <x-icon name="check-circle" class="w-4 h-4 text-primary-600 dark:text-primary-400 flex-shrink-0" strokeWidth="2"/>
+                        <p class="text-xs font-medium text-primary-700 dark:text-primary-300">{{ session('success') }}</p>
+                    </div>
+                @endif
+                @yield('content')
+            </div>
         </div>
 
-        <p class="text-center mt-5 text-[11px] text-ink-400 dark:text-ink-500">{{ __('messages.business_mgmt_system') }}</p>
+        <p class="text-center mt-6 text-[11px] text-ink-400 dark:text-ink-500">{{ __('messages.business_mgmt_system') }}</p>
     </div>
 
     <script>

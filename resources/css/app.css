@@ -368,6 +368,13 @@ html.dark { color-scheme: dark; }
     @apply form-input appearance-none cursor-pointer;
 }
 
+/* Tiny caption for inline/line-item number fields (qty, price, lot). Kept
+   below the uppercase form-label on purpose so it reads as a column hint,
+   not a form section. */
+@utility row-label {
+    @apply block text-[10px] font-semibold text-ink-400 dark:text-ink-500 leading-none mb-1 truncate;
+}
+
 /* Primary button — solid, confident, single accent */
 @utility btn-primary {
     @apply inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-[0.875rem] text-sm font-bold text-white
@@ -1316,14 +1323,6 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
     .chart-container { @apply min-h-[200px]; }
     .chart-container canvas { height: 200px !important; }
     
-    /* Product row improvements */
-    .product-row { @apply flex-wrap gap-2; }
-    .product-row > * { @apply flex-1 min-w-0; }
-    .product-row .product-select { @apply flex-1; }
-    .product-row .product-price,
-    .product-row .product-qty,
-    .product-row .product-lot { @apply w-full; }
-    
     /* List row improvements */
     .list-row { @apply gap-3; }
     .list-row > div:last-child { @apply w-auto min-w-[120px]; }
@@ -1457,6 +1456,24 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 .dark .grain-overlay { opacity: 0.05; }
+
+/* ---- Auth ambient backdrop: two soft brand blooms, no clichéd mesh ----
+   Decorative only; sits behind the auth card, never intercepts touches. */
+.auth-ambient {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    background-image:
+        radial-gradient(52rem 34rem at 82% -12%, rgb(16 174 100 / 0.14), transparent 62%),
+        radial-gradient(44rem 30rem at 0% 112%, rgb(16 174 100 / 0.10), transparent 60%);
+}
+.dark .auth-ambient {
+    background-image:
+        radial-gradient(52rem 34rem at 82% -12%, rgb(16 174 100 / 0.20), transparent 62%),
+        radial-gradient(44rem 30rem at 0% 112%, rgb(70 191 124 / 0.10), transparent 60%);
+}
 
 /* ---- Aurora hero surface (brand gradient + atmospheric bloom + grain) ---- */
 .hero-aurora {

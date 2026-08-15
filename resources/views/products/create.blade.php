@@ -17,18 +17,6 @@
                 @error('name') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
             <div class="mb-4">
-                <label class="form-label">{{ __('messages.barcode') }}</label>
-                <div class="flex gap-2">
-                    <input type="text" name="barcode" id="barcode-input" value="{{ old('barcode') }}" class="form-input flex-1" placeholder="{{ __('messages.scan_or_enter_barcode') }}">
-                    <button type="button" onclick="scanBarcode()" class="btn-secondary btn-sm whitespace-nowrap">
-                        <x-icon name="qr-code" class="w-4 h-4"/>
-                        {{ __('messages.scan') }}
-                    </button>
-                </div>
-                <p class="text-[10px] text-ink-400 mt-1">{{ __('messages.barcode_help') }}</p>
-                @error('barcode') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
-            </div>
-            <div class="mb-4">
                 <label class="form-label">{{ __('messages.lot_number') }}</label>
                 <input type="text" name="lot_number" value="{{ old('lot_number') }}" class="form-input" placeholder="{{ __('messages.lot_auto_generate') }}">
                 <p class="text-[10px] text-ink-400 mt-1">{{ __('messages.lot_help') }}</p>
@@ -47,12 +35,12 @@
             <div class="grid grid-cols-2 gap-3 mb-4">
                 <div>
                     <label class="form-label">{{ __('messages.price_afn') }}</label>
-                    <input type="number" name="price" value="{{ old('price') }}" step="0.01" min="0" required class="form-input">
+                    <input type="number" name="price" value="{{ old('price') }}" step="0.01" min="0" required dir="ltr" inputmode="decimal" class="form-input">
                     @error('price') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="form-label">{{ __('messages.stock') }}</label>
-                    <input type="number" name="stock" value="{{ old('stock', 0) }}" min="0" required class="form-input">
+                    <input type="number" name="stock" value="{{ old('stock', 0) }}" min="0" required dir="ltr" inputmode="numeric" class="form-input">
                     @error('stock') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
                 </div>
             </div>
@@ -64,83 +52,4 @@
             <button type="submit" class="btn-primary w-full"><x-icon name="check-circle" class="w-4 h-4" strokeWidth="2"/>{{ __('messages.submit') }}</button>
         </form>
     </div>
-
-    <!-- Barcode Scanner Modal -->
-    <div id="scanner-modal" class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center hidden">
-        <div class="bg-white dark:bg-[#16181c] rounded-2xl p-6 mx-4 max-w-sm w-full">
-            <div class="text-center mb-4">
-                <h3 class="text-lg font-bold text-ink-900 dark:text-white">{{ __('messages.scan_barcode') }}</h3>
-                <p class="text-sm text-ink-500">{{ __('messages.point_camera_at_barcode') }}</p>
-            </div>
-            <div id="scanner-container" class="relative w-full aspect-video bg-ink-900 rounded-xl overflow-hidden mb-4">
-                <video id="scanner-video" class="w-full h-full object-cover"></video>
-                <div class="absolute inset-0 flex items-center justify-center">
-                    <div class="w-3/4 h-0.5 bg-danger-500 animate-pulse"></div>
-                </div>
-            </div>
-            <div id="scanner-result" class="text-center text-sm font-medium text-ink-700 dark:text-ink-300 mb-4"></div>
-            <div class="flex gap-3">
-                <button type="button" onclick="closeScanner()" class="btn-secondary flex-1">{{ __('messages.cancel') }}</button>
-            </div>
-        </div>
-    </div>
-
-@push('scripts')
-<script>
-    let scannerStream = null;
-
-    function scanBarcode() {
-        const modal = document.getElementById('scanner-modal');
-        modal.classList.remove('hidden');
-
-        // Try to use camera for barcode scanning
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-                .then(stream => {
-                    scannerStream = stream;
-                    const video = document.getElementById('scanner-video');
-                    video.srcObject = stream;
-                    video.play();
-
-                    // Use BarcodeDetector API if available
-                    if ('BarcodeDetector' in window) {
-                        const barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e'] });
-                        detectBarcode(video, barcodeDetector);
-                    } else {
-                        // Fallback: manual entry
-                        document.getElementById('scanner-result').textContent = '{{ __("messages.manual_entry_hint") }}';
-                    }
-                })
-                .catch(err => {
-                    document.getElementById('scanner-result').textContent = '{{ __("messages.camera_not_available") }}';
-                });
-        } else {
-            document.getElementById('scanner-result').textContent = '{{ __("messages.camera_not_supported") }}';
-        }
-    }
-
-    async function detectBarcode(video, detector) {
-        try {
-            const barcodes = await detector.detect(video);
-            if (barcodes.length > 0) {
-                document.getElementById('barcode-input').value = barcodes[0].rawValue;
-                closeScanner();
-                return;
-            }
-        } catch (e) {}
-        if (scannerStream) {
-            requestAnimationFrame(() => detectBarcode(video, detector));
-        }
-    }
-
-    function closeScanner() {
-        if (scannerStream) {
-            scannerStream.getTracks().forEach(track => track.stop());
-            scannerStream = null;
-        }
-        document.getElementById('scanner-modal').classList.add('hidden');
-        document.getElementById('scanner-video').srcObject = null;
-    }
-</script>
-@endpush
 @endsection

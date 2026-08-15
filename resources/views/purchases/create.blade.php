@@ -20,12 +20,12 @@
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.currency_unit') }}</label>
-                <div class="flex gap-3">
-                    <label class="flex items-center gap-2 px-4 py-2.5 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20">
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-colors">
                         <input type="radio" name="currency" value="AFN" {{ old('currency', 'AFN') === 'AFN' ? 'checked' : '' }} class="text-primary-600">
                         <span class="text-sm font-medium">{{ __('messages.afn') }}</span>
                     </label>
-                    <label class="flex items-center gap-2 px-4 py-2.5 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20">
+                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-colors">
                         <input type="radio" name="currency" value="USD" {{ old('currency') === 'USD' ? 'checked' : '' }} class="text-primary-600">
                         <span class="text-sm font-medium">USD ($)</span>
                     </label>
@@ -35,20 +35,33 @@
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.products') }}</label>
-                <div id="products-container" class="space-y-2">
-                    <div class="product-row flex items-center gap-2 flex-wrap">
-                        <div class="flex-1 min-w-[180px]">
-                            <x-searchable-select name="products[0][product_id]" required select-class="product-select" placeholder="{{ __('messages.product') }}" :options="$productOptions" />
+                <div id="products-container" class="space-y-2.5">
+                    <div class="product-row rounded-xl border border-ink-100 dark:border-white/[0.06] bg-ink-50 dark:bg-white/[0.03] p-3">
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 min-w-0">
+                                <x-searchable-select name="products[0][product_id]" required select-class="product-select" placeholder="{{ __('messages.product') }}" :options="$productOptions" />
+                            </div>
+                            <button type="button" class="remove-product w-11 h-11 rounded-lg text-danger-400 hover:text-danger-600 hover:bg-danger-50 dark:hover:bg-danger-900/20 flex items-center justify-center transition-colors flex-shrink-0" aria-label="{{ __('messages.remove') }}">
+                                <x-icon name="x-mark" class="w-4 h-4" strokeWidth="2"/>
+                            </button>
                         </div>
-                        <input type="number" name="products[0][quantity]" min="1" value="1" required placeholder="{{ __('messages.quantity') }}" class="product-qty w-20 form-input text-center">
-                        <input type="number" name="products[0][unit_price]" min="0" step="0.01" value="" required placeholder="{{ __('messages.price') }}" class="product-price w-24 form-input text-center">
-                        <input type="text" name="products[0][lot_number]" placeholder="{{ __('messages.lot_number') }}" class="product-lot w-24 form-input text-center">
-                        <button type="button" class="remove-product p-2 text-danger-400 hover:text-danger-600 transition-colors">
-                            <x-icon name="x-mark" class="w-4 h-4" strokeWidth="2"/>
-                        </button>
+                        <div class="grid grid-cols-3 gap-2 mt-2.5">
+                            <div class="min-w-0">
+                                <span class="row-label">{{ __('messages.quantity') }}</span>
+                                <input type="number" name="products[0][quantity]" min="1" value="1" dir="ltr" inputmode="numeric" required class="product-qty w-full form-input text-center">
+                            </div>
+                            <div class="min-w-0">
+                                <span class="row-label">{{ __('messages.price') }}</span>
+                                <input type="number" name="products[0][unit_price]" min="0" step="0.01" value="" dir="ltr" inputmode="decimal" placeholder="0.00" required class="product-price w-full form-input text-center">
+                            </div>
+                            <div class="min-w-0">
+                                <span class="row-label">{{ __('messages.lot_number') }}</span>
+                                <input type="text" name="products[0][lot_number]" placeholder="—" class="product-lot w-full form-input text-center">
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <button type="button" id="add-product" class="text-primary-600 dark:text-primary-400 text-sm font-bold mt-2">+ {{ __('messages.another_product') }}</button>
+                <button type="button" id="add-product" class="inline-flex items-center gap-1.5 text-primary-600 dark:text-primary-400 text-sm font-bold mt-3 active:scale-95 transition-transform"><x-icon name="plus" class="w-4 h-4" strokeWidth="2.2"/>{{ __('messages.another_product') }}</button>
             </div>
 
             <div class="bg-primary-50 dark:bg-primary-900/10 rounded-xl p-3.5 mb-4 space-y-1.5">

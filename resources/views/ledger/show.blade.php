@@ -38,12 +38,12 @@
             @csrf
             <div>
                 <label class="form-label">{{ __('messages.channel') }}</label>
-                <div class="flex gap-3">
-                    <label class="flex items-center gap-2 px-4 py-2.5 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-all duration-200">
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-colors">
                         <input type="radio" name="channel" value="sms" checked class="text-secondary-600">
                         <span class="text-sm text-ink-700 dark:text-ink-300">SMS</span>
                     </label>
-                    <label class="flex items-center gap-2 px-4 py-2.5 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-all duration-200">
+                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-colors">
                         <input type="radio" name="channel" value="whatsapp" class="text-secondary-600">
                         <span class="text-sm text-ink-700 dark:text-ink-300">WhatsApp</span>
                     </label>
@@ -51,12 +51,12 @@
             </div>
             <div>
                 <label class="form-label">{{ __('messages.currency_unit') }}</label>
-                <div class="flex gap-3">
-                    <label class="flex items-center gap-2 px-4 py-2.5 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-all duration-200">
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-colors">
                         <input type="radio" name="currency" value="AFN" checked class="text-secondary-600">
                         <span class="text-sm text-ink-700 dark:text-ink-300">{{ __('messages.afn') }}</span>
                     </label>
-                    <label class="flex items-center gap-2 px-4 py-2.5 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-all duration-200">
+                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-colors">
                         <input type="radio" name="currency" value="USD" class="text-secondary-600">
                         <span class="text-sm text-ink-700 dark:text-ink-300">{{ __('messages.usd_with_paren') }}$)</span>
                     </label>

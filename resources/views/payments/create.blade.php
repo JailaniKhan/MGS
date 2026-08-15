@@ -56,14 +56,14 @@
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.currency_unit') }}</label>
-                <div class="flex gap-3">
-                    <label class="flex items-center gap-2 px-4 py-2.5 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-all duration-200">
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-colors">
                         <input type="radio" name="currency" value="AFN" {{ old('currency', 'AFN') === 'AFN' ? 'checked' : '' }} class="text-primary-600">
-                        <span class="text-sm text-ink-700 dark:text-ink-300">{{ __('messages.afn') }}</span>
+                        <span class="text-sm font-medium text-ink-700 dark:text-ink-300">{{ __('messages.afn') }}</span>
                     </label>
-                    <label class="flex items-center gap-2 px-4 py-2.5 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-all duration-200">
+                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 transition-colors">
                         <input type="radio" name="currency" value="USD" {{ old('currency') === 'USD' ? 'checked' : '' }} class="text-primary-600">
-                        <span class="text-sm text-ink-700 dark:text-ink-300">{{ __('messages.usd_with_paren') }}$)</span>
+                        <span class="text-sm font-medium text-ink-700 dark:text-ink-300">{{ __('messages.usd_with_paren') }}$)</span>
                     </label>
                 </div>
                 @error('currency') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror

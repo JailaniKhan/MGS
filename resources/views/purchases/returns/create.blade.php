@@ -52,19 +52,31 @@
 
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.products') }}</label>
-                <div id="products-container" class="space-y-2">
-                    <div class="product-row flex items-center gap-2">
-                        <select name="products[0][product_id]" required class="product-select flex-1 form-input">
-                            <option value="">{{ __('messages.product') }}</option>
-                        </select>
-                        <input type="number" name="products[0][quantity]" min="1" value="1" required class="product-qty w-20 form-input text-center">
-                        <input type="number" name="products[0][unit_price]" min="0" step="0.01" value="0" required class="product-price w-24 form-input text-center">
-                        <button type="button" class="remove-product text-danger-500 p-1 flex-shrink-0">
-                            <x-icon name="trash" class="w-5 h-5" strokeWidth="2"/>
-                        </button>
+                <div id="products-container" class="space-y-2.5">
+                    <div class="product-row rounded-xl border border-ink-100 dark:border-white/[0.06] bg-ink-50 dark:bg-white/[0.03] p-3">
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 min-w-0">
+                                <select name="products[0][product_id]" required class="product-select form-input">
+                                    <option value="">{{ __('messages.product') }}</option>
+                                </select>
+                            </div>
+                            <button type="button" class="remove-product w-11 h-11 rounded-lg bg-danger-50 dark:bg-danger-900/20 text-danger-500 flex items-center justify-center flex-shrink-0 transition-colors" aria-label="{{ __('messages.remove') }}">
+                                <x-icon name="trash" class="w-4 h-4" strokeWidth="2"/>
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 mt-2.5">
+                            <div class="min-w-0">
+                                <span class="row-label">{{ __('messages.quantity') }}</span>
+                                <input type="number" name="products[0][quantity]" min="1" value="1" dir="ltr" inputmode="numeric" required class="product-qty w-full form-input text-center">
+                            </div>
+                            <div class="min-w-0">
+                                <span class="row-label">{{ __('messages.price') }}</span>
+                                <input type="number" name="products[0][unit_price]" min="0" step="0.01" value="0" dir="ltr" inputmode="decimal" required class="product-price w-full form-input text-center">
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <button type="button" id="add-product" class="text-primary-600 dark:text-primary-400 text-xs font-semibold mt-2">+ {{ __('messages.another_product') }}</button>
+                <button type="button" id="add-product" class="inline-flex items-center gap-1.5 text-primary-600 dark:text-primary-400 text-xs font-semibold mt-3 active:scale-95 transition-transform"><x-icon name="plus" class="w-3.5 h-3.5" strokeWidth="2.2"/>{{ __('messages.another_product') }}</button>
             </div>
 
             <div class="bg-ink-50 dark:bg-ink-800/50 rounded-xl p-3 mb-4 flex justify-between text-sm">

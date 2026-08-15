@@ -25,7 +25,7 @@
                                 @if($chat['last_status'] === 'sent') badge-success
                                 @elseif($chat['last_status'] === 'failed') badge-danger
                                 @else badge-warning @endif">
-                                {{ __("messages.wa_{$chat['last_status']}") }}
+                                {{ __('messages.wa_' . (in_array($chat['last_status'], ['sent', 'failed', 'pending', 'drafted'], true) ? $chat['last_status'] : 'pending')) }}
                             </span>
                             <p class="text-xs text-ink-500 dark:text-ink-400 truncate">{{ $chat['last_message'] }}</p>
                         </div>

@@ -2,23 +2,37 @@
 
 @section('content')
 <div class="page-enter">
-    <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ __('messages.whatsapp_gateway') ?? 'WhatsApp Gateway (OpenWA)' }}</h2>
-        <div class="flex items-center gap-3">
-            <a href="{{ route('whatsapp.chats.index') }}" class="text-sm text-primary-600 dark:text-primary-400">{{ __('messages.whatsapp_chats') }}</a>
-            <a href="{{ route('settings.index') }}" class="text-sm text-primary-600 dark:text-primary-400">&larr; {{ __('messages.settings') }}</a>
+    {{-- Header --}}
+    <div class="page-header">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-[0.875rem] bg-primary-50 dark:bg-primary-900/30 border border-primary-100 dark:border-primary-800/40 flex items-center justify-center flex-shrink-0">
+                <x-icon name="chat-bubble-left-right" class="w-4 h-4 text-primary-600 dark:text-primary-400" strokeWidth="1.8"/>
+            </div>
+            <div class="min-w-0">
+                <h2 class="page-title leading-tight truncate">{{ __('messages.whatsapp_gateway') }}</h2>
+                <p class="text-[11px] text-ink-500 dark:text-ink-400 truncate" dir="ltr">{{ config('services.openwa.base_url') }}</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{{ route('whatsapp.chats.index') }}" aria-label="{{ __('messages.whatsapp_chats') }}"
+               class="w-9 h-9 rounded-xl bg-white dark:bg-[#18191a] border border-ink-100 dark:border-white/[0.06] flex items-center justify-center text-ink-500 dark:text-ink-400 hover:text-ink-700 dark:hover:text-ink-200 hover:border-ink-200 dark:hover:border-white/[0.12] transition-all duration-200 active:scale-95">
+                <x-icon name="chat-bubble-oval-left-ellipsis" class="w-4 h-4" strokeWidth="1.8"/>
+            </a>
+            <a href="{{ route('settings.index') }}" aria-label="{{ __('messages.back') }}"
+               class="w-9 h-9 rounded-xl bg-white dark:bg-[#18191a] border border-ink-100 dark:border-white/[0.06] flex items-center justify-center text-ink-500 dark:text-ink-400 hover:text-ink-700 dark:hover:text-ink-200 hover:border-ink-200 dark:hover:border-white/[0.12] transition-all duration-200 active:scale-95">
+                <x-icon name="arrow-left" class="w-4 h-4 back-chevron" strokeWidth="2"/>
+            </a>
         </div>
     </div>
 
     @if (!$configured)
         <div class="card p-6 text-center">
-            <div class="text-danger-600 dark:text-danger-400 font-medium mb-2">{{ __('messages.openwa_not_configured') ?? 'OpenWA is not configured' }}</div>
+            <div class="text-danger-600 dark:text-danger-400 font-medium mb-2">{{ __('messages.openwa_not_configured') }}</div>
             <p class="text-sm text-ink-500 dark:text-ink-400">
-                {{ __('messages.openwa_not_configured_hint') ?? 'Set OPENWA_API_KEY and OPENWA_BASE_URL in your .env file to enable WhatsApp reminders via your self-hosted gateway.' }}
+                {{ __('messages.openwa_not_configured_hint') }}
             </p>
         </div>
     @else
-        <div class="card p-6">
         @php
             $rawState = $status['status'] ?? null;
             $isReachable = $status !== null;
@@ -28,126 +42,136 @@
                 !$isReachable => 'badge-danger',
                 default => 'badge-danger',
             };
-            $badgeLabel = $isReachable ? ucfirst($rawState ?? 'unknown') : 'Unreachable';
+            $badgeLabel = match (true) {
+                $rawState === 'connected' => __('messages.openwa_status_connected'),
+                $rawState === 'ready' => __('messages.openwa_status_ready'),
+                $rawState === 'qr_ready' => __('messages.openwa_status_qr_ready'),
+                !$isReachable => __('messages.openwa_status_unreachable'),
+                default => __('messages.openwa_status_unknown'),
+            };
         @endphp
 
-            <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-2">
+        {{-- Status strip --}}
+        <div class="card px-4 py-3.5 mb-3">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span id="sessionBadge" class="badge {{ $badgeClass }} flex-shrink-0">{{ $badgeLabel }}</span>
                     @isset($gatewayRunning)
-                        <span class="badge {{ $gatewayRunning ? 'badge-success' : 'badge-danger' }}">
-                            {{ $gatewayRunning ? __('messages.openwa_gateway_running') ?? 'Gateway: Running' : __('messages.openwa_gateway_stopped') ?? 'Gateway: Stopped' }}
+                        <span class="badge {{ $gatewayRunning ? 'badge-success' : 'badge-danger' }} flex-shrink-0">
+                            {{ $gatewayRunning ? __('messages.openwa_gateway_running') : __('messages.openwa_gateway_stopped') }}
                         </span>
                     @endisset
-                    <span id="sessionBadge" class="badge {{ $badgeClass }}">{{ $badgeLabel }}</span>
                     @if (!empty($status['phone']))
-                        <span class="text-sm text-ink-500 dark:text-ink-400">{{ $status['phone'] }}</span>
+                        <span class="text-sm font-semibold text-ink-700 dark:text-ink-300 truncate" dir="ltr">{{ $status['phone'] }}</span>
                     @endif
                 </div>
                 <div class="flex items-center gap-2">
                     <button id="testSendBtn" type="button" class="btn btn-sm btn-primary">
-                        {{ __('messages.openwa_test_send') ?? 'Send test WhatsApp' }}
+                        <span class="btn-label">{{ __('messages.openwa_test_send') }}</span>
                     </button>
-                    <button id="refreshBtn" type="button" class="btn btn-sm btn-outline">
-                        {{ __('messages.refresh') ?? 'Refresh QR' }}
+                    <button id="refreshBtn" type="button" class="btn btn-sm btn-secondary">
+                        <x-icon name="arrow-path" class="w-3.5 h-3.5"/>
+                        <span class="btn-label">{{ __('messages.refresh') }}</span>
                     </button>
                     <button id="restartBtn" type="button" class="btn btn-sm btn-danger">
-                        {{ __('messages.openwa_restart') ?? 'Restart gateway' }}
+                        <span class="btn-label">{{ __('messages.openwa_restart') }}</span>
                     </button>
                 </div>
             </div>
-
             <div id="testSendResult" class="text-sm mt-2 hidden"></div>
+        </div>
 
-            @if (!$isReachable)
-                <div class="text-sm text-danger-600 dark:text-danger-400 bg-danger-50 dark:bg-danger-900/20 rounded-lg p-3 mb-4">
-                    {{ __('messages.openwa_unreachable') ?? 'OpenWA gateway is not reachable. Make sure it is running (it auto-starts on login) and OPENWA_BASE_URL is correct.' }}
-                </div>
-
-                @if (!empty($managerStatus['last_error']))
-                    <div id="openwaDiagnostics" class="text-xs bg-ink-50 dark:bg-ink-800/50 rounded-lg p-3 mb-4 font-mono whitespace-pre-wrap break-words">
-                        <div class="font-semibold text-ink-700 dark:text-ink-200 mb-1">{{ __('messages.openwa_diag') ?? 'Gateway diagnostic (last launch attempt):' }}</div>
-                        <div id="openwaLastError" class="text-ink-600 dark:text-ink-300">{{ $managerStatus['last_error'] }}</div>
-                        <div class="mt-2 border-t border-ink-200 dark:border-ink-700 pt-2">
-                            <div>{{ __('messages.openwa_diag_app_dir') ?? 'App dir' }}: {{ $managerStatus['resolved_app_dir'] ?? '(none)' }}</div>
-                            <div>{{ __('messages.openwa_diag_node') ?? 'Node binary' }}: {{ $managerStatus['resolved_node_binary'] ?? '(none)' }}</div>
-                        </div>
-                    </div>
-                @endif
-            @endif
-
-            {{-- Why the session isn't connected: rendered from lastDisconnect,
-                 which the gateway exposes with reason + message. Distinguishes
-                 a 401 (rejected credentials — wipe & re-link) from a transient
-                 408 (network/DNS or plain QR expiry) so the user knows whether
-                 to fix their WhatsApp account or just wait. Rendered server-side
-                 on first paint; the JS poll keeps it fresh. --}}
-            @php
-                $discReason = $status['lastDisconnect']['reason'] ?? null;
-                $discReason = $discReason === null ? null : (int) $discReason;
-                $discCls = 'bg-ink-50 dark:bg-ink-800/50 text-ink-600 dark:text-ink-300';
-                $discText = __('messages.openwa_disc_generic');
-                if ($discReason === 401) {
-                    $discCls = 'bg-danger-50 dark:bg-danger-900/20 text-danger-600 dark:text-danger-400';
-                    $discText = __('messages.openwa_disc_401');
-                } elseif ($discReason === 408) {
-                    $discCls = 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400';
-                    $discText = __('messages.openwa_disc_408');
-                }
-            @endphp
-            <div id="disconnectNote" class="text-sm rounded-lg p-3 mb-4 {{ $discCls }}" {{ $discReason === null ? 'hidden' : '' }}>{{ $discText }}</div>
-
-            {{-- QR + pairing code side by side: both are generated together so
-                 the user can scan the QR OR type the code — whichever they
-                 reach first. On narrow screens they stack. --}}
-            <div class="grid md:grid-cols-2 gap-6">
-
-                {{-- QR code --}}
-                <div class="flex flex-col items-center justify-center py-4">
-                    @if ($qr)
-                        <img id="qrImage" src="{{ $qr }}" alt="WhatsApp QR"
-                             class="w-64 h-64 rounded-lg border border-ink-200 dark:border-ink-700 bg-white p-2">
-                        <p class="text-sm text-ink-500 dark:text-ink-400 mt-4 text-center max-w-xs">
-                            {{ __('messages.openwa_scan_hint') ?? 'Open WhatsApp → Linked Devices → Link a device, then scan this code to connect.' }}
-                        </p>
-                    @else
-                        <div id="qrPlaceholder" class="w-64 h-64 rounded-lg border border-dashed border-ink-300 dark:border-ink-600 flex items-center justify-center text-center text-sm text-ink-500 dark:text-ink-400 p-4">
-                            @if (in_array($status['status'] ?? '', ['connected', 'ready'], true))
-                                {{ __('messages.openwa_connected') ?? 'Session connected. No QR needed.' }}
-                            @else
-                                {{ __('messages.openwa_qr_unavailable') ?? 'QR not available right now. Click Refresh.' }}
-                            @endif
-                        </div>
-                    @endif
-                </div>
-
-                {{-- Pairing code (alternative to QR) --}}
-                <div class="flex flex-col items-center justify-center py-4">
-                    <h4 class="text-sm font-semibold text-ink-700 dark:text-ink-200 mb-1">
-                        {{ __('messages.openwa_pairing_title') ?? 'Or link with a phone number' }}
-                    </h4>
-                    <p class="text-xs text-ink-500 dark:text-ink-400 mb-3 text-center max-w-xs">
-                        {{ __('messages.openwa_pairing_hint') ?? 'Enter your WhatsApp number — the code is generated together with the QR so you can link either way.' }}
-                    </p>
-
-                    <div class="flex items-center gap-2 w-full max-w-xs">
-                        <input id="pairingPhone" type="text" inputmode="numeric" placeholder="93700268836"
-                               class="form-input flex-1">
-                        <button id="pairingBtn" type="button" class="btn btn-primary btn-sm whitespace-nowrap">
-                            {{ __('messages.openwa_generate_code') ?? 'Generate code' }}
-                        </button>
-                    </div>
-
-                    <div id="pairingResult" class="mt-3 text-center">
-                        <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.openwa_pairing_code_label') ?? 'Your pairing code:' }}</div>
-                        <div id="pairingCode" class="text-2xl font-bold tracking-widest text-primary-600 dark:text-primary-400 my-1">--------</div>
-                        <div id="pairingExpiry" class="text-xs font-medium hidden"></div>
-                        <div class="text-xs text-ink-400">{{ __('messages.openwa_pairing_validity') ?? 'Valid for a few minutes. Type it in WhatsApp → Linked Devices → Link with phone number.' }}</div>
-                    </div>
-                </div>
+        @if (!$isReachable)
+            <div class="text-sm text-danger-600 dark:text-danger-400 bg-danger-50 dark:bg-danger-900/20 rounded-[1rem] p-3.5 mb-3">
+                {{ __('messages.openwa_unreachable') }}
             </div>
 
-            <div class="text-xs text-ink-400 mt-4 text-center">
-                {{ __('messages.openwa_gateway_url') ?? 'Gateway' }}: {{ config('services.openwa.base_url') }}
+            @if (!empty($managerStatus['last_error']))
+                <div id="openwaDiagnostics" class="text-xs bg-ink-50 dark:bg-ink-800/50 rounded-[1rem] p-3.5 mb-3 font-mono whitespace-pre-wrap break-words">
+                    <div class="font-semibold text-ink-700 dark:text-ink-200 mb-1">{{ __('messages.openwa_diag') }}</div>
+                    <div id="openwaLastError" class="text-ink-600 dark:text-ink-300">{{ $managerStatus['last_error'] }}</div>
+                    <div class="mt-2 border-t border-ink-200 dark:border-ink-700 pt-2">
+                        <div>{{ __('messages.openwa_diag_app_dir') }}: {{ $managerStatus['resolved_app_dir'] ?? '—' }}</div>
+                        <div>{{ __('messages.openwa_diag_node') }}: {{ $managerStatus['resolved_node_binary'] ?? '—' }}</div>
+                    </div>
+                </div>
+            @endif
+        @endif
+
+        {{-- Why the session isn't connected: rendered from lastDisconnect,
+             which the gateway exposes with reason + message. Distinguishes
+             a 401 (rejected credentials — wipe & re-link) from a transient
+             408 (network/DNS or plain QR expiry) so the user knows whether
+             to fix their WhatsApp account or just wait. Rendered server-side
+             on first paint; the JS poll keeps it fresh. --}}
+        @php
+            $discReason = $status['lastDisconnect']['reason'] ?? null;
+            $discReason = $discReason === null ? null : (int) $discReason;
+            $discCls = 'bg-ink-50 dark:bg-ink-800/50 text-ink-600 dark:text-ink-300';
+            $discText = __('messages.openwa_disc_generic');
+            if ($discReason === 401) {
+                $discCls = 'bg-danger-50 dark:bg-danger-900/20 text-danger-600 dark:text-danger-400';
+                $discText = __('messages.openwa_disc_401');
+            } elseif ($discReason === 408) {
+                $discCls = 'bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-400';
+                $discText = __('messages.openwa_disc_408');
+            }
+        @endphp
+        <div id="disconnectNote" class="text-sm rounded-[1rem] p-3.5 mb-3 {{ $discCls }}" {{ $discReason === null ? 'hidden' : '' }}>{{ $discText }}</div>
+
+        {{-- QR + pairing code: generated together so the user can scan the QR
+             OR type the code — whichever they reach first. Stacks on phones,
+             sits side by side on wide screens. --}}
+        <div class="grid md:grid-cols-2 gap-3">
+
+            {{-- QR code card --}}
+            <div id="qrContainer" class="card p-5 flex flex-col items-center justify-center">
+                @if ($qr)
+                    <img id="qrImage" src="{{ $qr }}" alt="WhatsApp QR"
+                         class="w-60 h-60 rounded-2xl border border-ink-200 dark:border-ink-700 bg-white p-2.5 shadow-card">
+                    <p class="text-xs text-ink-500 dark:text-ink-400 mt-4 text-center leading-relaxed max-w-xs">
+                        {{ __('messages.openwa_scan_hint') }}
+                    </p>
+                @else
+                    <div id="qrPlaceholder" class="w-60 h-60 rounded-2xl border border-dashed border-ink-300 dark:border-ink-600 flex items-center justify-center text-center text-sm text-ink-500 dark:text-ink-400 p-4">
+                        @if (in_array($status['status'] ?? '', ['connected', 'ready'], true))
+                            {{ __('messages.openwa_connected') }}
+                        @else
+                            {{ __('messages.openwa_qr_unavailable') }}
+                        @endif
+                    </div>
+                @endif
+            </div>
+
+            {{-- Pairing code card (alternative to QR) --}}
+            <div class="card p-5 flex flex-col items-center justify-center">
+                <div class="flex items-center gap-2 mb-1">
+                    <x-icon name="device-phone-mobile" class="w-4 h-4 text-primary-600 dark:text-primary-400"/>
+                    <h4 class="text-sm font-bold text-ink-800 dark:text-ink-100">
+                        {{ __('messages.openwa_pairing_title') }}
+                    </h4>
+                </div>
+                <p class="text-xs text-ink-500 dark:text-ink-400 mb-4 text-center leading-relaxed max-w-xs">
+                    {{ __('messages.openwa_pairing_hint') }}
+                </p>
+
+                <div class="flex items-center gap-2 w-full max-w-xs">
+                    <input id="pairingPhone" type="text" inputmode="numeric" placeholder="93700268836"
+                           class="form-input flex-1" dir="ltr">
+                    <button id="pairingBtn" type="button" class="btn btn-primary btn-sm whitespace-nowrap">
+                        {{ __('messages.openwa_generate_code') }}
+                    </button>
+                </div>
+
+                <div id="pairingResult" class="mt-4 w-full max-w-xs text-center hidden">
+                    <div class="text-[11px] font-semibold uppercase tracking-wider text-ink-400">{{ __('messages.openwa_pairing_code_label') }}</div>
+                    <div id="pairingCode" class="text-3xl font-extrabold tracking-[0.3em] text-primary-600 dark:text-primary-400 my-2 py-2.5 rounded-xl bg-primary-50 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-800/40 tabular-nums" dir="ltr">--------</div>
+                    <div id="pairingExpiry" class="text-xs font-medium text-ink-500 dark:text-ink-400 hidden"></div>
+                    <div class="text-[11px] text-ink-400 dark:text-ink-500 mt-2 leading-relaxed">{{ __('messages.openwa_pairing_validity') }}</div>
+                </div>
+                <div id="pairingEmptyHint" class="mt-4 text-center text-[11px] text-ink-400 dark:text-ink-500 max-w-xs leading-relaxed">
+                    {{ __('messages.openwa_pairing_validity') }}
+                </div>
             </div>
         </div>
     @endif
@@ -156,7 +180,17 @@
 @if ($configured)
 @push('scripts')
 <script>
-    const QR_PLACEHOLDER_CLASS = 'w-64 h-64 rounded-lg border border-dashed border-ink-300 dark:border-ink-600 flex items-center justify-center text-center text-sm text-ink-500 dark:text-ink-400 p-4';
+    const QR_PLACEHOLDER_CLASS = 'w-60 h-60 rounded-2xl border border-dashed border-ink-300 dark:border-ink-600 flex items-center justify-center text-center text-sm text-ink-500 dark:text-ink-400 p-4';
+    const QR_IMAGE_CLASS = 'w-60 h-60 rounded-2xl border border-ink-200 dark:border-ink-700 bg-white p-2.5 shadow-card';
+
+    // Localized session-status labels (mirrors the PHP match above).
+    const STATUS_LABELS = {
+        connected: '{{ __('messages.openwa_status_connected') }}',
+        ready: '{{ __('messages.openwa_status_ready') }}',
+        qr_ready: '{{ __('messages.openwa_status_qr_ready') }}',
+    };
+    const LABEL_UNKNOWN = '{{ __('messages.openwa_status_unknown') }}';
+    const LABEL_UNREACHABLE = '{{ __('messages.openwa_status_unreachable') }}';
 
     function showPlaceholder(text) {
         const img = document.getElementById('qrImage');
@@ -175,14 +209,14 @@
     function setBadge(status) {
         const badge = document.getElementById('sessionBadge');
         if (!badge) return;
-        const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unreachable';
+        const label = STATUS_LABELS[status] || (status ? LABEL_UNKNOWN : LABEL_UNREACHABLE);
         const cls = ['connected', 'ready'].includes(status)
             ? 'badge-success'
             : status === 'qr_ready'
                 ? 'badge-warning'
                 : 'badge-danger';
         badge.textContent = label;
-        badge.className = 'badge ' + cls;
+        badge.className = 'badge flex-shrink-0 ' + cls;
     }
 
     // Guard: QR polls and manual refreshes must never overlap (the retry
@@ -223,9 +257,10 @@
                     const newImg = document.createElement('img');
                     newImg.id = 'qrImage';
                     newImg.alt = 'WhatsApp QR';
-                    newImg.className = 'w-64 h-64 rounded-lg border border-ink-200 dark:border-ink-700 bg-white p-2';
+                    newImg.className = QR_IMAGE_CLASS;
+                    const container = document.getElementById('qrContainer');
                     if (placeholder) placeholder.replaceWith(newImg);
-                    else document.querySelector('.flex.flex-col.items-center.justify-center.py-4').appendChild(newImg);
+                    else if (container) container.insertBefore(newImg, container.firstChild);
                 }
                 document.getElementById('qrImage').src = data.qr;
             } else if (img) {
@@ -236,13 +271,13 @@
                 div.className = QR_PLACEHOLDER_CLASS;
                 const linked = ['connected', 'ready'].includes(data.status);
                 div.textContent = linked
-                    ? '{{ __('messages.openwa_connected') ?? 'Session connected. No QR needed.' }}'
-                    : '{{ __('messages.openwa_qr_unavailable') ?? 'QR not available right now. Click Refresh.' }}';
+                    ? '{{ __('messages.openwa_connected') }}'
+                    : '{{ __('messages.openwa_qr_unavailable') }}';
                 img.replaceWith(div);
             } else {
                 showPlaceholder(['connected', 'ready'].includes(data.status)
-                    ? '{{ __('messages.openwa_connected') ?? 'Session connected. No QR needed.' }}'
-                    : '{{ __('messages.openwa_qr_unavailable') ?? 'QR not available right now. Click Refresh.' }}');
+                    ? '{{ __('messages.openwa_connected') }}'
+                    : '{{ __('messages.openwa_qr_unavailable') }}');
             }
         } catch (e) {
             console.error(e);
@@ -253,11 +288,13 @@
 
     document.getElementById('refreshBtn')?.addEventListener('click', async () => {
         const btn = document.getElementById('refreshBtn');
+        const labelEl = btn.querySelector('.btn-label') || btn;
+        const label = labelEl.textContent;
         btn.disabled = true;
-        btn.textContent = '...';
+        labelEl.textContent = '…';
         await refreshState();
         btn.disabled = false;
-        btn.textContent = '{{ __('messages.refresh') ?? 'Refresh QR' }}';
+        labelEl.textContent = label;
     });
 
     // The gateway rotates the QR every ~20s. Auto-poll at 10s so the
@@ -268,16 +305,15 @@
     document.getElementById('pairingBtn')?.addEventListener('click', async () => {
         const btn = document.getElementById('pairingBtn');
         const phone = document.getElementById('pairingPhone').value.trim();
-        const result = document.getElementById('pairingResult');
-        const codeEl = document.getElementById('pairingCode');
 
         if (!phone) {
-            showToast('error', '{{ __('messages.openwa_enter_phone') ?? 'Please enter your WhatsApp number.' }}');
+            showToast('error', '{{ __('messages.openwa_enter_phone') }}');
             return;
         }
 
+        const label = btn.textContent;
         btn.disabled = true;
-        btn.textContent = '...';
+        btn.textContent = '…';
 
         try {
             const res = await fetch('{{ route('settings.openwa.pairing') }}', {
@@ -292,26 +328,28 @@
             const data = await res.json();
 
             if (data.pairingCode) {
-                codeEl.textContent = data.pairingCode;
-                result.classList.remove('hidden');
+                document.getElementById('pairingEmptyHint')?.classList.add('hidden');
+                document.getElementById('pairingResult').classList.remove('hidden');
+                document.getElementById('pairingCode').textContent = data.pairingCode;
                 startPairingCountdown(data.expiresAt);
                 startPairingPoll();
             } else {
-                showToast('error', data.error || '{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
+                showToast('error', data.error || '{{ __('messages.openwa_pairing_error') }}');
             }
         } catch (e) {
             console.error(e);
-            showToast('error', '{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
+            showToast('error', '{{ __('messages.openwa_pairing_error') }}');
         } finally {
             btn.disabled = false;
-            btn.textContent = '{{ __('messages.openwa_generate_code') ?? 'Generate code' }}';
+            btn.textContent = label;
         }
     });
 
     document.getElementById('restartBtn')?.addEventListener('click', async () => {
         const btn = document.getElementById('restartBtn');
+        const label = btn.textContent;
         btn.disabled = true;
-        btn.textContent = '{{ __('messages.openwa_restarting') ?? 'Restarting…' }}';
+        btn.textContent = '{{ __('messages.openwa_restarting') }}';
 
         try {
             const res = await fetch('{{ route('settings.openwa.restart') }}', {
@@ -325,14 +363,14 @@
             const data = await res.json();
             showToast(data.success ? 'success' : 'error',
                 data.success
-                    ? '{{ __('messages.openwa_restarted') ?? 'Gateway restarted.' }}'
-                    : (data.error || '{{ __('messages.openwa_restart_failed') ?? 'Restart failed.' }}'));
+                    ? '{{ __('messages.openwa_restarted') }}'
+                    : (data.error || '{{ __('messages.openwa_restart_failed') }}'));
         } catch (e) {
             console.error(e);
-            showToast('error', '{{ __('messages.openwa_restart_failed') ?? 'Restart failed.' }}');
+            showToast('error', '{{ __('messages.openwa_restart_failed') }}');
         } finally {
             btn.disabled = false;
-            btn.textContent = '{{ __('messages.openwa_restart') ?? 'Restart gateway' }}';
+            btn.textContent = label;
             await refreshState();
         }
     });
@@ -340,8 +378,9 @@
     document.getElementById('testSendBtn')?.addEventListener('click', async () => {
         const btn = document.getElementById('testSendBtn');
         const result = document.getElementById('testSendResult');
+        const label = btn.textContent;
         btn.disabled = true;
-        btn.textContent = '...';
+        btn.textContent = '…';
 
         try {
             const res = await fetch('{{ route('settings.openwa.test') }}', {
@@ -357,19 +396,19 @@
             result.classList.remove('hidden');
             if (data.success) {
                 result.className = 'text-sm mt-2 text-primary-600 dark:text-primary-400';
-                result.textContent = '{{ __('messages.openwa_test_sent') ?? 'Test message sent! Check your WhatsApp.' }}';
+                result.textContent = '{{ __('messages.openwa_test_sent') }}';
             } else {
                 result.className = 'text-sm mt-2 text-danger-600 dark:text-danger-400';
-                result.textContent = '{{ __('messages.openwa_test_failed') ?? 'Test failed:' }} ' + (data.error || '');
+                result.textContent = '{{ __('messages.openwa_test_failed') }} ' + (data.error || '');
             }
         } catch (e) {
             console.error(e);
             result.classList.remove('hidden');
             result.className = 'text-sm mt-2 text-danger-600 dark:text-danger-400';
-            result.textContent = '{{ __('messages.openwa_test_failed') ?? 'Test failed:' }} request error';
+            result.textContent = '{{ __('messages.openwa_test_failed') }} request error';
         } finally {
             btn.disabled = false;
-            btn.textContent = '{{ __('messages.openwa_test_send') ?? 'Send test WhatsApp' }}';
+            btn.textContent = label;
         }
     });
 
@@ -388,15 +427,15 @@
         }
         const reason = Number(lastDisconnect.reason);
         let cls = 'bg-ink-50 dark:bg-ink-800/50 text-ink-600 dark:text-ink-300';
-        let text = '{{ __('messages.openwa_disc_generic') ?? 'Connection lost — reconnecting…' }}';
+        let text = '{{ __('messages.openwa_disc_generic') }}';
         if (reason === 401) {
             cls = 'bg-danger-50 dark:bg-danger-900/20 text-danger-600 dark:text-danger-400';
-            text = '{{ __('messages.openwa_disc_401') ?? 'WhatsApp rejected the session (401). Stored credentials were wiped — link the device again. If it keeps failing, open WhatsApp on your phone, go to Linked Devices and remove old entries (max 4), then wait a few minutes before retrying.' }}';
+            text = '{{ __('messages.openwa_disc_401') }}';
         } else if (reason === 408) {
-            cls = 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400';
-            text = '{{ __('messages.openwa_disc_408') ?? 'Connection lost (408) — a network or DNS problem, or the QR/pairing code expired. The gateway recovers automatically; wait a moment or press Restart.' }}';
+            cls = 'bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-400';
+            text = '{{ __('messages.openwa_disc_408') }}';
         }
-        el.className = 'text-sm rounded-lg p-3 mb-4 ' + cls;
+        el.className = 'text-sm rounded-[1rem] p-3.5 mb-3 ' + cls;
         el.textContent = text;
         el.classList.remove('hidden');
     }
@@ -446,8 +485,8 @@
         const tick = () => {
             const secs = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
             el.textContent = secs > 0
-                ? '{{ __('messages.openwa_pairing_expires_in') ?? 'Expires in' }} ' + secs + 's'
-                : '{{ __('messages.openwa_pairing_expired') ?? 'Code expired — generating a new one…' }}';
+                ? '{{ __('messages.openwa_pairing_expires_in') }} ' + secs + 's'
+                : '{{ __('messages.openwa_pairing_expired') }}';
         };
         tick();
         pairingCountdownTimer = setInterval(tick, 1000);
@@ -472,7 +511,7 @@
         codeEl.textContent = '--------';
         if (expiryEl) {
             expiryEl.classList.remove('hidden');
-            expiryEl.textContent = '{{ __('messages.openwa_pairing_generating') ?? 'Generating new code…' }}';
+            expiryEl.textContent = '{{ __('messages.openwa_pairing_generating') }}';
         }
         try {
             const res = await fetch('{{ route('settings.openwa.pairing') }}', {
@@ -488,19 +527,21 @@
             if (data.pairingCode) {
                 // Stop any stale countdown before starting the new one.
                 if (pairingCountdownTimer) clearInterval(pairingCountdownTimer);
+                document.getElementById('pairingEmptyHint')?.classList.add('hidden');
+                document.getElementById('pairingResult').classList.remove('hidden');
                 codeEl.textContent = data.pairingCode;
                 startPairingCountdown(data.expiresAt);
                 startPairingPoll();
             } else {
                 // No code returned — let the auto-retry interval try again.
                 autoPairingRequested = false;
-                if (!silent) showToast('error', data.error || '{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
+                if (!silent) showToast('error', data.error || '{{ __('messages.openwa_pairing_error') }}');
             }
         } catch (e) {
             console.error(e);
             // Allow the auto-request interval to retry a failed generation.
             autoPairingRequested = false;
-            if (!silent) showToast('error', '{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
+            if (!silent) showToast('error', '{{ __('messages.openwa_pairing_error') }}');
         } finally {
             generatingPairing = false;
             if (!silent) btn.disabled = false;
