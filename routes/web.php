@@ -26,6 +26,7 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,
 Route::get('/login/phone', function () {
     return view('auth.otp-login');
 })->name('login.phone');
+Route::post('/login/phone/verify', [AuthController::class, 'verifyPhoneOtp'])->name('login.phone.verify')->middleware('throttle:5,1');
 Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');

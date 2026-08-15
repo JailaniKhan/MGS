@@ -137,6 +137,14 @@ use App\Models\Setting;
                     <x-icon name="chat-bubble-oval-left-ellipsis" class="w-5 h-5"/>
                     <span>{{ __('messages.whatsapp_chats') }}</span>
                 </a>
+                <div class="sidebar-divider"></div>
+                <form method="POST" action="{{ route('logout') }}" class="sidebar-logout-form">
+                    @csrf
+                    <button type="submit" class="sidebar-link w-full text-start border-0 bg-transparent cursor-pointer font-[inherit]">
+                        <x-icon name="arrow-right-on-rectangle" class="w-5 h-5"/>
+                        <span>{{ __('messages.logout') }}</span>
+                    </button>
+                </form>
             </nav>
         </aside>
 

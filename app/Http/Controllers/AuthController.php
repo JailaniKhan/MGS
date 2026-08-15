@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\Accounting\ChartOfAccountsSeeder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -68,5 +69,42 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('login');
+    }
+
+    public function verifyPhoneOtp(Request $request)
+    {
+        $validated = $request->validate([
+            'phone' => 'required|string|max:20',
+            'otp' => 'required|string|size:6',
+            'name' => 'nullable|string|max:255',
+        ]);
+
+        $cached = Cache::get("otp_{$validated['phone']}");
+
+        if (! $cached || $cached !== (int) $validated['otp']) {
+            return response()->json(['message' => __('messages.invalid_otp')], 401);
+        }
+
+        Cache::forget("otp_{$validated['phone']}");
+
+        $user = User::where('phone', $validated['phone'])->first()
+            ?? User::where('email', $validated['phone'].'@phone.local')->first();
+
+        if (! $user) {
+            $user = User::create([
+                'name' => $validated['name'] ?? $validated['phone'],
+                'email' => $validated['phone'].'@phone.local',
+                'phone' => $validated['phone'],
+                'password' => bcrypt((string) random_int(100000000, 999999999)),
+            ]);
+        }
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return response()->json([
+            'ok' => true,
+            'redirect' => route('dashboard'),
+        ]);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -20,12 +21,17 @@ class OtpAuthController extends Controller
 
         cache(["otp_{$validated['phone']}" => $otp], 300);
 
-        // In production, send via SMS gateway
-        // For development, log to console
-        logger("OTP for {$validated['phone']}: {$otp}");
+        $message = __('messages.otp_message', ['otp' => $otp]);
+        try {
+            if (! app(WhatsAppService::class)->send($validated['phone'], $message)) {
+                logger("OTP for {$validated['phone']}: {$otp}");
+            }
+        } catch (\Throwable $e) {
+            logger("OTP for {$validated['phone']}: {$otp}");
+        }
 
         return response()->json([
-            'message' => 'OTP sent successfully',
+            'message' => __('messages.otp_sent'),
         ]);
     }
 
@@ -54,6 +60,7 @@ class OtpAuthController extends Controller
             $user = User::create([
                 'name' => $validated['name'] ?? 'User',
                 'email' => $validated['phone'].'@phone.local',
+                'phone' => $validated['phone'],
                 'password' => Hash::make(Str::random(32)),
             ]);
         }

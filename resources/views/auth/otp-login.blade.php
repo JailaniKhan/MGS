@@ -178,7 +178,7 @@
             btn.textContent = '{{ __('messages.verifying') }}';
 
             try {
-                const res = await fetch('/api/auth/verify-otp', {
+                const res = await fetch('{{ route('login.phone.verify') }}', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}'},
                     body: JSON.stringify({phone: currentPhone, otp})
@@ -187,8 +187,7 @@
                 if (res.ok) {
                     document.getElementById('step-otp').classList.add('hidden');
                     document.getElementById('step-success').classList.remove('hidden');
-                    localStorage.setItem('token', data.token);
-                    setTimeout(() => window.location.href = '{{ route("dashboard") }}', 1000);
+                    setTimeout(() => window.location.href = data.redirect, 800);
                 } else {
                     showError('otp-error', data.message || '{{ __('messages.invalid_otp') }}');
                     shakeOtp();
