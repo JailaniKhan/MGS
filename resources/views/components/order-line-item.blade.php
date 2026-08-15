@@ -1,4 +1,4 @@
-@props([
+﻿@props([
     'index' => 0,
     'products' => [],
     'selected' => null,
@@ -10,26 +10,26 @@
 
 <div class="flex flex-wrap items-start gap-2 p-3 bg-ink-50 dark:bg-white/[0.03] rounded-xl mb-2 border border-ink-100 dark:border-white/[0.06] group/line">
     <select name="items[{{ $index }}][product_id]"
-            class="form-select flex-1 min-w-[120px] text-[14px] py-2.5"
+            class="form-select flex-1 min-w-[120px] text-sm py-2.5"
             x-data
             @@change="$dispatch('product-changed', { index: {{ $index }}, price: $el.selectedOptions[0]?.dataset.price || 0 })">
         <option value="">{{ __('messages.select_product') }}</option>
         @foreach ($products as $product)
             <option value="{{ $product->id }}" data-price="{{ $product->price }}"
                 {{ $selected == $product->id ? 'selected' : '' }}>
-                {{ $product->name }} — {{ number_format($product->price) }} {{ __('messages.afn') }}
+                {{ $product->name }} â€” {{ number_format($product->price) }} {{ __('messages.afn') }}
             </option>
         @endforeach
     </select>
 
     <div class="relative w-20">
         <input type="number" name="items[{{ $index }}][qty]" step="any" min="1"
-               class="form-input text-center py-2.5 pr-0 text-[14px]" value="{{ $qty }}"
+               class="form-input text-center py-2.5 pe-0 text-sm" value="{{ $qty }}"
                placeholder="1">
     </div>
 
     <input type="number" name="items[{{ $index }}][price]" step="0.01"
-           class="form-input w-24 text-right py-2.5 text-[13px] font-semibold text-ink-700 dark:text-ink-200"
+           class="form-input w-24 text-end py-2.5 text-sm font-semibold text-ink-700 dark:text-ink-200"
            value="{{ $price }}" readonly>
 
     <div class="flex items-center gap-1 text-base font-bold text-primary-600 dark:text-primary-400 min-w-[60px]">

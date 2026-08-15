@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
     <div class="mb-4 page-enter">
@@ -11,8 +11,8 @@
     <div class="card p-4 mb-4 page-enter" style="animation-delay: 0.05s;">
         <div class="flex justify-between items-start mb-4">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center shadow-sm">
-                    <x-icon name="shopping-bag" class="w-4 h-4 text-white"/>
+                <div class="w-10 h-10 rounded-[0.875rem] bg-accent-50 dark:bg-accent-900/30 flex items-center justify-center border border-accent-100 dark:border-accent-800/40">
+                    <x-icon name="shopping-bag" class="w-4 h-4 text-accent-600 dark:text-accent-400"/>
                 </div>
                 <div>
                     <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ __('messages.purchase') }} #{{ $purchase->id }}</h2>
@@ -96,18 +96,6 @@
                 </div>
             @endforeach
         </div>
-        @if ($purchase->tax_rate > 0)
-        <div class="px-4 py-2.5 bg-ink-50 dark:bg-ink-800/50 border-t border-ink-100 dark:border-ink-700/30">
-            <div class="flex justify-between text-xs">
-                <span class="text-ink-500 dark:text-ink-400">{{ __('messages.subtotal') }} ({{ __('messages.without_tax') }})</span>
-                <span class="font-medium text-ink-700 dark:text-ink-300">{{ number_format($purchase->subtotal) }} {{ $purchase->currency === 'USD' ? '$' : __('messages.afn') }}</span>
-            </div>
-            <div class="flex justify-between text-xs mt-1">
-                <span class="text-ink-500 dark:text-ink-400">{{ __('messages.tax') }} ({{ $purchase->tax_rate }}% {{ $purchase->tax_type === 'inclusive' ? __('messages.inclusive') : __('messages.exclusive') }})</span>
-                <span class="font-medium text-ink-700 dark:text-ink-300">{{ number_format($purchase->tax_amount) }} {{ $purchase->currency === 'USD' ? '$' : __('messages.afn') }}</span>
-            </div>
-        </div>
-        @endif
         <div class="px-4 py-3 bg-primary-50 dark:bg-primary-900/10 border-t border-ink-100 dark:border-ink-700/30">
             <div class="flex justify-between">
                 <span class="text-sm font-bold text-ink-900 dark:text-white">{{ __('messages.total') }}</span>

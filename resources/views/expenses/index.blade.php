@@ -13,8 +13,8 @@
         @forelse ($expenses as $expense)
             <a href="{{ route('expenses.show', $expense) }}" class="list-row">
                 <div class="flex items-center gap-3 min-w-0 flex-1">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-danger-500 to-danger-700 flex items-center justify-center flex-shrink-0 shadow-sm">
-                        <x-icon name="currency-dollar" class="w-4 h-4 text-white"/>
+                    <div class="w-9 h-9 rounded-[0.875rem] bg-danger-50 dark:bg-danger-900/30 flex items-center justify-center flex-shrink-0 border border-danger-100 dark:border-danger-800/40">
+                        <x-icon name="currency-dollar" class="w-4 h-4 text-danger-600 dark:text-danger-400"/>
                     </div>
                     <div class="min-w-0">
                         <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $expense->category }}</div>
@@ -24,13 +24,13 @@
                         </div>
                     </div>
                 </div>
-                <div class="text-sm font-bold text-danger-600 dark:text-danger-400 flex-shrink-0 ml-3">
+                <div class="text-sm font-bold text-danger-600 dark:text-danger-400 flex-shrink-0 ms-3">
                     -{{ number_format($expense->amount) }} {{ $expense->currency_symbol }}
                 </div>
             </a>
         @empty
             <div class="empty-state">
-                <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                <div class="empty-illustration">
                     <x-icon name="currency-dollar" class="w-6 h-6 text-ink-400"/>
                 </div>
                 <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_expenses') }}</p>

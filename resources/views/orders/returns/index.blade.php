@@ -13,7 +13,7 @@
         @forelse ($orderReturns as $orderReturn)
             <a href="{{ route('orders.returns.show', $orderReturn) }}" class="list-row">
                 <div class="flex items-center gap-3 min-w-0 flex-1">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-danger-500 to-danger-700 flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <div class="w-9 h-9 rounded-[0.875rem] bg-danger-50 dark:bg-danger-900/30 flex items-center justify-center flex-shrink-0 border border-danger-100 dark:border-danger-800/40">
                         <x-icon name="arrow-uturn-left" class="w-4 h-4 text-white"/>
                     </div>
                     <div class="min-w-0">
@@ -21,7 +21,7 @@
                         <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $orderReturn->return_date->format('d M Y') }}</div>
                     </div>
                 </div>
-                <div class="text-right flex-shrink-0 ml-3">
+                <div class="text-end flex-shrink-0 ms-3">
                     <div class="text-sm font-bold text-ink-900 dark:text-ink-100">{{ number_format($orderReturn->total_amount) }} {{ $orderReturn->order->currency === 'USD' ? '$' : __('messages.afn') }}</div>
                     <span class="inline-flex items-center gap-1 badge mt-0.5
                         @if($orderReturn->status === 'completed') badge-success
@@ -39,7 +39,7 @@
             </a>
         @empty
             <div class="empty-state">
-                <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                <div class="empty-illustration">
                     <x-icon name="arrow-uturn-left" class="w-6 h-6 text-ink-400"/>
                 </div>
                 <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_order_returns') }}</p>

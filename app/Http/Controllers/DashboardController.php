@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\Expense;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\PartyPayment;
 use App\Models\Payment;
 use App\Models\Product;
@@ -16,10 +15,14 @@ use App\Models\SalaryPayment;
 use App\Models\Setting;
 use App\Models\Supplier;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
+    /** Cache TTL for dashboard aggregates (seconds). */
+    protected const DASHBOARD_TTL = 120;
+
     /**
      * USD -> AFN conversion rate, sourced from settings (Fix M5).
      */
@@ -43,10 +46,14 @@ class DashboardController extends Controller
 
         foreach (['AFN', 'USD'] as $currency) {
             $totals[$currency] = [
-                'in' => (float) Payment::where('currency', $currency)->sum('amount')
+                'in' => (float) Payment::where('currency', $currency)
+                    ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
+                    ->sum('amount')
                     + (float) PartyPayment::where('currency', $currency)->where('type', 'payment_received')->sum('amount')
                     + (float) $this->cashbookSum('cashbook_in', 'debit', $currency),
-                'out' => (float) PurchasePayment::where('currency', $currency)->sum('amount')
+                'out' => (float) PurchasePayment::where('currency', $currency)
+                    ->whereHas('purchase', fn ($q) => $q->where('status', '!=', 'cancelled'))
+                    ->sum('amount')
                     + (float) PartyPayment::where('currency', $currency)->where('type', 'payment_made')->sum('amount')
                     + (float) $this->cashbookSum('cashbook_out', 'credit', $currency)
                     + (float) Expense::where('currency', $currency)->sum('amount')
@@ -76,151 +83,125 @@ class DashboardController extends Controller
     }
 
     /**
-     * Single day's cash in/out per currency (payments use their created_at,
-     * cashbook entries their transaction_date, expenses their expense_date).
+     * Weekly revenue/expense series, built from ONE grouped query per side
+     * instead of 7 per-day query batches (was ~168 queries; now ~6).
      */
-    protected function dailyCashFlow(string $date): array
+    protected function weeklySeries(string $side): array
     {
-        $flow = [];
+        $userId = auth()->id();
+        $start = Carbon::now()->subDays(6)->startOfDay();
+        $end = Carbon::now()->endOfDay();
 
-        foreach (['AFN', 'USD'] as $currency) {
-            $flow[$currency] = [
-                'in' => (float) Payment::where('currency', $currency)->whereDate('created_at', $date)->sum('amount')
-                    + (float) PartyPayment::where('currency', $currency)->where('type', 'payment_received')->whereDate('created_at', $date)->sum('amount')
-                    + (float) DB::table('journal_entries')
-                        ->join('ledger_entries', 'ledger_entries.journal_entry_id', '=', 'journal_entries.id')
-                        ->where('journal_entries.user_id', auth()->id())
-                        ->where('journal_entries.source', 'cashbook_in')
-                        ->where('journal_entries.currency', $currency)
-                        ->where('ledger_entries.direction', 'debit')
-                        ->whereDate('journal_entries.transaction_date', $date)
-                        ->sum('ledger_entries.amount'),
-                'out' => (float) PurchasePayment::where('currency', $currency)->whereDate('created_at', $date)->sum('amount')
-                    + (float) PartyPayment::where('currency', $currency)->where('type', 'payment_made')->whereDate('created_at', $date)->sum('amount')
-                    + (float) DB::table('journal_entries')
-                        ->join('ledger_entries', 'ledger_entries.journal_entry_id', '=', 'journal_entries.id')
-                        ->where('journal_entries.user_id', auth()->id())
-                        ->where('journal_entries.source', 'cashbook_out')
-                        ->where('journal_entries.currency', $currency)
-                        ->where('ledger_entries.direction', 'credit')
-                        ->whereDate('journal_entries.transaction_date', $date)
-                        ->sum('ledger_entries.amount')
-                    + (float) Expense::where('currency', $currency)->whereDate('expense_date', $date)->sum('amount')
-                    + (float) SalaryPayment::where('currency', $currency)
-                        ->whereHas('employee', fn ($q) => $q->where('user_id', auth()->id()))
-                        ->whereDate('created_at', $date)
-                        ->sum('amount'),
+        $days = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $d = Carbon::now()->subDays($i);
+            $days[$d->format('Y-m-d')] = [
+                'label' => $d->format('m/d'),
+                'AFN' => 0.0, 'USD' => 0.0,
             ];
         }
 
-        return $flow;
+        $bucket = function ($rows, $dateCol) use (&$days) {
+            foreach ($rows as $r) {
+                $key = Carbon::parse($r->{$dateCol})->format('Y-m-d');
+                if (isset($days[$key])) {
+                    $days[$key][$r->currency] += (float) $r->total;
+                }
+            }
+        };
+
+        if ($side === 'in') {
+            $bucket(Payment::selectRaw('DATE(created_at) as d, currency, SUM(amount) as total')
+                ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
+                ->where('created_at', '>=', $start)->where('created_at', '<=', $end)
+                ->groupBy('d', 'currency')->get(), 'd');
+            $bucket(PartyPayment::selectRaw('DATE(created_at) as d, currency, SUM(amount) as total')
+                ->where('type', 'payment_received')
+                ->where('created_at', '>=', $start)->where('created_at', '<=', $end)
+                ->groupBy('d', 'currency')->get(), 'd');
+            $bucket(DB::table('journal_entries')
+                ->join('ledger_entries', 'ledger_entries.journal_entry_id', '=', 'journal_entries.id')
+                ->where('journal_entries.user_id', $userId)
+                ->where('journal_entries.source', 'cashbook_in')
+                ->where('ledger_entries.direction', 'debit')
+                ->where('journal_entries.transaction_date', '>=', $start)
+                ->where('journal_entries.transaction_date', '<=', $end)
+                ->groupBy(DB::raw('DATE(journal_entries.transaction_date)'), 'journal_entries.currency')
+                ->selectRaw('DATE(journal_entries.transaction_date) as d, journal_entries.currency, SUM(ledger_entries.amount) as total')
+                ->get(), 'd');
+        } else {
+            $bucket(PurchasePayment::selectRaw('DATE(created_at) as d, currency, SUM(amount) as total')
+                ->whereHas('purchase', fn ($q) => $q->where('status', '!=', 'cancelled'))
+                ->where('created_at', '>=', $start)->where('created_at', '<=', $end)
+                ->groupBy('d', 'currency')->get(), 'd');
+            $bucket(PartyPayment::selectRaw('DATE(created_at) as d, currency, SUM(amount) as total')
+                ->where('type', 'payment_made')
+                ->where('created_at', '>=', $start)->where('created_at', '<=', $end)
+                ->groupBy('d', 'currency')->get(), 'd');
+            $bucket(DB::table('journal_entries')
+                ->join('ledger_entries', 'ledger_entries.journal_entry_id', '=', 'journal_entries.id')
+                ->where('journal_entries.user_id', $userId)
+                ->where('journal_entries.source', 'cashbook_out')
+                ->where('ledger_entries.direction', 'credit')
+                ->where('journal_entries.transaction_date', '>=', $start)
+                ->where('journal_entries.transaction_date', '<=', $end)
+                ->groupBy(DB::raw('DATE(journal_entries.transaction_date)'), 'journal_entries.currency')
+                ->selectRaw('DATE(journal_entries.transaction_date) as d, journal_entries.currency, SUM(ledger_entries.amount) as total')
+                ->get(), 'd');
+            $bucket(Expense::selectRaw('DATE(expense_date) as d, currency, SUM(amount) as total')
+                ->where('expense_date', '>=', $start)->where('expense_date', '<=', $end)
+                ->groupBy('d', 'currency')->get(), 'd');
+            $bucket(SalaryPayment::selectRaw('DATE(salary_payments.created_at) as d, salary_payments.currency, SUM(salary_payments.amount) as total')
+                ->join('employees', 'salary_payments.employee_id', '=', 'employees.id')
+                ->where('employees.user_id', $userId)
+                ->where('salary_payments.created_at', '>=', $start)->where('salary_payments.created_at', '<=', $end)
+                ->groupBy('d', 'salary_payments.currency')->get(), 'd');
+        }
+
+        $labels = [];
+        $dataAFN = [];
+        $dataUSD = [];
+        $data = [];
+        $rate = $this->usdToAfn();
+        foreach ($days as $day) {
+            $labels[] = $day['label'];
+            $dataAFN[] = $day['AFN'];
+            $dataUSD[] = $day['USD'];
+            $data[] = $day['AFN'] + $day['USD'] * $rate;
+        }
+
+        return [
+            'labels' => $labels,
+            'data' => $data,
+            'data_afn' => $dataAFN,
+            'data_usd' => $dataUSD,
+        ];
     }
 
     protected function weeklyRevenue()
     {
-        $labels = [];
-        $data = [];
-        $dataAFN = [];
-        $dataUSD = [];
+        $series = $this->weeklySeries('in');
+        $series['datasets'] = [[
+            'label' => 'Weekly Revenue',
+            'data' => $series['data'],
+            'backgroundColor' => 'rgba(16, 174, 100, 0.2)',
+            'borderColor' => 'rgba(16, 174, 100, 1)',
+        ]];
 
-        for ($i = 6; $i >= 0; $i--) {
-            $date = Carbon::now()->subDays($i)->format('Y-m-d');
-            $labels[] = Carbon::now()->subDays($i)->format('m/d');
-            $flow = $this->dailyCashFlow($date);
-            $dataAFN[] = $flow['AFN']['in'];
-            $dataUSD[] = $flow['USD']['in'];
-            $data[] = $flow['AFN']['in'] + $flow['USD']['in'] * $this->usdToAfn();
-        }
-
-        return [
-            'labels' => $labels,
-            'data' => $data,
-            'data_afn' => $dataAFN,
-            'data_usd' => $dataUSD,
-            'datasets' => [
-                [
-                    'label' => 'Weekly Revenue',
-                    'data' => $data,
-                    'backgroundColor' => 'rgba(75, 192, 192, 0.2)',
-                    'borderColor' => 'rgba(75, 192, 192, 1)',
-                ],
-            ],
-        ];
+        return $series;
     }
 
     protected function weeklyExpenses()
     {
-        $labels = [];
-        $data = [];
-        $dataAFN = [];
-        $dataUSD = [];
+        $series = $this->weeklySeries('out');
+        $series['datasets'] = [[
+            'label' => 'Weekly Expenses',
+            'data' => $series['data'],
+            'backgroundColor' => 'rgba(230, 85, 85, 0.2)',
+            'borderColor' => 'rgba(230, 85, 85, 1)',
+        ]];
 
-        for ($i = 6; $i >= 0; $i--) {
-            $date = Carbon::now()->subDays($i)->format('Y-m-d');
-            $labels[] = Carbon::now()->subDays($i)->format('m/d');
-            $flow = $this->dailyCashFlow($date);
-            $dataAFN[] = $flow['AFN']['out'];
-            $dataUSD[] = $flow['USD']['out'];
-            $data[] = $flow['AFN']['out'] + $flow['USD']['out'] * $this->usdToAfn();
-        }
-
-        return [
-            'labels' => $labels,
-            'data' => $data,
-            'data_afn' => $dataAFN,
-            'data_usd' => $dataUSD,
-            'datasets' => [
-                [
-                    'label' => 'Weekly Expenses',
-                    'data' => $data,
-                    'backgroundColor' => 'rgba(255, 99, 132, 0.2)',
-                    'borderColor' => 'rgba(255, 99, 132, 1)',
-                ],
-            ],
-        ];
-    }
-
-    protected function topProducts()
-    {
-        $items = OrderItem::selectRaw('product_id, SUM(quantity) as total_quantity')
-            ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
-            ->groupBy('product_id')
-            ->orderBy('total_quantity', 'desc')
-            ->take(5)
-            ->get();
-
-        $productNames = Product::whereIn('id', $items->pluck('product_id'))->pluck('name', 'id');
-
-        $labels = [];
-        $data = [];
-        foreach ($items as $item) {
-            $labels[] = $productNames[$item->product_id] ?? 'Unknown';
-            $data[] = $item->total_quantity;
-        }
-
-        return [
-            'labels' => $labels,
-            'datasets' => [
-                [
-                    'label' => 'Quantity Sold',
-                    'data' => $data,
-                    'backgroundColor' => [
-                        'rgba(255, 99, 132, 0.2)',
-                        'rgba(54, 162, 235, 0.2)',
-                        'rgba(255, 206, 86, 0.2)',
-                        'rgba(75, 192, 192, 0.2)',
-                        'rgba(153, 102, 255, 0.2)',
-                    ],
-                    'borderColor' => [
-                        'rgba(255, 99, 132, 1)',
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(255, 206, 86, 1)',
-                        'rgba(75, 192, 192, 1)',
-                        'rgba(153, 102, 255, 1)',
-                    ],
-                ],
-            ],
-        ];
+        return $series;
     }
 
     /**
@@ -268,14 +249,14 @@ class DashboardController extends Controller
         // Combine: orders add to what they owe us, purchases add to what we owe them.
         $pending = [];
         foreach ($orders as $row) {
-            $key = $row->person_type . ':' . $row->person_id;
+            $key = $row->person_type.':'.$row->person_id;
             $pending[$key]['type'] = $row->person_type;
             $pending[$key]['id'] = $row->person_id;
             $pending[$key]['owed'][$row->currency] = (float) $row->remaining;
             $pending[$key]['due'][$row->currency] = 0;
         }
         foreach ($purchases as $row) {
-            $key = $row->person_type . ':' . $row->person_id;
+            $key = $row->person_type.':'.$row->person_id;
             if (! isset($pending[$key])) {
                 $pending[$key]['type'] = $row->person_type;
                 $pending[$key]['id'] = $row->person_id;
@@ -311,38 +292,65 @@ class DashboardController extends Controller
 
     public function index()
     {
-        $weeklyRevenue = $this->weeklyRevenue();
-        $weeklyExpenses = $this->weeklyExpenses();
-        $topProducts = $this->topProducts();
+        $cacheKey = sprintf('dashboard_v3_%s_%s', auth()->id(), now()->format('Ymd'));
 
-        $totals = $this->cashFlowTotals();
+        // Only scalar aggregates are cached; collections (recentOrders,
+        // recentPurchases, topDebtors, recentReminders) are always fresh
+        // so the view receives live Eloquent models with ->created_at etc.
+        $aggregates = Cache::remember($cacheKey, self::DASHBOARD_TTL, function () {
+            $totals = $this->cashFlowTotals();
+            $lowStockThreshold = (int) Setting::get('min_stock_threshold', 10);
 
-        $data = [
-            'totalRevenueAFN' => $totals['AFN']['in'],
-            'totalRevenueUSD' => $totals['USD']['in'],
-            'totalExpenseAFN' => $totals['AFN']['out'],
-            'totalExpenseUSD' => $totals['USD']['out'],
-            'pendingOrders' => Order::where('status', '!=', 'cancelled')->get()->filter(function ($order) {
-                return $order->remaining_amount > 0;
-            })->count(),
-            'processingOrders' => Order::where('status', 'processing')->count(),
-            'recentOrders' => Order::with('customer')->orderBy('created_at', 'desc')->take(5)->get(),
-            'recentPurchases' => Purchase::with('supplier')->orderBy('created_at', 'desc')->take(5)->get(),
-            'lowStockProducts' => Product::where('stock', '<', 10)->count(),
-            'pendingPayments' => Purchase::where('status', '!=', 'cancelled')->get()->filter(function ($purchase) {
-                return $purchase->remaining_amount > 0;
-            })->count(),
-            'rate' => $this->usdToAfn(),
-            'weeklyRevenue' => $weeklyRevenue,
-            'weeklyExpenses' => $weeklyExpenses,
-            'topProducts' => $topProducts,
-            'topDebtors' => $this->topDebtors(),
-            'recentReminders' => Reminder::with('remindable')
-                ->orderBy('created_at', 'desc')
-                ->take(3)
-                ->get(),
-        ];
+            return [
+                'totalRevenueAFN' => (float) $totals['AFN']['in'],
+                'totalRevenueUSD' => (float) $totals['USD']['in'],
+                'totalExpenseAFN' => (float) $totals['AFN']['out'],
+                'totalExpenseUSD' => (float) $totals['USD']['out'],
+                // Pending = remaining_amount > 0, mirroring the model accessors:
+                // only same-currency payments settle a document, and returns
+                // (non-cancelled) reduce the balance before the comparison.
+                'pendingOrders' => (int) Order::where('status', '!=', 'cancelled')
+                    ->whereRaw('orders.total_amount > (SELECT COALESCE(SUM(p.amount), 0) FROM payments p WHERE p.order_id = orders.id AND p.currency = orders.currency) + (SELECT COALESCE(SUM(r.total_amount), 0) FROM order_returns r WHERE r.order_id = orders.id AND r.status != ? AND r.currency = orders.currency)', ['cancelled'])
+                    ->count(),
+                'processingOrders' => (int) Order::where('status', 'processing')->count(),
+                'lowStockProducts' => (int) Product::where('stock', '<', $lowStockThreshold)->count(),
+                'pendingPayments' => (int) Purchase::where('status', '!=', 'cancelled')
+                    ->whereRaw('purchases.total_amount > (SELECT COALESCE(SUM(p.amount), 0) FROM purchase_payments p WHERE p.purchase_id = purchases.id AND p.currency = purchases.currency) + (SELECT COALESCE(SUM(r.total_amount), 0) FROM purchase_returns r WHERE r.purchase_id = purchases.id AND r.status != ? AND r.currency = purchases.currency)', ['cancelled'])
+                    ->count(),
+                'rate' => (float) $this->usdToAfn(),
+                // Chart series — primitives only (labels[], data[], data_afn[], data_usd[])
+                'weeklyRevenue' => $this->pluckChartSeries($this->weeklyRevenue()),
+                'weeklyExpenses' => $this->pluckChartSeries($this->weeklyExpenses()),
+            ];
+        });
+
+        // Data fetched fresh per request (must be live Eloquent collections)
+        $recentOrders = Order::with('customer')->orderBy('created_at', 'desc')->take(5)->get();
+        $recentPurchases = Purchase::with('supplier')->orderBy('created_at', 'desc')->take(5)->get();
+        $recentReminders = Reminder::with('remindable')->orderBy('created_at', 'desc')->take(3)->get();
+        $topDebtors = $this->topDebtors();
+
+        $data = array_merge($aggregates, [
+            'recentOrders' => $recentOrders,
+            'recentPurchases' => $recentPurchases,
+            'recentReminders' => $recentReminders,
+            'topDebtors' => $topDebtors,
+        ]);
 
         return view('dashboard', $data);
+    }
+
+    /**
+     * Strip chart series to plain arrays (labels/data/data_afn/data_usd) —
+     * must be primitives for the cache store to safely round-trip them.
+     */
+    protected function pluckChartSeries(array $series): array
+    {
+        return [
+            'labels' => array_values($series['labels'] ?? []),
+            'data' => array_values($series['data'] ?? []),
+            'data_afn' => array_values($series['data_afn'] ?? []),
+            'data_usd' => array_values($series['data_usd'] ?? []),
+        ];
     }
 }

@@ -4,10 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ __('messages.ledger_for') }} {{ $person->name }}</title>
+    @fonts
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Vazirmatn', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             direction: rtl;
             padding: 20px;
             color: #333;
@@ -34,10 +35,6 @@
             font-size: 13px;
             color: #555;
             line-height: 1.8;
-        }
-        .company-info .tax-id {
-            margin-top: 6px;
-            font-weight: 600;
         }
         .ledger-title {
             text-align: left;
@@ -233,9 +230,6 @@
                 @if($company['email'])
                     <p>{{ __('messages.email') }}: {{ $company['email'] }}</p>
                 @endif
-                @if($company['tax_id'])
-                    <p class="tax-id">{{ __('messages.tax_id') }}: {{ $company['tax_id'] }}</p>
-                @endif
             </div>
             <div class="ledger-title">
                 <h2>{{ __('messages.ledger') }}</h2>
@@ -311,9 +305,9 @@
                         <th>{{ __('messages.description') }}</th>
                         <th>{{ __('messages.reference') }}</th>
                         <th>{{ __('messages.unit') }}</th>
-                        <th>{{ __('messages.subtotal') }}Dr)</th>
-                        <th>من (Cr)</th>
-                        <th>اوسطه</th>
+                        <th>{{ __('messages.subtotal') }} Dr</th>
+                        <th>Cr</th>
+                        <th>{{ __('messages.balance') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -341,20 +335,28 @@
         @endif
 
         <div style="font-size:14px;font-weight:700;color:#0d9488;margin:20px 0 10px 0;padding-bottom:5px;border-bottom:2px dashed #e5e7eb;">
-            خلاصه
+            {{ __('messages.summary') }}
         </div>
         <div class="summary">
             <table class="summary-table">
                 <tr class="summary-row">
-                    <td>{{ __('messages.total_subtotal') }}{{ number_format($totalOrdersAFN) }} {{ __('messages.afn') }})</td>
+                    <td>{{ __('messages.total_subtotal') }} {{ __('messages.afn') }}</td>
                     <td>{{ number_format($totalOrdersAFN) }} {{ __('messages.afn') }}</td>
                 </tr>
                 <tr class="summary-row">
-                    <td>{{ __('messages.total_subtotal') }}$)</td>
+                    <td>{{ __('messages.total_subtotal') }} {{ __('messages.usd') }}</td>
                     <td>{{ number_format($totalOrdersUSD) }}$</td>
                 </tr>
                 <tr class="summary-row">
-                    <td>{{ __('messages.pending') }} {{ __('messages.afn') }}اني</td>
+                    <td>{{ __('messages.returned') }} {{ __('messages.afn') }}</td>
+                    <td>{{ number_format($totalReturnedAFN) }} {{ __('messages.afn') }}</td>
+                </tr>
+                <tr class="summary-row">
+                    <td>{{ __('messages.returned') }} {{ __('messages.usd') }}</td>
+                    <td>{{ number_format($totalReturnedUSD) }}$</td>
+                </tr>
+                <tr class="summary-row">
+                    <td>{{ __('messages.pending') }} {{ __('messages.afn') }}</td>
                     <td>{{ number_format($remainingAFN) }} {{ __('messages.afn') }}</td>
                 </tr>
                 <tr class="summary-row">
@@ -362,11 +364,11 @@
                     <td>{{ number_format($remainingUSD) }}$</td>
                 </tr>
                 <tr class="total-row">
-                    <td>{{ __('messages.paid_short') }} شوي {{ __('messages.afn') }}اني</td>
+                    <td>{{ __('messages.paid_short') }} {{ __('messages.afn') }}</td>
                     <td>{{ number_format($totalPaidAFN) }} {{ __('messages.afn') }}</td>
                 </tr>
                 <tr class="total-row">
-                    <td>{{ __('messages.paid_short') }} شوي {{ __('messages.usd') }}</td>
+                    <td>{{ __('messages.paid_short') }} {{ __('messages.usd') }}</td>
                     <td>{{ number_format($totalPaidUSD) }}$</td>
                 </tr>
             </table>

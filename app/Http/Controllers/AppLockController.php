@@ -19,7 +19,7 @@ class AppLockController extends Controller
     public function setPin(Request $request)
     {
         $validated = $request->validate([
-            'pin' => 'required|string|size:4|confirmed',
+            'pin' => 'required|digits:4|confirmed',
         ]);
 
         Setting::set('pin_lock_hash', Hash::make($validated['pin']));
@@ -39,7 +39,13 @@ class AppLockController extends Controller
     public function toggleBiometric(Request $request)
     {
         $current = Setting::get('biometric_lock_enabled', '0');
-        Setting::set('biometric_lock_enabled', $current === '1' ? '0' : '1');
+        $enabling = $current !== '1';
+
+        if ($enabling && Setting::get('pin_lock_enabled', '0') !== '1') {
+            return redirect()->route('app-lock.index')->with('error', __('messages.biometric_requires_pin'));
+        }
+
+        Setting::set('biometric_lock_enabled', $enabling ? '1' : '0');
 
         return redirect()->route('app-lock.index')->with('success', __('messages.saved_successfully'));
     }
@@ -53,6 +59,7 @@ class AppLockController extends Controller
         $hash = Setting::get('pin_lock_hash');
         if ($hash && Hash::check($validated['pin'], $hash)) {
             session(['pin_verified' => true]);
+
             return response()->json(['success' => true]);
         }
 
@@ -62,6 +69,7 @@ class AppLockController extends Controller
     public function lockScreen()
     {
         session()->forget('pin_verified');
+
         return view('app-lock.lock');
     }
 }

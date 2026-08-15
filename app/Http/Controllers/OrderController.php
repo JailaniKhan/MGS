@@ -2,32 +2,71 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Order;
+use App\Http\Controllers\Concerns\AddsListBalances;
 use App\Models\Customer;
-use App\Models\Supplier;
+use App\Models\Order;
 use App\Models\Product;
+use App\Models\Purchase;
+use App\Models\PurchaseItem;
 use App\Models\Setting;
 use App\Models\StockMovement;
+use App\Models\Supplier;
 use App\Services\Billing\BillService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
-    public function index()
+    use AddsListBalances;
+
+    public function index(Request $request)
     {
-        $orders = Order::with(['customer', 'supplier'])
+        $search = trim((string) $request->query('search', ''));
+
+        $ordersQuery = Order::with(['customer', 'supplier']);
+        $purchasesQuery = Purchase::with(['customer', 'supplier']);
+
+        if ($search !== '') {
+            if (ctype_digit($search)) {
+                // Pure digits mean a document id — never fuzzy-match names or
+                // phones, or a search for "1" also matches every phone
+                // containing the digit.
+                $ordersQuery->where('orders.id', (int) $search);
+                $purchasesQuery->where('purchases.id', (int) $search);
+            } else {
+                $ordersQuery->where(function ($q) use ($search) {
+                    $q->where(fn ($q) => $q->where('person_type', 'customer')
+                        ->whereHas('customer', fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%")));
+                    $q->orWhere(fn ($q) => $q->where('person_type', 'supplier')
+                        ->whereHas('supplier', fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%")));
+                });
+                $purchasesQuery->where(function ($q) use ($search) {
+                    $q->where(fn ($q) => $q->where('person_type', 'customer')
+                        ->whereHas('customer', fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%")));
+                    $q->orWhere(fn ($q) => $q->where('person_type', 'supplier')
+                        ->whereHas('supplier', fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%")));
+                });
+            }
+        }
+
+        $orders = $ordersQuery
             ->orderBy('created_at', 'desc')
             ->paginate(self::PER_PAGE, ['*'], 'orders_page')
             ->withQueryString();
 
-        $purchases = \App\Models\Purchase::with(['customer', 'supplier'])
+        $purchases = $purchasesQuery
             ->orderBy('created_at', 'desc')
             ->paginate(self::PER_PAGE, ['*'], 'purchases_page')
             ->withQueryString();
 
-        return view('orders.index', compact('orders', 'purchases'));
+        // One grouped query per side for remaining/list_status — the model
+        // accessors would run ~4 queries per row (was ~160 queries/page).
+        $this->attachOrderListBalances($orders->getCollection());
+        $this->attachPurchaseListBalances($purchases->getCollection());
+
+        return view('orders.index', compact('orders', 'purchases', 'search'));
     }
 
     public function create()
@@ -36,7 +75,7 @@ class OrderController extends Controller
         $suppliers = Supplier::orderBy('name')->get();
         $products = Product::with('category', 'unit')->where('stock', '>', 0)->orderBy('name')->get();
 
-        $productLots = \App\Models\PurchaseItem::whereNotNull('lot_number')
+        $productLots = PurchaseItem::whereNotNull('lot_number')
             ->where('lot_number', '<>', '')
             ->get(['product_id', 'lot_number'])
             ->groupBy('product_id')
@@ -45,18 +84,15 @@ class OrderController extends Controller
             ->map->values()
             ->toArray();
 
-        $defaultTaxRate = Setting::get('default_tax_rate', '0');
-        $defaultTaxType = Setting::get('default_tax_type', 'exclusive');
-
         $personOptions = collect($customers)
             ->map(fn ($customer) => [
-                'value' => 'customer:' . $customer->id,
+                'value' => 'customer:'.$customer->id,
                 'label' => $customer->name,
                 'sublabel' => $customer->phone,
                 'group' => __('messages.customers'),
             ])
             ->concat($suppliers->map(fn ($supplier) => [
-                'value' => 'supplier:' . $supplier->id,
+                'value' => 'supplier:'.$supplier->id,
                 'label' => $supplier->name,
                 'sublabel' => $supplier->phone,
                 'group' => __('messages.suppliers'),
@@ -68,14 +104,14 @@ class OrderController extends Controller
             ->map(fn ($product) => [
                 'value' => $product->id,
                 'label' => $product->name,
-                'sublabel' => __('messages.stock') . ': ' . $product->stock . ($product->unit ? ' ' . ($product->unit->short_name ?? $product->unit->name) : ''),
+                'sublabel' => __('messages.stock').': '.$product->stock.($product->unit ? ' '.($product->unit->short_name ?? $product->unit->name) : ''),
                 'price' => number_format((float) $product->price),
                 'lot' => $product->lot_number,
             ])
             ->values()
             ->all();
 
-        return view('orders.create', compact('customers', 'suppliers', 'products', 'productLots', 'defaultTaxRate', 'defaultTaxType', 'personOptions', 'productOptions'));
+        return view('orders.create', compact('customers', 'suppliers', 'products', 'productLots', 'personOptions', 'productOptions'));
     }
 
     public function store(Request $request)
@@ -83,8 +119,6 @@ class OrderController extends Controller
         $validated = $request->validate([
             'person' => 'required|string',
             'currency' => 'required|in:AFN,USD',
-            'tax_rate' => 'nullable|numeric|min:0|max:100',
-            'tax_type' => 'nullable|in:inclusive,exclusive',
             'products' => 'required|array|min:1',
             'products.*.product_id' => 'required|exists:products,id',
             'products.*.quantity' => 'required|integer|min:1',
@@ -113,8 +147,8 @@ class OrderController extends Controller
                 $product = Product::where('id', $item['product_id'])->lockForUpdate()->firstOrFail();
 
                 if ($product->stock < $item['quantity']) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        'products' => __('messages.insufficient_stock') . ' د ' . $product->name . '! (' . __('messages.pending') . ': ' . $product->stock . ')',
+                    throw ValidationException::withMessages([
+                        'products' => __('messages.insufficient_stock').' د '.$product->name.'! ('.__('messages.pending').': '.$product->stock.')',
                     ]);
                 }
 
@@ -133,32 +167,13 @@ class OrderController extends Controller
                 $product->decrement('stock', $item['quantity']);
             }
 
-            $taxRate = $validated['tax_rate'] ?? 0;
-            $taxType = $validated['tax_type'] ?? 'exclusive';
-            $taxAmount = 0;
-            $totalAmount = $subtotal;
-
-            if ($taxRate > 0) {
-                if ($taxType === 'exclusive') {
-                    $taxAmount = bcmul($subtotal, bcdiv((string) $taxRate, '100', 6), 2);
-                    $totalAmount = bcadd($subtotal, $taxAmount, 2);
-                } else {
-                    $totalAmount = $subtotal;
-                    $taxAmount = bcmul($subtotal, bcdiv((string) $taxRate, bcadd('100', (string) $taxRate, 6), 6), 2);
-                    $subtotal = bcsub($totalAmount, $taxAmount, 2);
-                }
-            }
-
             $order = Order::create([
                 'customer_id' => $customerId,
                 'person_type' => $personType,
                 'person_id' => $personId,
                 'status' => 'pending',
                 'subtotal' => $subtotal,
-                'tax_rate' => $taxRate,
-                'tax_type' => $taxType,
-                'tax_amount' => $taxAmount,
-                'total_amount' => $totalAmount,
+                'total_amount' => $subtotal,
                 'currency' => $validated['currency'],
             ]);
 
@@ -189,8 +204,8 @@ class OrderController extends Controller
             'address' => Setting::get('company_address', ''),
             'phone' => Setting::get('company_phone', ''),
             'email' => Setting::get('company_email', ''),
-            'tax_id' => Setting::get('tax_id', ''),
         ];
+
         return view('orders.show', compact('order', 'company'));
     }
 
@@ -202,10 +217,10 @@ class OrderController extends Controller
             'address' => Setting::get('company_address', ''),
             'phone' => Setting::get('company_phone', ''),
             'email' => Setting::get('company_email', ''),
-            'tax_id' => Setting::get('tax_id', ''),
         ];
         $invoicePrefix = Setting::get('invoice_prefix', 'INV-');
-        $invoiceNumber = $invoicePrefix . $order->id;
+        $invoiceNumber = $invoicePrefix.$order->id;
+
         return view('orders.print', compact('order', 'company', 'invoiceNumber'));
     }
 
@@ -232,6 +247,7 @@ class OrderController extends Controller
     {
         $customers = Customer::orderBy('name')->get();
         $suppliers = Supplier::orderBy('name')->get();
+
         return view('orders.edit', compact('order', 'customers', 'suppliers'));
     }
 
@@ -242,6 +258,12 @@ class OrderController extends Controller
             'customer_id' => 'nullable|exists:customers,id',
             'status' => 'required|in:pending,processing,completed,cancelled',
         ]);
+
+        // A cancelled order has returned its stock to the shelf; allowing it
+        // back to a live status would desync inventory (same rule as status()).
+        if ($order->status === 'cancelled' && $validated['status'] !== 'cancelled') {
+            return back()->with('error', __('messages.invalid_status'));
+        }
 
         if ($validated['status'] === 'cancelled' && $order->status !== 'cancelled') {
             foreach ($order->orderItems as $item) {
@@ -282,7 +304,7 @@ class OrderController extends Controller
     public function status(Order $order, $status)
     {
         $allowed = ['pending', 'processing', 'completed', 'cancelled'];
-        if (!in_array($status, $allowed, true)) {
+        if (! in_array($status, $allowed, true)) {
             return back()->with('error', __('messages.invalid_status'));
         }
 
@@ -311,28 +333,34 @@ class OrderController extends Controller
         }
 
         $order->update(['status' => $status]);
+
         return redirect()->route('orders.index')->with('success', __('messages.order_status_changed'));
     }
 
     public function destroy(Order $order)
     {
         \DB::transaction(function () use ($order) {
-            foreach ($order->orderItems as $item) {
-                $product = $item->product()->lockForUpdate()->first();
-                $product->increment('stock', $item->quantity);
+            // A cancelled order already returned its stock on cancellation —
+            // restoring it again here would double-count inventory.
+            if ($order->status !== 'cancelled') {
+                foreach ($order->orderItems as $item) {
+                    $product = $item->product()->lockForUpdate()->first();
+                    $product->increment('stock', $item->quantity);
 
-                StockMovement::create([
-                    'user_id' => Auth::id(),
-                    'product_id' => $item->product_id,
-                    'quantity_change' => $item->quantity,
-                    'movement_type' => 'order_deleted',
-                    'reference_type' => 'order',
-                    'reference_id' => $order->id,
-                    'notes' => __('messages.order_deleted'),
-                ]);
+                    StockMovement::create([
+                        'user_id' => Auth::id(),
+                        'product_id' => $item->product_id,
+                        'quantity_change' => $item->quantity,
+                        'movement_type' => 'order_deleted',
+                        'reference_type' => 'order',
+                        'reference_id' => $order->id,
+                        'notes' => __('messages.order_deleted'),
+                    ]);
+                }
             }
             $order->delete();
         });
+
         return redirect()->route('orders.index')->with('success', __('messages.order_deleted'));
     }
 

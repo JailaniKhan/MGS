@@ -18,6 +18,7 @@ use App\Http\Controllers\BackupController;
 use App\Http\Controllers\CashbookController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\SalaryController;
+use App\Http\Controllers\PasswordResetController;
 
 // Auth routes (no auth middleware)
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
@@ -29,13 +30,21 @@ Route::get('/register', [AuthController::class, 'showRegister'])->name('register
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+// Forgot / reset password (public — a guest must reach these without being logged in).
+Route::get('/forgot-password', [PasswordResetController::class, 'showForgot'])->name('password.request');
+Route::post('/forgot-password', [PasswordResetController::class, 'sendResetCode'])->name('password.email')->middleware('throttle:5,1');
+Route::get('/reset-password', [PasswordResetController::class, 'showReset'])->name('password.reset');
+Route::post('/reset-password', [PasswordResetController::class, 'reset'])->name('password.update')->middleware('throttle:5,1');
+
+// Language preference must be switchable from the guest auth pages too.
+Route::post('/language', [App\Http\Controllers\SettingsController::class, 'updateLanguage'])->name('language.update');
+
 // Protected routes (require authentication)
 Route::middleware('auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('/settings', [App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
     Route::post('/settings', [App\Http\Controllers\SettingsController::class, 'update'])->name('settings.update');
-    Route::post('/language', [App\Http\Controllers\SettingsController::class, 'updateLanguage'])->name('language.update');
     Route::get('/settings/openwa', [App\Http\Controllers\SettingsController::class, 'openwa'])->name('settings.openwa');
     Route::get('/settings/openwa/qr', [App\Http\Controllers\SettingsController::class, 'openwaQr'])->name('settings.openwa.qr');
     Route::post('/settings/openwa/pairing-code', [App\Http\Controllers\SettingsController::class, 'openwaPairingCode'])->name('settings.openwa.pairing');

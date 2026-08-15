@@ -489,7 +489,7 @@ class ReturnServiceTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
-        $supplier = \App\Models\Supplier::create(['name' => 'Revert Supplier', 'phone' => '0700000014']);
+        $supplier = Supplier::create(['name' => 'Revert Supplier', 'phone' => '0700000014']);
         $category = Category::create(['name' => 'Purchase Revert Category']);
         $product = Product::create([
             'name' => 'Purchase Revert Widget',

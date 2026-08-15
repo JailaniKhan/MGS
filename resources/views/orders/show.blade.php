@@ -12,7 +12,7 @@
         <div class="flex justify-between items-start mb-4">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-brand text-white flex items-center justify-center shadow-sm">
-                    <span class="text-white font-bold text-sm">#{{ $order->id }}</span>
+                    <span class="text-secondary-600 dark:text-secondary-300 font-bold text-sm">#{{ $order->id }}</span>
                 </div>
                 <div>
                     <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ __('messages.order') }} #{{ $order->id }}</h2>
@@ -106,18 +106,6 @@
                 </div>
             @endforeach
         </div>
-        @if ($order->tax_rate > 0)
-        <div class="px-4 py-2.5 bg-ink-50 dark:bg-ink-800/50 border-t border-ink-100 dark:border-ink-700/30">
-            <div class="flex justify-between text-xs">
-                <span class="text-ink-500 dark:text-ink-400">{{ __('messages.subtotal') }} ({{ __('messages.without_tax') }})</span>
-                <span class="font-medium text-ink-700 dark:text-ink-300">{{ number_format($order->subtotal) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</span>
-            </div>
-            <div class="flex justify-between text-xs mt-1">
-                <span class="text-ink-500 dark:text-ink-400">{{ __('messages.tax') }} ({{ $order->tax_rate }}% {{ $order->tax_type === 'inclusive' ? __('messages.inclusive') : __('messages.exclusive') }})</span>
-                <span class="font-medium text-ink-700 dark:text-ink-300">{{ number_format($order->tax_amount) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</span>
-            </div>
-        </div>
-        @endif
         <div class="px-4 py-3 bg-primary-50 dark:bg-primary-900/10 border-t border-ink-100 dark:border-ink-700/30">
             <div class="flex justify-between">
                 <span class="text-sm font-bold text-ink-900 dark:text-white">{{ __('messages.total') }}</span>

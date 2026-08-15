@@ -13,7 +13,7 @@
         <h3 class="text-base font-extrabold text-ink-900 dark:text-white mb-1">{{ $title }}</h3>
     @endif
     @if ($message)
-        <p class="text-[12px] text-ink-500 dark:text-ink-400 mb-4">{{ $message }}</p>
+        <p class="text-sm text-ink-500 dark:text-ink-400 mb-4">{{ $message }}</p>
     @endif
     <div class="flex gap-2">
         <button type="button" class="btn-secondary flex-1" data-modal-cancel="{{ $id }}">

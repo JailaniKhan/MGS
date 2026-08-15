@@ -1,11 +1,11 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="{{ app()->getLocale() }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>MGS - {{ __('messages.welcome') }}</title>
+    @fonts
     @vite(['resources/css/app.css'])
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="bg-ink-50 min-h-screen">
     <div class="min-h-screen flex flex-col items-center justify-center px-6 py-10" id="onboarding-app">
@@ -18,7 +18,7 @@
 
         <!-- Step 1: Company Info -->
         <div class="onboarding-step active" id="step-1">
-            <div class="w-16 h-16 rounded-2xl bg-brand text-white flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary-500/30">
+            <div class="w-16 h-16 rounded-[1.25rem] brand-grad flex items-center justify-center mx-auto mb-4 shadow-fab">
                 <x-icon name="building-office" class="w-8 h-8 text-white"/>
             </div>
             <h2 class="text-xl font-bold text-center text-ink-900 mb-2">{{ __('messages.welcome_to_mgs') }}</h2>
@@ -50,7 +50,7 @@
 
         <!-- Step 2: Categories -->
         <div class="onboarding-step" id="step-2">
-            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-secondary-500 to-secondary-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-secondary-500/30">
+            <div class="w-16 h-16 rounded-[1.25rem] bg-secondary-100 dark:bg-secondary-900/40 text-secondary-600 dark:text-secondary-300 flex items-center justify-center mx-auto mb-4 shadow-card">
                 <x-icon name="tag" class="w-8 h-8 text-white"/>
             </div>
             <h2 class="text-xl font-bold text-center text-ink-900 mb-2">{{ __('messages.add_categories') }}</h2>
@@ -71,7 +71,7 @@
 
         <!-- Step 3: Units -->
         <div class="onboarding-step" id="step-3">
-            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-accent-500/30">
+            <div class="w-16 h-16 rounded-[1.25rem] bg-accent-100 dark:bg-accent-900/40 text-accent-700 dark:text-accent-300 flex items-center justify-center mx-auto mb-4 shadow-card">
                 <x-icon name="squares-2x2" class="w-8 h-8 text-white"/>
             </div>
             <h2 class="text-xl font-bold text-center text-ink-900 mb-2">{{ __('messages.setup_units') }}</h2>
@@ -106,8 +106,8 @@
 
     <style>
         .step-dot { width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; transition: all 0.3s; }
-        .step-dot.active { background: #10b981; width: 24px; border-radius: 4px; }
-        .step-dot.done { background: #10b981; }
+        .step-dot.active { background: var(--color-brand); width: 24px; border-radius: 4px; }
+        .step-dot.done { background: var(--color-brand); }
         .onboarding-step { display: none; animation: fadeUp 0.35s ease-out both; }
         .onboarding-step.active { display: block; }
         @keyframes fadeUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }

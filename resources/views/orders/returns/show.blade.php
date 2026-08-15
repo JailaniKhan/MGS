@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
     <div class="mb-4 page-enter">
@@ -10,7 +10,7 @@
     <div class="card p-4 mb-4 page-enter" style="animation-delay: 0.05s;">
         <div class="flex items-start justify-between mb-4">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center shadow-sm">
+                <div class="w-10 h-10 rounded-[0.875rem] bg-accent-50 dark:bg-accent-900/30 flex items-center justify-center border border-accent-100 dark:border-accent-800/40">
                     <x-icon name="arrow-uturn-left" class="w-4 h-4 text-white"/>
                 </div>
                 <div>

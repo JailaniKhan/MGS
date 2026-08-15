@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
     <div class="mb-4 page-enter">
@@ -13,68 +13,68 @@
             @csrf
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.type') }}</label>
-                <select name="type" class="form-input">
-                    <option value="in">{{ __('messages.income_entry') }}</option>
-                    <option value="out">{{ __('messages.expense_entry') }}</option>
-                </select>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="flex items-center gap-2.5 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary-500/30 transition-colors">
+                        <input type="radio" name="type" value="in" {{ old('type', 'in') === 'in' ? 'checked' : '' }} class="text-primary-600">
+                        <x-icon name="plus" class="w-4 h-4 text-primary-600" strokeWidth="2.2"/>
+                        <span class="text-sm font-bold text-primary-700 dark:text-primary-300">{{ __('messages.income_entry') }}</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-danger-500 has-[:checked]:bg-danger-50 dark:has-[:checked]:bg-danger-900/20 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-danger-500/30 transition-colors">
+                        <input type="radio" name="type" value="out" {{ old('type') === 'out' ? 'checked' : '' }} class="text-danger-600">
+                        <x-icon name="minus" class="w-4 h-4 text-danger-600" strokeWidth="2.2"/>
+                        <span class="text-sm font-bold text-danger-700 dark:text-danger-300">{{ __('messages.expense_entry') }}</span>
+                    </label>
+                </div>
+                @error('type') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
+
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.currency') }}</label>
-                <select name="currency" class="form-input">
-                    <option value="AFN">{{ __('messages.afn') }}</option>
-                    <option value="USD">$</option>
-                </select>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="flex items-center gap-2.5 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary-500/30 transition-colors">
+                        <input type="radio" name="currency" value="AFN" {{ old('currency', 'AFN') === 'AFN' ? 'checked' : '' }} class="text-primary-600">
+                        <span class="text-sm font-medium text-ink-800 dark:text-ink-100">{{ __('messages.afn') }}</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary-500/30 transition-colors">
+                        <input type="radio" name="currency" value="USD" {{ old('currency') === 'USD' ? 'checked' : '' }} class="text-primary-600">
+                        <span class="text-sm font-medium text-ink-800 dark:text-ink-100">USD ($)</span>
+                    </label>
+                </div>
+                @error('currency') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
-            <div class="mb-4">
-                <label class="form-label">{{ __('messages.amount_amount') }}</label>
-                <input type="number" step="0.01" name="amount" required class="form-input">
-            </div>
-            <div class="mb-4">
-                <label class="form-label">{{ __('messages.person') }}</label>
-                <select id="person-select" class="form-input">
-                    <option value="">{{ __('messages.none') }}</option>
 
-                        @foreach ($customers as $customer)
-                            <option value="customer:{{ $customer->id }}">{{ $customer->name }} ({{ __('messages.customer') }})</option>
-                        @endforeach
-
-                        @foreach ($suppliers as $supplier)
-                            <option value="supplier:{{ $supplier->id }}">{{ $supplier->name }} ({{ __('messages.supplier') }})</option>
-                        @endforeach
-
-                </select>
-                <input type="hidden" name="person_id" id="person-id">
-                <input type="hidden" name="person_type" id="person-type">
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                    <label class="form-label">{{ __('messages.amount_amount') }}</label>
+                    <input type="number" step="0.01" min="0.01" inputmode="decimal" name="amount" value="{{ old('amount') }}" required placeholder="0.00" class="form-input">
+                    @error('amount') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="form-label">{{ __('messages.date') }}</label>
+                    <input type="date" name="entry_date" value="{{ old('entry_date', date('Y-m-d')) }}" required class="form-input">
+                    @error('entry_date') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                </div>
             </div>
-            <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    const personSelect = document.getElementById('person-select');
-                    const personId = document.getElementById('person-id');
-                    const personType = document.getElementById('person-type');
-                    function updatePerson() {
-                        const val = personSelect.value;
-                        if (val) {
-                            const parts = val.split(':');
-                            personType.value = parts[0];
-                            personId.value = parts[1];
-                        } else {
-                            personType.value = '';
-                            personId.value = '';
-                        }
-                    }
-                    personSelect.addEventListener('change', updatePerson);
-                    updatePerson();
-                });
-            </script>
+
             <div class="mb-4">
-                <label class="form-label">{{ __('messages.date') }}</label>
-                <input type="date" name="entry_date" value="{{ date('Y-m-d') }}" required class="form-input">
+                <div class="flex items-center justify-between">
+                    <label class="form-label">{{ __('messages.person') }}</label>
+                    <span class="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{{ __('messages.optional') }}</span>
+                </div>
+                <x-searchable-select name="person" :selected="old('person')" placeholder="{{ __('messages.select_person') }}" :options="$personOptions" />
+                @error('person') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
-            <div class="mb-4">
+
+            <div class="mb-5">
                 <label class="form-label">{{ __('messages.notes') }}</label>
-                <input type="text" name="notes" class="form-input">
+                <input type="text" name="notes" value="{{ old('notes') }}" class="form-input" placeholder="{{ __('messages.notes') }}">
+                @error('notes') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
-            <button type="submit" class="btn-primary w-full"><x-icon name="plus" class="w-4 h-4" strokeWidth="2"/>{{ __('messages.register') }}</button>
+
+            <button type="submit" class="btn-primary w-full">
+                <x-icon name="check-circle" class="w-4 h-4" strokeWidth="2"/>
+                {{ __('messages.register') }}
+            </button>
         </form>
     </div>
 @endsection

@@ -6,14 +6,14 @@
     </div>
 
     <!-- Tabs -->
-    <div class="flex gap-1.5 mb-4 page-enter overflow-x-auto pb-2 scrollbar-thin" style="animation-delay: 0.05s;">
-        <button id="tab-products" class="tab-btn px-4 py-2 text-xs font-bold rounded-xl bg-primary-500 text-white shadow-sm shadow-primary-500/20 whitespace-nowrap" onclick="switchTab('products')">
+    <div class="segmented mb-4 page-enter" style="animation-delay: 0.05s;">
+        <button id="tab-products" class="tab-btn segmented-item segmented-item-active whitespace-nowrap" onclick="switchTab('products')">
             {{ __('messages.products') }}
         </button>
-        <button id="tab-categories" class="tab-btn px-4 py-2 text-xs font-bold rounded-xl bg-ink-100 dark:bg-ink-800 text-ink-600 dark:text-ink-300 border border-ink-200 dark:border-ink-700 whitespace-nowrap" onclick="switchTab('categories')">
+        <button id="tab-categories" class="tab-btn segmented-item whitespace-nowrap" onclick="switchTab('categories')">
             {{ __('messages.categories') }}
         </button>
-        <button id="tab-units" class="tab-btn px-4 py-2 text-xs font-bold rounded-xl bg-ink-100 dark:bg-ink-800 text-ink-600 dark:text-ink-300 border border-ink-200 dark:border-ink-700 whitespace-nowrap" onclick="switchTab('units')">
+        <button id="tab-units" class="tab-btn segmented-item whitespace-nowrap" onclick="switchTab('units')">
             {{ __('messages.units') }}
         </button>
     </div>
@@ -40,8 +40,8 @@
                                 <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $product->category->name }}</div>
                             </div>
                         </div>
-                        <div class="flex items-center gap-2 flex-shrink-0 ml-3">
-                            <div class="text-right">
+                        <div class="flex items-center gap-2 flex-shrink-0 ms-3">
+                            <div class="text-end">
                                 <div class="text-sm font-bold text-ink-900 dark:text-ink-100">{{ number_format($product->price) }}</div>
                                 <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full
                                     @if ($product->stock < 10) bg-danger-50 dark:bg-danger-900/30 text-danger-600 dark:text-danger-400 border border-danger-200 dark:border-danger-700/50
@@ -61,7 +61,7 @@
                     </div>
                 @empty
                     <div class="empty-state">
-                        <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                        <div class="empty-illustration">
                             <x-icon name="archive-box" class="w-6 h-6 text-ink-400"/>
                         </div>
                         <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_products') }}</p>
@@ -88,8 +88,8 @@
                 @forelse ($categories as $category)
                     <div class="swipe-row">
                         <div class="swipe-content">
-                            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-secondary-500 to-secondary-700 flex items-center justify-center flex-shrink-0 shadow-sm">
-                                <x-icon name="tag" class="w-4 h-4 text-white"/>
+                            <div class="w-9 h-9 rounded-[0.875rem] bg-secondary-50 dark:bg-secondary-900/30 flex items-center justify-center flex-shrink-0 border border-secondary-100 dark:border-secondary-800/40">
+                                <x-icon name="tag" class="w-4 h-4 text-secondary-600 dark:text-secondary-300"/>
                             </div>
                             <div class="min-w-0">
                                 <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $category->name }}</div>
@@ -110,7 +110,7 @@
                     </div>
                 @empty
                     <div class="empty-state">
-                        <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                        <div class="empty-illustration">
                             <x-icon name="tag" class="w-6 h-6 text-ink-400"/>
                         </div>
                         <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_categories') }}</p>
@@ -137,8 +137,8 @@
                 @forelse ($units as $unit)
                     <div class="swipe-row">
                         <div class="swipe-content">
-                            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center flex-shrink-0 shadow-sm">
-                                <x-icon name="bars-3" class="w-4 h-4 text-white"/>
+                            <div class="w-9 h-9 rounded-[0.875rem] bg-accent-50 dark:bg-accent-900/30 flex items-center justify-center flex-shrink-0 border border-accent-100 dark:border-accent-800/40">
+                                <x-icon name="bars-3" class="w-4 h-4 text-accent-600 dark:text-accent-300"/>
                             </div>
                             <div class="min-w-0">
                                 <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">
@@ -164,7 +164,7 @@
                     </div>
                 @empty
                     <div class="empty-state">
-                        <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                        <div class="empty-illustration">
                             <x-icon name="bars-3" class="w-6 h-6 text-ink-400"/>
                         </div>
                         <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_units') }}</p>
@@ -183,13 +183,8 @@
     function switchTab(tab) {
         document.querySelectorAll('.tab-section').forEach(el => el.classList.add('hidden'));
         document.getElementById('section-' + tab).classList.remove('hidden');
-        document.querySelectorAll('.tab-btn').forEach(el => {
-            el.classList.remove('bg-primary-500', 'text-white', 'shadow-sm', 'shadow-primary-500/20');
-            el.classList.add('bg-ink-100', 'dark:bg-ink-800', 'text-ink-600', 'dark:text-ink-300', 'border', 'border-ink-200', 'dark:border-ink-700');
-        });
-        const activeBtn = document.getElementById('tab-' + tab);
-        activeBtn.classList.remove('bg-ink-100', 'dark:bg-ink-800', 'text-ink-600', 'dark:text-ink-300', 'border', 'border-ink-200', 'dark:border-ink-700');
-        activeBtn.classList.add('bg-primary-500', 'text-white', 'shadow-sm', 'shadow-primary-500/20');
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('segmented-item-active'));
+        document.getElementById('tab-' + tab).classList.add('segmented-item-active');
     }
 
     // Keep the active tab when paging categories/units.

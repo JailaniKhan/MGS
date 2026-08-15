@@ -312,7 +312,6 @@ class LedgerController extends Controller
             'address' => Setting::get('company_address', ''),
             'phone' => Setting::get('company_phone', ''),
             'email' => Setting::get('company_email', ''),
-            'tax_id' => Setting::get('tax_id', ''),
         ];
 
         return view('ledger.pdf', compact(

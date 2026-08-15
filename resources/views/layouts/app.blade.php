@@ -5,7 +5,7 @@ use App\Models\Setting;
 <html lang="{{ app()->getLocale() }}" dir="{{ in_array(app()->getLocale(), ['ps', 'fa']) ? 'rtl' : 'ltr' }}">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, minimum-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>MGS - {{ __('messages.dashboard') }}</title>
     @fonts
@@ -14,9 +14,6 @@ use App\Models\Setting;
     @else
         @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/ui.js'])
     @endif
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/favicon.svg">
 </head>
@@ -24,7 +21,7 @@ use App\Models\Setting;
     <div class="min-h-screen flex flex-col pb-[72px]">
 
         <!-- HEADER -->
-        <header class="bg-white/90 dark:bg-[#16181c]/90 backdrop-blur-xl border-b border-ink-100 dark:border-white/[0.06] sticky top-0 z-40">
+        <header class="bg-white/90 dark:bg-[#18191a]/90 backdrop-blur-xl border-b border-ink-100 dark:border-white/[0.05] sticky top-0 z-40">
             <div class="px-4 py-3 flex items-center justify-between">
                 <div class="flex items-center gap-2.5">
                     <button type="button" id="sidebar-toggle" aria-label="{{ __('messages.features') }}"
@@ -198,7 +195,7 @@ use App\Models\Setting;
 
     <!-- BOTTOM NAVIGATION -->
     <nav class="fixed bottom-0 left-0 right-0 z-50 px-2 pb-1 pt-0">
-        <div class="bg-white/90 dark:bg-[#16181c]/90 backdrop-blur-2xl border border-ink-100 dark:border-white/[0.06] rounded-2xl shadow-nav dark:shadow-nav-dark">
+        <div class="bg-white/90 dark:bg-[#18191a]/90 backdrop-blur-2xl border border-ink-100 dark:border-white/[0.05] rounded-[1.25rem] shadow-nav dark:shadow-nav-dark">
             <div class="relative flex items-center justify-around py-1">
             <span id="nav-pill" class="nav-pill"></span>
                 <!-- Dashboard -->

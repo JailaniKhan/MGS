@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
     <div class="flex items-center justify-between mb-4 page-enter">
@@ -9,31 +9,46 @@
         </a>
     </div>
 
+    <form method="GET" action="{{ route('purchases.index') }}" class="mb-4 page-enter" style="animation-delay: 0.05s;">
+        <div class="relative">
+            <x-icon name="magnifying-glass" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none"/>
+            <input type="search" name="search" value="{{ $search }}" placeholder="{{ __('messages.search') }}..."
+                   class="form-input !pl-10">
+        </div>
+    </form>
+
     <div class="card overflow-hidden page-enter" style="animation-delay: 0.1s;">
         <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
             @forelse ($purchases as $purchase)
                 <a href="{{ route('purchases.show', $purchase) }}" class="list-row">
                     <div class="flex items-center gap-3 min-w-0">
-                        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center flex-shrink-0 shadow-sm">
-                            <x-icon name="shopping-bag" class="w-4 h-4 text-white"/>
+                        <div class="w-9 h-9 rounded-[0.875rem] bg-accent-50 dark:bg-accent-900/30 flex items-center justify-center flex-shrink-0 border border-accent-100 dark:border-accent-800/40">
+                            <x-icon name="shopping-bag" class="w-4 h-4 text-accent-600 dark:text-accent-400"/>
                         </div>
                         <div class="min-w-0">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $purchase->party?->name ?? __('messages.unknown') }}</div>
                             <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $purchase->created_at->format('d M, H:i') }}</div>
                         </div>
                     </div>
-                    <div class="text-right flex-shrink-0 ml-3">
+                    <div class="text-end flex-shrink-0 ms-3">
                         <div class="text-sm font-bold text-ink-900 dark:text-ink-100">
                             {{ number_format($purchase->total_amount) }}
                             <span class="text-[10px] font-normal text-ink-500">{{ $purchase->currency === 'USD' ? '$' : __('messages.afn') }}</span>
                         </div>
+                        <div class="mt-0.5">
+                            @if ($purchase->status !== 'cancelled' && $purchase->remaining > 0)
+                                <span class="text-[10px] text-accent-600 dark:text-accent-400 font-semibold">
+                                    {{ __('messages.remaining') }}: {{ number_format($purchase->remaining) }}
+                                </span>
+                            @endif
+                        </div>
                         <span class="inline-flex items-center gap-1 badge mt-0.5
-                            @if($purchase->display_status === 'completed') badge-success
-                            @elseif($purchase->display_status === 'processing') badge-info
-                            @elseif($purchase->display_status === 'cancelled') badge-danger
-                            @elseif($purchase->display_status === 'paid') badge-success
+                            @if($purchase->list_status === 'completed') badge-success
+                            @elseif($purchase->list_status === 'processing') badge-info
+                            @elseif($purchase->list_status === 'cancelled') badge-danger
+                            @elseif($purchase->list_status === 'paid') badge-success
                             @else badge-warning @endif">
-                            @switch($purchase->display_status)
+                            @switch($purchase->list_status)
                                 @case('completed') {{ __('messages.completed') }} @break
                                 @case('processing') {{ __('messages.processing') }} @break
                                 @case('cancelled') {{ __('messages.cancelled') }} @break
@@ -45,7 +60,7 @@
                 </a>
             @empty
                 <div class="empty-state">
-                    <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                    <div class="empty-illustration">
                         <x-icon name="shopping-bag" class="w-6 h-6 text-ink-400"/>
                     </div>
                     <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_purchases') }}</p>

@@ -44,9 +44,18 @@ class Order extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function orderReturns()
+    {
+        return $this->hasMany(OrderReturn::class);
+    }
+
     public function getPaidAmountAttribute()
     {
-        return bcadd('0.00', (string) ($this->payments()->sum('amount') ?: '0'), 2);
+        // Only payments in the order's own currency may settle it; a foreign-currency
+        // payment must never reduce the balance of an order it does not match.
+        return bcadd('0.00', (string) ($this->payments()
+            ->where('currency', $this->currency)
+            ->sum('amount') ?: '0'), 2);
     }
 
     public function getReturnedAmountAttribute()
@@ -62,6 +71,7 @@ class Order extends Model
         // Use bcmath: total_amount is a decimal string, paid/returned are canonical strings.
         $afterPaid = bcsub((string) $this->total_amount, $this->paid_amount, 2);
         $afterReturned = bcsub($afterPaid, $this->returned_amount, 2);
+
         // Clamp at zero.
         return bccomp($afterReturned, '0', 2) >= 0 ? $afterReturned : '0.00';
     }

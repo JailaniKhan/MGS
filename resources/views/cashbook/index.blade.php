@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
 <div class="flex items-center justify-between mb-4 page-enter">
@@ -36,8 +36,8 @@
         @endphp
         <a href="{{ route('cashbook.person', [$person['type'], $person['id']]) }}" class="list-row group">
             <div class="flex items-center gap-3 min-w-0 flex-1">
-                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center flex-shrink-0 shadow-sm">
-                    <span class="text-white font-bold text-sm">{{ mb_substr($person['name'], 0, 1) }}</span>
+                <div class="w-9 h-9 rounded-[0.875rem] bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center flex-shrink-0 border border-primary-100 dark:border-primary-800/40">
+                    <span class="text-primary-600 dark:text-primary-300 font-bold text-sm">{{ mb_substr($person['name'], 0, 1) }}</span>
                 </div>
                 <div class="min-w-0">
                     <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $person['name'] }}</div>
@@ -47,7 +47,7 @@
                     </div>
                 </div>
             </div>
-            <div class="text-right flex-shrink-0 ml-3">
+            <div class="text-end flex-shrink-0 ms-3">
                 @if($netAFN != 0)
                     <div class="text-sm font-bold {{ $netAFN >= 0 ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">
                         {{ $netAFN >= 0 ? '+' : '-' }}{{ number_format(abs($netAFN), 2) }} <span class="text-[10px] text-ink-400">AFN</span>
@@ -65,7 +65,7 @@
         </a>
     @empty
         <div class="empty-state">
-            <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+            <div class="empty-illustration">
                 <x-icon name="currency-dollar" class="w-6 h-6 text-ink-400"/>
             </div>
             <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_entries') }}</p>

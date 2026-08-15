@@ -9,8 +9,7 @@
 
 <div {{ $attributes->merge(['class' => 'metric-tile relative']) }}>
     <span class="metric-label">{{ $label }}</span>
-    <span class="metric-value {{ $trend ? 'mt-0.5 font-bold text-xl' : 'text-lg font-bold' }} text-ink-900 dark:text-white tabular-nums">
-        {{ is_numeric($value) ? number_format($value) : $value }}
+    <span class="metric-value {{ $trend ? 'mt-0.5' : '' }}">{{ is_numeric($value) ? number_format($value) : $value }}
         @if ($suffix)
             <span class="text-[11px] font-medium text-ink-400">{{ $suffix }}</span>
         @endif

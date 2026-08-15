@@ -1,0 +1,24 @@
+﻿{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "skill": {
+      "*": "allow",
+      "design-taste-frontend-v1": "deny",
+      "gpt-taste": "deny",
+      "stitch-design-taste": "deny"
+    }
+  },
+  "mcp": {
+    "repowise": {
+      "type": "local",
+      "command": [
+        "C:\\Users\\Abdul Qadir\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\repowise.exe",
+        "mcp",
+        "D:/Mobile App/MGS",
+        "--transport",
+        "stdio"
+      ],
+      "enabled": true
+    }
+  }
+}

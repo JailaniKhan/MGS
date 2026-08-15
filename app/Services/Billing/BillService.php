@@ -55,11 +55,6 @@ class BillService
 
         $lines[] = str_repeat('-', 30);
 
-        if ((float) $order->tax_rate > 0) {
-            $lines[] = __('messages.subtotal') . ': ' . number_format((float) $order->subtotal) . ' ' . $currency;
-            $lines[] = __('messages.tax') . ' (' . $order->tax_rate . '%): ' . number_format((float) $order->tax_amount) . ' ' . $currency;
-        }
-
         $lines[] = __('messages.total_amount') . ': ' . number_format((float) $order->total_amount) . ' ' . $currency;
         $lines[] = __('messages.paid') . ': ' . number_format($order->paid_amount) . ' ' . $currency;
         $lines[] = $order->is_fully_paid
@@ -110,11 +105,6 @@ class BillService
         }
 
         $lines[] = str_repeat('-', 30);
-
-        if ((float) $purchase->tax_rate > 0) {
-            $lines[] = __('messages.subtotal') . ': ' . number_format((float) $purchase->subtotal) . ' ' . $currency;
-            $lines[] = __('messages.tax') . ' (' . $purchase->tax_rate . '%): ' . number_format((float) $purchase->tax_amount) . ' ' . $currency;
-        }
 
         $lines[] = __('messages.total_amount') . ': ' . number_format((float) $purchase->total_amount) . ' ' . $currency;
         $lines[] = __('messages.paid') . ': ' . number_format($purchase->paid_amount) . ' ' . $currency;
@@ -257,7 +247,6 @@ class BillService
             'address' => Setting::get('company_address', ''),
             'phone' => Setting::get('company_phone', ''),
             'email' => Setting::get('company_email', ''),
-            'tax_id' => Setting::get('tax_id', ''),
         ];
 
         $lines = [$company['name']];
@@ -272,10 +261,6 @@ class BillService
 
         if ($company['email']) {
             $lines[] = __('messages.email') . ': ' . $company['email'];
-        }
-
-        if ($company['tax_id']) {
-            $lines[] = __('messages.tax_id') . ': ' . $company['tax_id'];
         }
 
         return $lines;

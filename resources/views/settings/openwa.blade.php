@@ -19,12 +19,6 @@
         </div>
     @else
         <div class="card p-6">
-            {{--<span class="badge {{ state badge }}">
-                connected  → badge-success (state 'connected' or 'ready')
-                qr_ready   → badge-warning
-                unreachable→ badge-danger (status is null, gateway down)
-                failed/other → badge-danger
-            </span>-->--}}
         @php
             $rawState = $status['status'] ?? null;
             $isReachable = $status !== null;
@@ -35,7 +29,6 @@
                 default => 'badge-danger',
             };
             $badgeLabel = $isReachable ? ucfirst($rawState ?? 'unknown') : 'Unreachable';
-            $baileysLogTail = $managerStatus['baileys_log_tail'] ?? '';
         @endphp
 
             <div class="flex items-center justify-between mb-4">
@@ -56,6 +49,9 @@
                     </button>
                     <button id="refreshBtn" type="button" class="btn btn-sm btn-outline">
                         {{ __('messages.refresh') ?? 'Refresh QR' }}
+                    </button>
+                    <button id="restartBtn" type="button" class="btn btn-sm btn-danger">
+                        {{ __('messages.openwa_restart') ?? 'Restart gateway' }}
                     </button>
                 </div>
             </div>
@@ -83,8 +79,22 @@
                  which the gateway exposes with reason + message. Distinguishes
                  a 401 (rejected credentials — wipe & re-link) from a transient
                  408 (network/DNS or plain QR expiry) so the user knows whether
-                 to fix their WhatsApp account or just wait. --}}
-            <div id="disconnectNote" class="text-sm rounded-lg p-3 mb-4 hidden"></div>
+                 to fix their WhatsApp account or just wait. Rendered server-side
+                 on first paint; the JS poll keeps it fresh. --}}
+            @php
+                $discReason = $status['lastDisconnect']['reason'] ?? null;
+                $discReason = $discReason === null ? null : (int) $discReason;
+                $discCls = 'bg-ink-50 dark:bg-ink-800/50 text-ink-600 dark:text-ink-300';
+                $discText = __('messages.openwa_disc_generic');
+                if ($discReason === 401) {
+                    $discCls = 'bg-danger-50 dark:bg-danger-900/20 text-danger-600 dark:text-danger-400';
+                    $discText = __('messages.openwa_disc_401');
+                } elseif ($discReason === 408) {
+                    $discCls = 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400';
+                    $discText = __('messages.openwa_disc_408');
+                }
+            @endphp
+            <div id="disconnectNote" class="text-sm rounded-lg p-3 mb-4 {{ $discCls }}" {{ $discReason === null ? 'hidden' : '' }}>{{ $discText }}</div>
 
             {{-- QR + pairing code side by side: both are generated together so
                  the user can scan the QR OR type the code — whichever they
@@ -101,7 +111,7 @@
                         </p>
                     @else
                         <div id="qrPlaceholder" class="w-64 h-64 rounded-lg border border-dashed border-ink-300 dark:border-ink-600 flex items-center justify-center text-center text-sm text-ink-500 dark:text-ink-400 p-4">
-                            @if (($status['status'] ?? '') === 'connected')
+                            @if (in_array($status['status'] ?? '', ['connected', 'ready'], true))
                                 {{ __('messages.openwa_connected') ?? 'Session connected. No QR needed.' }}
                             @else
                                 {{ __('messages.openwa_qr_unavailable') ?? 'QR not available right now. Click Refresh.' }}
@@ -121,7 +131,7 @@
 
                     <div class="flex items-center gap-2 w-full max-w-xs">
                         <input id="pairingPhone" type="text" inputmode="numeric" placeholder="93700268836"
-                               class="form-input flex-1" value="{{ old('phone', '93700268836') }}">
+                               class="form-input flex-1">
                         <button id="pairingBtn" type="button" class="btn btn-primary btn-sm whitespace-nowrap">
                             {{ __('messages.openwa_generate_code') ?? 'Generate code' }}
                         </button>
@@ -133,46 +143,6 @@
                         <div id="pairingExpiry" class="text-xs font-medium hidden"></div>
                         <div class="text-xs text-ink-400">{{ __('messages.openwa_pairing_validity') ?? 'Valid for a few minutes. Type it in WhatsApp → Linked Devices → Link with phone number.' }}</div>
                     </div>
-                </div>
-            </div>
-
-            {{-- Baileys connection log: the on-device record of every
-                 QR generated / CONNECTED / connection closed event. Shown
-                 whenever the gateway is up so a failed scan or pairing has
-                 a visible reason instead of "nothing happened". --}}
-            <div class="mt-2">
-                <details id="baileysLogBox" class="text-xs" {{ $baileysLogTail !== '' ? 'open' : '' }}>
-                    <summary class="cursor-pointer font-semibold text-ink-700 dark:text-ink-200 mb-1 select-none">
-                        {{ __('messages.openwa_baileys_log') ?? 'Baileys log (connection events)' }}
-                    </summary>
-                    <pre id="baileysLogTail" class="mt-1 bg-ink-50 dark:bg-ink-800/50 rounded-lg p-3 font-mono text-[10px] leading-relaxed whitespace-pre-wrap break-words max-h-64 overflow-y-auto">{{ $baileysLogTail }}</pre>
-                </details>
-            </div>
-
-            <div class="border-t border-ink-200 dark:border-ink-700 my-4"></div>
-
-            {{-- Pairing code (alternative to QR) --}}
-            <div class="flex flex-col items-center justify-center">
-                <h4 class="text-sm font-semibold text-ink-700 dark:text-ink-200 mb-1">
-                    {{ __('messages.openwa_pairing_title') ?? 'Or link with a phone number' }}
-                </h4>
-                <p class="text-xs text-ink-500 dark:text-ink-400 mb-3 text-center max-w-xs">
-                    {{ __('messages.openwa_pairing_hint') ?? 'Enter your WhatsApp number, generate a code, then type it in WhatsApp → Linked Devices → Link with phone number.' }}
-                </p>
-
-                <div class="flex items-center gap-2 w-full max-w-xs">
-                    <input id="pairingPhone" type="text" inputmode="numeric" placeholder="93700268836"
-                           class="form-input flex-1" value="{{ old('phone', '93700268836') }}">
-                    <button id="pairingBtn" type="button" class="btn btn-primary btn-sm whitespace-nowrap">
-                        {{ __('messages.openwa_generate_code') ?? 'Generate code' }}
-                    </button>
-                </div>
-
-                <div id="pairingResult" class="mt-3 text-center hidden">
-                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.openwa_pairing_code_label') ?? 'Your pairing code:' }}</div>
-                    <div id="pairingCode" class="text-2xl font-bold tracking-widest text-primary-600 dark:text-primary-400 my-1">--------</div>
-                    <div id="pairingExpiry" class="text-xs font-medium hidden"></div>
-                    <div class="text-xs text-ink-400">{{ __('messages.openwa_pairing_validity') ?? 'Valid for a few minutes. Type it in WhatsApp → Linked Devices → Link with phone number.' }}</div>
                 </div>
             </div>
 
@@ -230,13 +200,6 @@
             setBadge(data.status);
             renderDisconnect(data.last_disconnect);
 
-            const tailEl = document.getElementById('baileysLogTail');
-            if (tailEl && typeof data.baileys_log_tail === 'string') {
-                tailEl.textContent = data.baileys_log_tail;
-            }
-            const logBox = document.getElementById('baileysLogBox');
-            if (logBox && data.baileys_log_tail) logBox.open = true;
-
             // After a kick (start) the fresh socket needs ~2-4s to generate
             // its first QR, so retry once before giving up.
             if (!data.qr && data.status !== 'connected' && data.status !== 'dead') {
@@ -245,10 +208,6 @@
                 data = await res.json();
                 setBadge(data.status);
                 renderDisconnect(data.last_disconnect);
-
-                if (tailEl && typeof data.baileys_log_tail === 'string') {
-                    tailEl.textContent = data.baileys_log_tail;
-                }
             }
 
             const diag = document.getElementById('openwaDiagnostics');
@@ -275,12 +234,13 @@
                 const div = document.createElement('div');
                 div.id = 'qrPlaceholder';
                 div.className = QR_PLACEHOLDER_CLASS;
-                div.textContent = data.status === 'connected'
+                const linked = ['connected', 'ready'].includes(data.status);
+                div.textContent = linked
                     ? '{{ __('messages.openwa_connected') ?? 'Session connected. No QR needed.' }}'
                     : '{{ __('messages.openwa_qr_unavailable') ?? 'QR not available right now. Click Refresh.' }}';
                 img.replaceWith(div);
             } else {
-                showPlaceholder(data.status === 'connected'
+                showPlaceholder(['connected', 'ready'].includes(data.status)
                     ? '{{ __('messages.openwa_connected') ?? 'Session connected. No QR needed.' }}'
                     : '{{ __('messages.openwa_qr_unavailable') ?? 'QR not available right now. Click Refresh.' }}');
             }
@@ -312,7 +272,7 @@
         const codeEl = document.getElementById('pairingCode');
 
         if (!phone) {
-            alert('{{ __('messages.openwa_enter_phone') ?? 'Please enter your WhatsApp number.' }}');
+            showToast('error', '{{ __('messages.openwa_enter_phone') ?? 'Please enter your WhatsApp number.' }}');
             return;
         }
 
@@ -337,14 +297,43 @@
                 startPairingCountdown(data.expiresAt);
                 startPairingPoll();
             } else {
-                alert(data.error || '{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
+                showToast('error', data.error || '{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
             }
         } catch (e) {
             console.error(e);
-            alert('{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
+            showToast('error', '{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
         } finally {
             btn.disabled = false;
             btn.textContent = '{{ __('messages.openwa_generate_code') ?? 'Generate code' }}';
+        }
+    });
+
+    document.getElementById('restartBtn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('restartBtn');
+        btn.disabled = true;
+        btn.textContent = '{{ __('messages.openwa_restarting') ?? 'Restarting…' }}';
+
+        try {
+            const res = await fetch('{{ route('settings.openwa.restart') }}', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? ''
+                }
+            });
+            const data = await res.json();
+            showToast(data.success ? 'success' : 'error',
+                data.success
+                    ? '{{ __('messages.openwa_restarted') ?? 'Gateway restarted.' }}'
+                    : (data.error || '{{ __('messages.openwa_restart_failed') ?? 'Restart failed.' }}'));
+        } catch (e) {
+            console.error(e);
+            showToast('error', '{{ __('messages.openwa_restart_failed') ?? 'Restart failed.' }}');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '{{ __('messages.openwa_restart') ?? 'Restart gateway' }}';
+            await refreshState();
         }
     });
 
@@ -425,6 +414,10 @@
         pairingPhone = document.getElementById('pairingPhone').value.trim() || pairingPhone;
         pairingPollTimer = setInterval(async () => {
             try {
+                // Session linked — the code dies with its socket. Stop polling
+                // instead of POSTing fresh codes into a connected session.
+                const badge = document.getElementById('sessionBadge');
+                if (badge && badge.classList.contains('badge-success')) { stopPairingPoll(); return; }
                 const res = await fetch('{{ route('settings.openwa.pairing-status') }}', { headers: { 'Accept': 'application/json' } });
                 const data = await res.json();
                 const result = document.getElementById('pairingResult');
@@ -501,13 +494,13 @@
             } else {
                 // No code returned — let the auto-retry interval try again.
                 autoPairingRequested = false;
-                if (!silent) alert(data.error || '{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
+                if (!silent) showToast('error', data.error || '{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
             }
         } catch (e) {
             console.error(e);
             // Allow the auto-request interval to retry a failed generation.
             autoPairingRequested = false;
-            if (!silent) alert('{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
+            if (!silent) showToast('error', '{{ __('messages.openwa_pairing_error') ?? 'Could not generate pairing code.' }}');
         } finally {
             generatingPairing = false;
             if (!silent) btn.disabled = false;

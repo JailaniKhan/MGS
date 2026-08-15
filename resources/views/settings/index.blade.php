@@ -30,28 +30,6 @@
                             <input type="email" name="company_email" value="{{ old('company_email', $settings['company_email']) }}" class="form-input">
                         </div>
                     </div>
-                    <div>
-                        <label class="form-label">{{ __('messages.tax_id') }}</label>
-                        <input type="text" name="tax_id" value="{{ old('tax_id', $settings['tax_id']) }}" class="form-input">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tax Settings -->
-            <div class="mb-6 border-t border-ink-100 dark:border-ink-700/30 pt-5">
-                <h4 class="section-title mb-4">{{ __('messages.tax_settings') }}</h4>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="form-label">{{ __('messages.default_tax_rate') }}</label>
-                        <input type="number" step="0.01" min="0" max="100" name="default_tax_rate" value="{{ old('default_tax_rate', $settings['default_tax_rate']) }}" class="form-input">
-                    </div>
-                    <div>
-                        <label class="form-label">{{ __('messages.default_tax_type') }}</label>
-                        <select name="default_tax_type" class="form-input">
-                            <option value="exclusive" {{ $settings['default_tax_type'] === 'exclusive' ? 'selected' : '' }}>{{ __('messages.exclusive') }} (Exclusive)</option>
-                            <option value="inclusive" {{ $settings['default_tax_type'] === 'inclusive' ? 'selected' : '' }}>{{ __('messages.inclusive') }} (Inclusive)</option>
-                        </select>
-                    </div>
                 </div>
             </div>
 

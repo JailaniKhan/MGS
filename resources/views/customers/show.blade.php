@@ -152,7 +152,7 @@
                             <div class="text-xs text-ink-500 dark:text-ink-400">{{ $order->created_at->format('Y/m/d') }}</div>
                         </div>
                     </div>
-                    <div class="text-right flex-shrink-0 ml-3">
+                    <div class="text-end flex-shrink-0 ms-3">
                         <div class="text-sm font-semibold text-ink-900 dark:text-ink-100">{{ number_format($order->total_amount) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</div>
                         <span class="inline-flex items-center gap-1 badge mt-1
                             @if($order->display_status === 'paid' || $order->display_status === 'completed') badge-success

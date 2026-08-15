@@ -144,6 +144,14 @@ class TransactionService
 
         // A payment REDUCES what we owe the supplier, so the supplier account must be DEBITED.
         // netBalance = credits - debits, positive = amount owed. (Fix C5)
+        //
+        // KNOWN LIMITATION: cash is posted as a CREDIT here so the journal balances
+        // (validateLines() requires debits == credits), but under this system's cash
+        // convention a credit is an INFLOW — so a supplier payment INCREASES the ledger
+        // cash balance. A correct entry would debit both cash and supplier, which the
+        // balanced-journal invariant cannot express. Live payment flows bypass this
+        // service entirely (they write Payment / PurchasePayment / PartyPayment rows);
+        // it is only used by the one-off MigrateToDoubleEntry command.
         return $this->post([
             ['account_id' => $cash->id, 'direction' => 'credit', 'amount' => $amount],
             ['account_id' => $supplierAccount->id, 'direction' => 'debit', 'amount' => $amount, 'notes' => $meta['notes'] ?? null],

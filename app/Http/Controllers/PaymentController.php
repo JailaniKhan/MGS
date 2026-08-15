@@ -2,17 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Payment;
-use App\Models\Order;
+use App\Http\Controllers\Concerns\AddsListBalances;
 use App\Models\Customer;
-use App\Models\Supplier;
+use App\Models\Order;
+use App\Models\PartyPayment;
+use App\Models\Payment;
 use App\Models\Purchase;
 use App\Models\PurchasePayment;
-use App\Models\PartyPayment;
+use App\Models\Supplier;
 use Illuminate\Http\Request;
 
 class PaymentController extends Controller
 {
+    use AddsListBalances;
+
     public function index()
     {
         // Money received from sales (customer payments) via the structured Payment table.
@@ -27,8 +30,8 @@ class PaymentController extends Controller
         // counted, otherwise the totals ignore payments that are listed in "Recent transactions"
         // (a payment_received is inflow, a payment_made is outflow). These are disjoint from the
         // document-linked Payment / PurchasePayment rows in normal use, so no double counting.
-        $ledgerInAFN  = PartyPayment::where('type', 'payment_received')->where('currency', 'AFN')->sum('amount');
-        $ledgerInUSD  = PartyPayment::where('type', 'payment_received')->where('currency', 'USD')->sum('amount');
+        $ledgerInAFN = PartyPayment::where('type', 'payment_received')->where('currency', 'AFN')->sum('amount');
+        $ledgerInUSD = PartyPayment::where('type', 'payment_received')->where('currency', 'USD')->sum('amount');
         $ledgerOutAFN = PartyPayment::where('type', 'payment_made')->where('currency', 'AFN')->sum('amount');
         $ledgerOutUSD = PartyPayment::where('type', 'payment_made')->where('currency', 'USD')->sum('amount');
 
@@ -54,9 +57,10 @@ class PaymentController extends Controller
                     'type' => 'incoming',
                     'amount' => $p->amount,
                     'currency' => $p->currency,
-                    'description' => ($p->order?->party?->name ?? __('messages.unknown')) . ' - ' . __('messages.order') . ' #' . $p->order_id,
+                    'description' => ($p->order?->party?->name ?? __('messages.unknown')).' - '.__('messages.order').' #'.$p->order_id,
                     'notes' => $p->notes,
                     'date' => $p->created_at,
+                    'link' => route('orders.show', $p->order_id),
                 ];
             });
 
@@ -95,9 +99,10 @@ class PaymentController extends Controller
                 'type' => 'outgoing',
                 'amount' => $p->amount,
                 'currency' => $p->currency,
-                'description' => ($purchasePartyNames[$p->purchase_id] ?? __('messages.unknown')) . ' - ' . __('messages.purchase') . ' #' . $p->purchase_id,
+                'description' => ($purchasePartyNames[$p->purchase_id] ?? __('messages.unknown')).' - '.__('messages.purchase').' #'.$p->purchase_id,
                 'notes' => $p->notes,
                 'date' => $p->created_at,
+                'link' => route('purchases.show', $p->purchase_id),
             ];
         });
 
@@ -106,13 +111,15 @@ class PaymentController extends Controller
                 ? ($customerNames[$entry->person_id] ?? __('messages.unknown'))
                 : ($supplierNames[$entry->person_id] ?? __('messages.unknown'));
             $typeLabel = $entry->type === 'payment_received' ? 'incoming' : 'outgoing';
+
             return [
                 'type' => $typeLabel,
                 'amount' => $entry->amount,
                 'currency' => $entry->currency,
-                'description' => $personName . ' (' . __('messages.ledger_close') . ')',
+                'description' => $personName.' ('.__('messages.ledger_close').')',
                 'notes' => $entry->notes,
                 'date' => $entry->created_at,
+                'link' => route('ledger.show', ['type' => $entry->person_type, 'id' => $entry->person_id]),
             ];
         });
 
@@ -126,12 +133,15 @@ class PaymentController extends Controller
 
         // Outstanding balances: receivables (orders — both customer and supplier) and
         // payables (purchases), split per currency so the page can show them separately.
+        // Balances are attached in one grouped query each via the trait, never the
+        // per-row accessors (which would run 2 SUM queries per row).
         $outstandingOrders = Order::with(['customer', 'supplier'])
             ->where('status', '!=', 'cancelled')
             ->latest()
             ->limit(100)
-            ->get()
-            ->filter(fn ($o) => $o->remaining_amount > 0);
+            ->get();
+        $this->attachOrderListBalances($outstandingOrders);
+        $outstandingOrders = $outstandingOrders->filter(fn ($o) => bccomp($o->remaining, '0', 2) > 0);
 
         $receivablesAFN = $this->paginateCollection(
             $outstandingOrders->filter(fn ($o) => $o->currency === 'AFN')->values(),
@@ -149,8 +159,9 @@ class PaymentController extends Controller
             ->where('status', '!=', 'cancelled')
             ->latest()
             ->limit(100)
-            ->get()
-            ->filter(fn ($p) => $p->remaining_amount > 0);
+            ->get();
+        $this->attachPurchaseListBalances($outstandingPurchases);
+        $outstandingPurchases = $outstandingPurchases->filter(fn ($p) => bccomp($p->remaining, '0', 2) > 0);
 
         $payablesAFN = $this->paginateCollection(
             $outstandingPurchases->filter(fn ($p) => $p->currency === 'AFN')->values(),
@@ -176,31 +187,77 @@ class PaymentController extends Controller
 
     public function create()
     {
-        $orders = Order::with('customer')->where('status', '!=', 'cancelled')->orderBy('created_at', 'desc')->get();
+        // The party may be a customer OR a supplier, so both must be eager-loaded.
+        $orders = Order::with(['customer', 'supplier'])
+            ->where('status', '!=', 'cancelled')
+            ->orderBy('created_at', 'desc')
+            ->get();
+        $this->attachOrderListBalances($orders);
         $orders = $orders->filter(function ($order) {
-            return $order->remaining_amount > 0;
-        });
+            return bccomp($order->remaining, '0', 2) > 0;
+        })->values();
+
+        // Purchases too — this page records payments against both orders and purchases.
+        $purchases = Purchase::with(['customer', 'supplier'])
+            ->where('status', '!=', 'cancelled')
+            ->orderBy('created_at', 'desc')
+            ->get();
+        $this->attachPurchaseListBalances($purchases);
+        $purchases = $purchases->filter(function ($purchase) {
+            return bccomp($purchase->remaining, '0', 2) > 0;
+        })->values();
+
+        $selectedType = in_array(request('type'), ['order', 'purchase'], true) ? request('type') : 'order';
         $selectedOrderId = request('order_id');
-        return view('payments.create', compact('orders', 'selectedOrderId'));
+        $selectedPurchaseId = request('purchase_id');
+
+        return view('payments.create', compact('orders', 'purchases', 'selectedType', 'selectedOrderId', 'selectedPurchaseId'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'order_id' => 'required|exists:orders,id',
+            'type' => 'required|in:order,purchase',
+            'order_id' => 'required_if:type,order|exists:orders,id',
+            'purchase_id' => 'required_if:type,purchase|exists:purchases,id',
             'amount' => 'required|numeric|min:0.01',
             'currency' => 'required|in:AFN,USD',
             'notes' => 'nullable|string|max:500',
         ]);
 
-        $order = Order::findOrFail($validated['order_id']);
-        
-        if ($validated['amount'] > $order->remaining_amount) {
-            $symbol = $order->currency === 'USD' ? '$' : __('messages.afn');
-            return back()->with('error', __('messages.payment_exceeds_balance') . ' (' . __('messages.pending') . ': ' . number_format($order->remaining_amount) . ' ' . $symbol . ')');
+        if ($validated['type'] === 'order') {
+            $document = Order::findOrFail($validated['order_id']);
+            $remaining = $document->remaining_amount;
+        } else {
+            $document = Purchase::findOrFail($validated['purchase_id']);
+            $remaining = $document->remaining_amount;
         }
 
-        Payment::create($validated);
+        if ($validated['currency'] !== $document->currency) {
+            return back()->with('error', __('messages.payment_currency_mismatch'));
+        }
+
+        if ($validated['amount'] > $remaining) {
+            $symbol = $document->currency === 'USD' ? '$' : __('messages.afn');
+
+            return back()->with('error', __('messages.payment_exceeds_balance').' ('.__('messages.pending').': '.number_format($remaining).' '.$symbol.')');
+        }
+
+        if ($validated['type'] === 'order') {
+            Payment::create([
+                'order_id' => $document->id,
+                'amount' => $validated['amount'],
+                'currency' => $validated['currency'],
+                'notes' => $validated['notes'] ?? null,
+            ]);
+        } else {
+            PurchasePayment::create([
+                'purchase_id' => $document->id,
+                'amount' => $validated['amount'],
+                'currency' => $validated['currency'],
+                'notes' => $validated['notes'] ?? null,
+            ]);
+        }
 
         return redirect()->route('payments.index')->with('success', __('messages.payment_created'));
     }
@@ -208,18 +265,20 @@ class PaymentController extends Controller
     public function show(Order $order)
     {
         $order->load('customer', 'payments');
+
         return view('payments.show', compact('order'));
     }
 
     public function destroy(Payment $payment)
     {
         $payment->delete();
+
         return redirect()->route('payments.index')->with('success', __('messages.payment_deleted'));
     }
 
     public function customerPaymentsPage()
     {
-        return view('payments.index');
+        return $this->index();
     }
 
     public function customerIndex()

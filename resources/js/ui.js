@@ -1,6 +1,65 @@
 // MGS — Phase A UI layer: skeleton overlay, expandable FAB, toast upgrades
 
 /* ============================================================
+   ADVANCED: SPOTLIGHT CARDS + COUNT-UP + MAGNETIC PRESS
+   - card-spot: cursor-tracked border glow (sets --mx/--my)
+   - [data-count]: animated number tween on view (tabular)
+   - .magnetic: springy press w/ subtle pointer-reactive tilt
+   All effects respect prefers-reduced-motion.
+   ============================================================ */
+(function () {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* ---- Spotlight (pointer → --mx/--my) ---- */
+    if (!reduceMotion && window.matchMedia('(pointer: fine)').matches) {
+        document.addEventListener('pointermove', (e) => {
+            const el = e.target.closest('.card-spot, .action-card');
+            if (!el) return;
+            const r = el.getBoundingClientRect();
+            el.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+            el.style.setProperty('--my', (e.clientY - r.top) + 'px');
+        }, { passive: true });
+    }
+
+    /* ---- Count-up numbers: <span data-count="42000"> ---- */
+    const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+    function tween(el) {
+        const target = parseFloat(el.getAttribute('data-count'));
+        if (!isFinite(target)) return;
+        const dur = 900;
+        const start = performance.now();
+        const fmt = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+        function frame(now) {
+            const p = Math.min(1, (now - start) / dur);
+            el.textContent = fmt.format(Math.round(target * easeOut(p)));
+            if (p < 1) requestAnimationFrame(frame);
+            else el.textContent = fmt.format(target);
+        }
+        if (reduceMotion) { el.textContent = fmt.format(target); return; }
+        requestAnimationFrame(frame);
+    }
+    const counters = document.querySelectorAll('[data-count]');
+    if (counters.length) {
+        const io = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+                io.unobserve(entry.target);
+                tween(entry.target);
+            });
+        }, { threshold: 0.4 });
+        counters.forEach((el) => io.observe(el));
+    }
+
+    /* ---- Inject grain overlay (once) ---- */
+    if (!document.querySelector('.grain-overlay')) {
+        const g = document.createElement('div');
+        g.className = 'grain-overlay';
+        g.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(g);
+    }
+})();
+
+/* ============================================================
    NAVIGATION SKELETON OVERLAY
    Shows a shimmer skeleton on internal link clicks / form submits
    to mask the white-flash of full-page navigation.
@@ -9,14 +68,23 @@
     const overlay = document.getElementById('page-skeleton');
     if (!overlay) return;
 
+    let lastShownAt = 0;
+    let suppressUntil = Date.now() + 400; // suppress right after initial page load
+
     const hide = () => { overlay.hidden = true; };
-    const show = () => { overlay.hidden = false; };
+    const show = () => {
+        // Bounce suppression: if we just loaded, don't show again immediately
+        if (Date.now() < suppressUntil) return;
+        overlay.hidden = false;
+        lastShownAt = Date.now();
+    };
 
     const isInternal = (href) => {
         if (!href) return false;
         if (href.startsWith('#') || href.startsWith('javascript:')) return false;
         try {
-            return new URL(href, window.location.href).origin === window.location.origin;
+            const u = new URL(href, window.location.href);
+            return u.origin === window.location.origin && u.pathname !== window.location.pathname;
         } catch (e) {
             return false;
         }
@@ -30,10 +98,52 @@
     });
     document.addEventListener('submit', (e) => { if (!e.defaultPrevented) show(); });
 
-    window.addEventListener('pageshow', hide);
+    window.addEventListener('pageshow', (e) => {
+        hide();
+        // Back/forward nav (persisted bfcache) — suppress overlay for a beat
+        if (e.persisted) suppressUntil = Date.now() + 400;
+    });
     window.addEventListener('load', hide);
     document.addEventListener('DOMContentLoaded', hide);
     setTimeout(hide, 700); // safety net
+})();
+
+/* ============================================================
+   LINK PREFETCHER — warms server + browser cache on hover/touch
+   so repeat navigation feels instant. GET links only; safe/no-op on failure.
+   ============================================================ */
+(function () {
+    const prefetched = new Set();
+    const prefetch = (url) => {
+        if (prefetched.has(url)) return;
+        prefetched.add(url);
+        // <link rel="prefetch"> — low priority, browser-managed
+        const link = document.createElement('link');
+        link.rel = 'prefetch';
+        link.href = url;
+        link.as = 'document';
+        document.head.appendChild(link);
+        // Speculative warm of server-rendered HTML via cache-friendly fetch
+        if (navigator.connection && (navigator.connection.saveData || /2g/.test(navigator.connection.effectiveType || ''))) return;
+        fetch(url, { credentials: 'same-origin', headers: { 'X-Prefetch': '1' } }).catch(() => {});
+    };
+
+    const attach = (a) => {
+        const href = a.getAttribute('href');
+        if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+        let url;
+        try {
+            const u = new URL(href, window.location.href);
+            if (u.origin !== window.location.origin) return;
+            if (u.pathname === window.location.pathname) return;
+            url = u.href;
+        } catch (e) { return; }
+
+        a.addEventListener('pointerenter', () => prefetch(url), { once: true, passive: true });
+        a.addEventListener('touchstart', () => prefetch(url), { once: true, passive: true });
+    };
+
+    document.querySelectorAll('a[href]').forEach(attach);
 })();
 
 /* ============================================================
@@ -137,6 +247,14 @@
 (function () {
     const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
     if (isTouch) document.documentElement.classList.add('touch');
+
+    // OS detection for platform-specific touch targets / zoom guards
+    const ua = navigator.userAgent || '';
+    if (/android/i.test(ua)) {
+        document.documentElement.classList.add('os-android');
+    } else if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+        document.documentElement.classList.add('os-ios');
+    }
 })();
 
 /* ---- Confirm / action sheet ----
@@ -322,4 +440,74 @@
     backdrop.addEventListener('click', () => setOpen(false));
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drawer.classList.contains('open')) setOpen(false); });
     drawer.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => setOpen(false)));
+})();
+
+/* ============================================================
+   THEME MANAGER — manual Light / Dark / System toggle
+   (P0: user-controlled theme on top of class-based dark mode)
+   - dark: utilities in app.css now respond to `.dark` on <html>
+   - preference persisted in localStorage; "system" tracks OS
+   - control is injected into the sidebar drawer (no Blade edit needed)
+   ============================================================ */
+(function () {
+    const KEY = 'mgs-theme';
+    const root = document.documentElement;
+
+    const getMode = () => {
+        try { return localStorage.getItem(KEY) || 'system'; } catch (e) { return 'system'; }
+    };
+    const systemDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    function applyMode(mode) {
+        const dark = mode === 'dark' || (mode === 'system' && systemDark());
+        root.classList.toggle('dark', dark);
+        root.style.colorScheme = dark ? 'dark' : 'light';
+
+        const group = document.getElementById('theme-segmented');
+        if (group) {
+            group.querySelectorAll('.segmented-item').forEach((b) => {
+                b.classList.toggle('segmented-item-active', b.dataset.theme === mode);
+            });
+        }
+    }
+
+    // Apply immediately (best-effort; a head script removes any flash — see notes)
+    applyMode(getMode());
+
+    function injectControl() {
+        const drawer = document.getElementById('sidebar-drawer');
+        if (!drawer || document.getElementById('theme-segmented')) return;
+        const header = drawer.querySelector('.sidebar-header');
+        if (!header) return;
+
+        const wrap = document.createElement('div');
+        wrap.className = 'px-4 py-3';
+        wrap.innerHTML =
+            '<p class="text-[10px] font-bold uppercase tracking-wider text-ink-400 dark:text-ink-500 mb-2">Appearance</p>' +
+            '<div class="segmented" id="theme-segmented" role="group" aria-label="Appearance">' +
+                '<button type="button" class="segmented-item" data-theme="light">Light</button>' +
+                '<button type="button" class="segmented-item" data-theme="dark">Dark</button>' +
+                '<button type="button" class="segmented-item" data-theme="system">System</button>' +
+            '</div>';
+
+        header.insertAdjacentElement('afterend', wrap);
+
+        wrap.querySelectorAll('.segmented-item').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const mode = btn.dataset.theme;
+                try { localStorage.setItem(KEY, mode); } catch (e) {}
+                applyMode(mode);
+            });
+        });
+
+        applyMode(getMode());
+    }
+
+    injectControl();
+
+    // React live to OS changes while in "system" mode
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => { if (getMode() === 'system') applyMode('system'); };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
 })();

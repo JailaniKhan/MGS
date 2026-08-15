@@ -22,12 +22,12 @@
                         @endif
                     </div>
                 </div>
-                <div class="text-right flex-shrink-0 ml-3">
+                <div class="text-end flex-shrink-0 ms-3">
                     @if ($person['remaining_afn'] > 0)
                         <div class="text-sm font-semibold {{ $person['type'] === 'customer' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">{{ number_format($person['remaining_afn']) }} {{ __('messages.afn') }}</div>
                     @endif
                     @if ($person['remaining_usd'] > 0)
-                        <div class="text-sm font-semibold {{ $person['type'] === 'customer' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">{{ number_format($person['remaining_usd']) }}$</div>
+                        <div class="text-sm font-semibold {{ $person['type'] === 'customer' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">{{ number_format($person['remaining_usd']) }} $</div>
                     @endif
                     @if ($person['remaining_afn'] <= 0 && $person['remaining_usd'] <= 0)
                         <span class="badge badge-success">{{ __('messages.fully_paid') }}</span>

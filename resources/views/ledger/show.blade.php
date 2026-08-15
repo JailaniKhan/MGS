@@ -22,7 +22,7 @@
             </div>
             <a href="{{ $personType === 'customer' ? route('reminders.customer', $person) : route('reminders.supplier', $person) }}"
                onclick="event.preventDefault(); document.getElementById('reminder-form-ledger').classList.toggle('hidden')"
-               class="p-2 text-secondary-600 dark:text-secondary-400 hover:bg-secondary-50 dark:hover:bg-secondary-900/20 rounded-xl transition-all duration-200">
+               class="w-10 h-10 flex items-center justify-center text-secondary-600 dark:text-secondary-400 hover:bg-secondary-50 dark:hover:bg-secondary-900/20 rounded-xl transition-all duration-200">
                 <x-icon name="bell" class="w-5 h-5"/>
             </a>
         </div>
@@ -105,7 +105,7 @@
                     <div class="text-sm font-medium text-ink-800 dark:text-ink-200">{{ $entry->created_at->format('Y/m/d H:i') }}</div>
                     @if ($entry->notes) <div class="text-xs text-ink-500 dark:text-ink-400 mt-0.5">{{ $entry->notes }}</div> @endif
                 </div>
-                <div class="text-right">
+                <div class="text-end">
                     <span class="text-sm font-bold {{ $entry->type === 'payment_received' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">{{ $entry->type === 'payment_received' ? '+' : '-' }}{{ number_format($entry->amount) }} {{ $entry->currency === 'USD' ? '$' : __('messages.afn') }}</span>
                 </div>
             </div>

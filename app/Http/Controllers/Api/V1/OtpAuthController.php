@@ -39,18 +39,21 @@ class OtpAuthController extends Controller
 
         $cached = cache("otp_{$validated['phone']}");
 
-        if (!$cached || $cached !== (int) $validated['otp']) {
+        if (! $cached || $cached !== (int) $validated['otp']) {
             return response()->json(['message' => 'Invalid OTP'], 401);
         }
 
         cache()->forget("otp_{$validated['phone']}");
 
-        $user = User::where('email', $validated['phone'] . '@phone.local')->first();
+        // Prefer an account registered with this phone number; fall back to
+        // the legacy phone-OTP convention (email = phone@phone.local).
+        $user = User::where('phone', $validated['phone'])->first()
+            ?? User::where('email', $validated['phone'].'@phone.local')->first();
 
-        if (!$user) {
+        if (! $user) {
             $user = User::create([
                 'name' => $validated['name'] ?? 'User',
-                'email' => $validated['phone'] . '@phone.local',
+                'email' => $validated['phone'].'@phone.local',
                 'password' => Hash::make(Str::random(32)),
             ]);
         }

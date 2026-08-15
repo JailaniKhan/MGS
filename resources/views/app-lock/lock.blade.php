@@ -4,14 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>MGS - {{ __('messages.lock_screen') }}</title>
+    @fonts
     @if(in_array(app()->getLocale(), ['ps', 'fa']))
         @vite(['resources/css/app-rtl.css'])
     @else
         @vite(['resources/css/app.css'])
     @endif
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body class="bg-ink-900 text-white min-h-screen flex items-center justify-center">
+<body class="bg-ink-900 text-white min-h-screen flex items-center justify-center font-sans">
     <div class="w-full max-w-sm px-6">
         <div class="text-center mb-8">
             <div class="w-16 h-16 rounded-2xl bg-brand text-white flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary-500/30">
@@ -23,10 +23,10 @@
 
         <form id="pin-verify-form" class="space-y-6">
             <div class="flex justify-center gap-3" id="pin-display">
-                <input type="text" maxlength="1" class="pin-input" data-index="0" inputmode="numeric">
-                <input type="text" maxlength="1" class="pin-input" data-index="1" inputmode="numeric">
-                <input type="text" maxlength="1" class="pin-input" data-index="2" inputmode="numeric">
-                <input type="text" maxlength="1" class="pin-input" data-index="3" inputmode="numeric">
+                <input type="password" maxlength="1" class="pin-input" data-index="0" inputmode="numeric" autocomplete="off">
+                <input type="password" maxlength="1" class="pin-input" data-index="1" inputmode="numeric" autocomplete="off">
+                <input type="password" maxlength="1" class="pin-input" data-index="2" inputmode="numeric" autocomplete="off">
+                <input type="password" maxlength="1" class="pin-input" data-index="3" inputmode="numeric" autocomplete="off">
             </div>
 
             <div id="pin-error" class="text-center text-danger-400 text-sm hidden">{{ __('messages.invalid_pin') }}</div>
@@ -53,8 +53,8 @@
             transition: all 0.2s;
         }
         .pin-input:focus {
-            border-color: #10b981;
-            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+            border-color: var(--color-brand, #10ae64);
+            box-shadow: 0 0 0 3px rgb(16 174 100 / 0.2);
         }
     </style>
 

@@ -44,6 +44,11 @@ class Purchase extends Model
         return $this->hasMany(PurchasePayment::class);
     }
 
+    public function purchaseReturns()
+    {
+        return $this->hasMany(PurchaseReturn::class);
+    }
+
     public function products()
     {
         return $this->belongsToMany(Product::class, 'purchase_items')
@@ -52,7 +57,11 @@ class Purchase extends Model
 
     public function getPaidAmountAttribute()
     {
-        return bcadd('0.00', (string) ($this->purchasePayments()->sum('amount') ?: '0'), 2);
+        // Only payments in the purchase's own currency may settle it; a foreign-currency
+        // payment must never reduce the balance of a purchase it does not match.
+        return bcadd('0.00', (string) ($this->purchasePayments()
+            ->where('currency', $this->currency)
+            ->sum('amount') ?: '0'), 2);
     }
 
     public function getReturnedAmountAttribute()
@@ -68,6 +77,7 @@ class Purchase extends Model
         // Use bcmath: total_amount is a decimal string, paid/returned are canonical strings.
         $afterPaid = bcsub((string) $this->total_amount, $this->paid_amount, 2);
         $afterReturned = bcsub($afterPaid, $this->returned_amount, 2);
+
         // Clamp at zero.
         return bccomp($afterReturned, '0', 2) >= 0 ? $afterReturned : '0.00';
     }

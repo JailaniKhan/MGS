@@ -3,116 +3,152 @@
 namespace App\Http\Controllers;
 
 use App\Models\Expense;
-use App\Models\Order;
+use App\Models\JournalEntry;
 use App\Models\Payment;
-use App\Models\Purchase;
 use App\Models\PurchasePayment;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
+use Illuminate\Support\Carbon;
 
 class PassbookController extends Controller
 {
+    private const FILTER_SOURCES = [
+        'cash_in' => ['cashbook', 'payments'],
+        'cash_out' => ['cashbook', 'purchasePayments', 'salary'],
+        'expense' => ['expenses'],
+    ];
+
     public function index(Request $request)
     {
         $filter = $request->get('filter', 'all');
         $dateFrom = $request->get('date_from');
         $dateTo = $request->get('date_to');
 
+        $from = $dateFrom ? Carbon::parse($dateFrom)->startOfDay() : null;
+        $to = $dateTo ? Carbon::parse($dateTo)->endOfDay() : null;
+
+        // Date-only columns (transaction_date / expense_date) may hold either
+        // 'Y-m-d' or a full timestamp; an exclusive upper bound keeps both
+        // forms inside the requested range on SQLite.
+        $toExclusive = $to ? $to->copy()->addDay()->toDateString() : null;
+
+        // The feed is cash-only: cashbook entries, customer/supplier payments,
+        // salary payments and expenses. Invoice (credit) documents are not
+        // part of this flow.
+        $sources = $filter === 'all'
+            ? ['cashbook', 'payments', 'purchasePayments', 'expenses', 'salary']
+            : (self::FILTER_SOURCES[$filter] ?? []);
+
         $query = collect();
 
-        // Sales (Credit In)
-        $orders = Order::with(['customer', 'supplier'])->get();
-        foreach ($orders as $order) {
-            $query->push([
-                'date' => $order->created_at,
-                'type' => 'credit_in',
-                'description' => __('messages.sale_to') . ' ' . ($order->party?->name ?? __('messages.unknown')),
-                'amount' => $order->total_amount,
-                'currency' => $order->currency,
-                'reference' => 'ORD-' . $order->id,
-                'icon' => 'sale',
-            ]);
+        // Cashbook entries (Cash In / Cash Out) and salary payments (Cash Out,
+        // posted to the ledger with source 'salary' like a cashbook outflow).
+        if (in_array('cashbook', $sources, true) || in_array('salary', $sources, true)) {
+            $journalSources = ['cashbook_in', 'cashbook_out'];
+            if (in_array('salary', $sources, true)) {
+                $journalSources[] = 'salary';
+            }
+
+            $journalQuery = JournalEntry::with('ledgerEntries', 'reference')
+                ->whereIn('source', $journalSources)
+                ->when($from, fn ($q) => $q->where('transaction_date', '>=', $from->toDateString()))
+                ->when($to, fn ($q) => $q->where('transaction_date', '<', $toExclusive));
+
+            if ($filter === 'cash_in') {
+                $journalQuery->where('source', 'cashbook_in');
+            } elseif ($filter === 'cash_out') {
+                $journalQuery->whereIn('source', ['cashbook_out', 'salary']);
+            }
+
+            foreach ($journalQuery->get() as $journal) {
+                $cashLine = $journal->ledgerEntries->first();
+                $isIn = $journal->source === 'cashbook_in';
+                $party = $journal->reference?->name;
+                $notes = $journal->ledgerEntries->pluck('notes')->filter()->first();
+
+                $query->push([
+                    'date' => $journal->transaction_date,
+                    'type' => $isIn ? 'cash_in' : 'cash_out',
+                    'description' => trim(implode(' - ', array_filter([
+                        $journal->description,
+                        $party,
+                        $notes,
+                    ]))),
+                    'amount' => $cashLine?->amount ?? 0,
+                    'currency' => $journal->currency,
+                    'reference' => ($journal->source === 'salary' ? 'SAL-' : 'CB-').$journal->id,
+                    'icon' => $isIn ? 'cash_in' : 'cash_out',
+                ]);
+            }
         }
 
         // Customer Payments (Cash In)
-        $payments = Payment::with('order.customer', 'order.supplier')->get();
-        foreach ($payments as $payment) {
-            $query->push([
-                'date' => $payment->created_at,
-                'type' => 'cash_in',
-                'description' => __('messages.payment_from') . ' ' . ($payment->order->party?->name ?? __('messages.unknown')),
-                'amount' => $payment->amount,
-                'currency' => $payment->currency,
-                'reference' => 'PAY-' . $payment->id,
-                'icon' => 'cash_in',
-            ]);
-        }
+        if (in_array('payments', $sources, true)) {
+            $payments = Payment::with('order.customer', 'order.supplier')
+                ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('created_at', '<=', $to))
+                ->get();
 
-        // Purchases (Credit Out)
-        $purchases = Purchase::with(['customer', 'supplier'])->get();
-        foreach ($purchases as $purchase) {
-            $query->push([
-                'date' => $purchase->created_at,
-                'type' => 'credit_out',
-                'description' => __('messages.purchase_from') . ' ' . ($purchase->party?->name ?? __('messages.unknown')),
-                'amount' => $purchase->total_amount,
-                'currency' => $purchase->currency,
-                'reference' => 'PUR-' . $purchase->id,
-                'icon' => 'purchase',
-            ]);
+            foreach ($payments as $payment) {
+                $query->push([
+                    'date' => $payment->created_at,
+                    'type' => 'cash_in',
+                    'description' => __('messages.payment_from').' '.($payment->order->party?->name ?? __('messages.unknown')),
+                    'amount' => $payment->amount,
+                    'currency' => $payment->currency,
+                    'reference' => 'PAY-'.$payment->id,
+                    'icon' => 'cash_in',
+                ]);
+            }
         }
 
         // Supplier Payments (Cash Out)
-        $purchasePayments = PurchasePayment::with('purchase.customer', 'purchase.supplier')->get();
-        foreach ($purchasePayments as $pp) {
-            $query->push([
-                'date' => $pp->created_at,
-                'type' => 'cash_out',
-                'description' => __('messages.payment_to') . ' ' . ($pp->purchase->party?->name ?? __('messages.unknown')),
-                'amount' => $pp->amount,
-                'currency' => $pp->currency,
-                'reference' => 'PPAY-' . $pp->id,
-                'icon' => 'cash_out',
-            ]);
+        if (in_array('purchasePayments', $sources, true)) {
+            $purchasePayments = PurchasePayment::with('purchase.customer', 'purchase.supplier')
+                ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('created_at', '<=', $to))
+                ->get();
+
+            foreach ($purchasePayments as $pp) {
+                $query->push([
+                    'date' => $pp->created_at,
+                    'type' => 'cash_out',
+                    'description' => __('messages.payment_to').' '.($pp->purchase->party?->name ?? __('messages.unknown')),
+                    'amount' => $pp->amount,
+                    'currency' => $pp->currency,
+                    'reference' => 'PPAY-'.$pp->id,
+                    'icon' => 'cash_out',
+                ]);
+            }
         }
 
         // Expenses
-        $expenses = Expense::all();
-        foreach ($expenses as $expense) {
-            $query->push([
-                'date' => $expense->expense_date,
-                'type' => 'expense',
-                'description' => $expense->category . ($expense->notes ? ' - ' . $expense->notes : ''),
-                'amount' => $expense->amount,
-                'currency' => $expense->currency,
-                'reference' => 'EXP-' . $expense->id,
-                'icon' => 'expense',
-            ]);
-        }
+        if (in_array('expenses', $sources, true)) {
+            $expenses = Expense::query()
+                ->when($from, fn ($q) => $q->where('expense_date', '>=', $from->toDateString()))
+                ->when($to, fn ($q) => $q->where('expense_date', '<', $toExclusive))
+                ->get();
 
-        // Filter by type
-        if ($filter !== 'all') {
-            $query = $query->filter(fn($item) => $item['type'] === $filter);
-        }
-
-        // Filter by date range
-        if ($dateFrom) {
-            $query = $query->filter(fn($item) => $item['date']->gte(Carbon::parse($dateFrom)));
-        }
-        if ($dateTo) {
-            $query = $query->filter(fn($item) => $item['date']->lte(Carbon::parse($dateTo)->endOfDay()));
+            foreach ($expenses as $expense) {
+                $query->push([
+                    'date' => $expense->expense_date,
+                    'type' => 'expense',
+                    'description' => $expense->category.($expense->notes ? ' - '.$expense->notes : ''),
+                    'amount' => $expense->amount,
+                    'currency' => $expense->currency,
+                    'reference' => 'EXP-'.$expense->id,
+                    'icon' => 'expense',
+                ]);
+            }
         }
 
         // Sort by date descending, then paginate the combined feed.
         $allTransactions = $query->sortByDesc('date')->values();
 
         // Totals are cash-basis: actual money received vs paid.
-        // Invoices (credit_in/credit_out) are excluded so they are not
-        // counted twice alongside their settlement payments.
-        $totalIn = $query->filter(fn($i) => $i['type'] === 'cash_in' && $i['currency'] === 'AFN')->sum('amount');
-        $totalInUSD = $query->filter(fn($i) => $i['type'] === 'cash_in' && $i['currency'] === 'USD')->sum('amount');
-        $totalOut = $query->filter(fn($i) => in_array($i['type'], ['cash_out', 'expense'], true) && $i['currency'] === 'AFN')->sum('amount');
-        $totalOutUSD = $query->filter(fn($i) => in_array($i['type'], ['cash_out', 'expense'], true) && $i['currency'] === 'USD')->sum('amount');
+        $totalIn = $query->filter(fn ($i) => $i['type'] === 'cash_in' && $i['currency'] === 'AFN')->sum('amount');
+        $totalInUSD = $query->filter(fn ($i) => $i['type'] === 'cash_in' && $i['currency'] === 'USD')->sum('amount');
+        $totalOut = $query->filter(fn ($i) => in_array($i['type'], ['cash_out', 'expense'], true) && $i['currency'] === 'AFN')->sum('amount');
+        $totalOutUSD = $query->filter(fn ($i) => in_array($i['type'], ['cash_out', 'expense'], true) && $i['currency'] === 'USD')->sum('amount');
 
         $transactions = $this->paginateCollection($allTransactions);
 

@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
     <a href="{{ route('cashbook.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400 mb-4">
@@ -9,8 +9,8 @@
     <!-- Profile Hero Card -->
     <div class="card p-4 mb-4 page-enter" style="animation-delay: 0.05s;">
         <div class="flex items-center gap-4">
-            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center flex-shrink-0 shadow-md shadow-primary-500/25 ring-4 ring-primary-500/10">
-                <span class="text-white font-bold text-2xl">{{ mb_substr($person->name, 0, 1) }}</span>
+            <div class="w-16 h-16 rounded-[1.25rem] brand-grad flex items-center justify-center flex-shrink-0 shadow-fab">
+                <span class="text-white font-extrabold text-2xl">{{ mb_substr($person->name, 0, 1) }}</span>
             </div>
             <div class="min-w-0 flex-1">
                 <h2 class="text-xl font-bold text-ink-900 dark:text-white truncate">{{ $person->name }}</h2>
@@ -52,7 +52,7 @@
                 <div class="border-t border-white/10 mt-4 pt-4"></div>
             @endif
             <div class="flex items-center justify-between mb-3">
-                <span class="text-[10px] font-bold tracking-wider text-white/60 uppercase">{{ __('messages.net_balance') }}</span>
+                <span class="text-[10px] font-bold tracking-wider text-white/60 uppercase">{{ __('messages.cashbook_net') }}</span>
                 <span class="text-[10px] font-extrabold bg-white/15 text-white px-2 py-0.5 rounded-full">{{ $currency }}</span>
             </div>
             <div class="text-3xl font-extrabold {{ $total['net'] >= 0 ? 'text-emerald-300' : 'text-red-300' }}">
@@ -80,7 +80,7 @@
             </div>
         @empty
             <div class="flex items-center justify-between mb-3">
-                <span class="text-[10px] font-bold tracking-wider text-white/60 uppercase">{{ __('messages.net_balance') }}</span>
+                <span class="text-[10px] font-bold tracking-wider text-white/60 uppercase">{{ __('messages.cashbook_net') }}</span>
                 <span class="text-[10px] font-extrabold bg-white/15 text-white px-2 py-0.5 rounded-full">AFN</span>
             </div>
             <div class="text-3xl font-extrabold text-emerald-300">0.00</div>
@@ -179,8 +179,8 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-1.5 flex-shrink-0 ml-3">
-                                    <div class="text-right">
+                                <div class="flex items-center gap-1.5 flex-shrink-0 ms-3">
+                                    <div class="text-end">
                                         <div class="text-sm font-bold {{ $tx->direction === 'in' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">
                                             {{ $tx->direction === 'in' ? '+' : '-' }}{{ number_format((float) $tx->amount, 2) }}
                                         </div>
@@ -199,7 +199,7 @@
                 </div>
             @empty
                 <div class="empty-state">
-                    <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                    <div class="empty-illustration">
                         <x-icon name="wallet" class="w-6 h-6 text-ink-400"/>
                     </div>
                     <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_person_transactions') }}</p>
@@ -209,7 +209,7 @@
     @else
         <div class="card overflow-hidden page-enter" style="animation-delay: 0.1s;">
             <div class="empty-state">
-                <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                <div class="empty-illustration">
                     <x-icon name="wallet" class="w-6 h-6 text-ink-400"/>
                 </div>
                 <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_person_transactions') }}</p>

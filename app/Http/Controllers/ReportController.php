@@ -30,21 +30,32 @@ class ReportController extends Controller
 
     public function profitLoss(Request $request)
     {
-        $startDate = $request->get('start_date', now()->startOfMonth()->toDateString());
-        $endDate = $request->get('end_date', now()->endOfMonth()->toDateString());
+        $anchor = Carbon::parse($request->get('date_to', now()->toDateString()));
+        $period = $request->get('period', 'month');
         $currency = $request->get('currency', 'AFN');
 
-        $startDateTime = Carbon::parse($startDate)->startOfDay();
-        $endDateTime = Carbon::parse($endDate)->endOfDay();
+        $anchorDate = $anchor->toDateString();
+        $startDateTime = match ($period) {
+            '30' => $anchor->copy()->subDays(29)->startOfDay(),
+            'quarter' => $anchor->copy()->startOfQuarter(),
+            'year' => $anchor->copy()->startOfYear(),
+            default => $anchor->copy()->startOfMonth(),
+        };
+        $endDateTime = $anchor->copy()->endOfDay();
 
         // Total Revenue from non-cancelled orders (net of returns)
         $totalRevenue = Order::where('status', '!=', 'cancelled')
             ->where('currency', $currency)
             ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->sum('total_amount');
+        // return_date is stored date-only ('Y-m-d'), so an inclusive lower bound on
+        // the date string plus an exclusive upper bound keeps first-day rows in range
+        // (a `<=` endOfDay / `>=` startOfDay string compare would drop them).
+        $toExclusive = $endDateTime->copy()->addDay()->toDateString();
         $orderReturns = OrderReturn::where('status', '!=', 'cancelled')
             ->where('currency', $currency)
-            ->whereBetween('return_date', [$startDateTime, $endDateTime])
+            ->where('return_date', '>=', $startDateTime->toDateString())
+            ->where('return_date', '<', $toExclusive)
             ->sum('total_amount');
         $totalRevenue = bcsub((string) $totalRevenue, (string) $orderReturns, 2);
 
@@ -57,7 +68,8 @@ class ReportController extends Controller
             ->sum('total_amount');
         $purchaseReturns = PurchaseReturn::where('status', '!=', 'cancelled')
             ->where('currency', $currency)
-            ->whereBetween('return_date', [$startDateTime, $endDateTime])
+            ->where('return_date', '>=', $startDateTime->toDateString())
+            ->where('return_date', '<', $toExclusive)
             ->sum('total_amount');
         $totalCOGS = bcsub((string) $purchasesCost, (string) $purchaseReturns, 2);
 
@@ -67,21 +79,29 @@ class ReportController extends Controller
             ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->sum('amount');
         $salaryExpenses = SalaryPayment::where('currency', $currency)
+            ->whereHas('employee', fn ($q) => $q->where('user_id', Auth::id()))
             ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->sum('amount');
         // Include the dedicated Expense table (Fix C4)
         $operatingExpenses = Expense::where('currency', $currency)
-            ->whereBetween('expense_date', [$startDateTime, $endDateTime])
+            ->where('expense_date', '>=', $startDateTime->toDateString())
+            ->where('expense_date', '<', $toExclusive)
             ->sum('amount');
 
         $totalExpenses = bcadd(bcadd((string) $totalCOGS, (string) $cashExpenses, 2), bcadd((string) $salaryExpenses, (string) $operatingExpenses, 2), 2);
         $netProfit = bcsub((string) $totalRevenue, (string) $totalExpenses, 2);
 
+        $grossProfit = bcsub((string) $totalRevenue, (string) $totalCOGS, 2);
+        $netMarginPercent = bccomp((string) $totalRevenue, '0', 2) === 1
+            ? bcdiv(bcmul((string) $netProfit, '100', 2), (string) $totalRevenue, 1)
+            : null;
+
         $selectedCurrency = $currency;
 
         return view('reports.profit_loss', compact(
             'totalRevenue', 'totalCOGS', 'cashExpenses', 'salaryExpenses', 'operatingExpenses',
-            'totalExpenses', 'netProfit', 'startDate', 'endDate', 'selectedCurrency'
+            'totalExpenses', 'netProfit', 'grossProfit', 'netMarginPercent',
+            'anchorDate', 'period', 'selectedCurrency'
         ));
     }
 
@@ -111,7 +131,11 @@ class ReportController extends Controller
                 (string) CashbookEntry::where('type', 'out')->where('currency', $currency)->sum('amount'),
                 2
             ),
-            (string) SalaryPayment::where('currency', $currency)->sum('amount'),
+            bcadd(
+                (string) SalaryPayment::where('currency', $currency)->whereHas('employee', fn ($q) => $q->where('user_id', Auth::id()))->sum('amount'),
+                (string) Expense::where('currency', $currency)->sum('amount'),
+                2
+            ),
             2
         );
         $cashBalance = bcsub($cashIn, $cashOut, 2);
@@ -121,19 +145,22 @@ class ReportController extends Controller
         // then the outer query sums. One round trip instead of two SQL per order.
         $receivableRow = DB::query()->fromSub(function ($q) use ($currency) {
             $q->from('orders')
-                ->selectRaw("MAX(orders.total_amount - COALESCE((SELECT SUM(amount) FROM payments WHERE payments.order_id = orders.id), 0) - COALESCE((SELECT SUM(total_amount) FROM order_returns WHERE order_returns.order_id = orders.id AND order_returns.status != 'cancelled' AND order_returns.currency = orders.currency), 0), 0) AS remaining")
+                ->selectRaw("MAX(orders.total_amount - COALESCE((SELECT SUM(amount) FROM payments WHERE payments.order_id = orders.id AND payments.currency = orders.currency), 0) - COALESCE((SELECT SUM(total_amount) FROM order_returns WHERE order_returns.order_id = orders.id AND order_returns.status != 'cancelled' AND order_returns.currency = orders.currency), 0), 0) AS remaining")
+                ->where('orders.user_id', Auth::id())
                 ->where('orders.currency', $currency)
                 ->where('orders.status', '!=', 'cancelled');
         }, 'per_order')->sum('remaining');
         $receivables = bcadd('0.00', (string) ($receivableRow ?: '0'), 2);
 
-        // Inventory Value (stock * average purchase price). One grouped AVG per product_id over
-        // purchase_items joined to parent currency+status, instead of one AVG query per product.
+        // Inventory Value (stock * weighted average purchase price). One grouped query per product_id
+        // over purchase_items joined to parent currency+status, instead of one AVG query per product.
+        // Weighted (unit_price × qty) / qty matches the stock report, so both pages agree.
         $avgPurchaseByProduct = DB::table('purchase_items')
             ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
+            ->where('purchases.user_id', Auth::id())
             ->where('purchases.currency', $currency)
             ->where('purchases.status', '!=', 'cancelled')
-            ->select('purchase_items.product_id', DB::raw('AVG(purchase_items.unit_price) as avg_price'))
+            ->select('purchase_items.product_id', DB::raw('SUM(purchase_items.unit_price * purchase_items.quantity) * 1.0 / NULLIF(SUM(purchase_items.quantity), 0) as avg_price'))
             ->groupBy('purchase_items.product_id')
             ->pluck('avg_price', 'product_id')
             ->map(fn ($v) => number_format((float) $v, 2, '.', ''));
@@ -152,7 +179,8 @@ class ReportController extends Controller
         // Accounts Payable (what we owe suppliers) = sum of purchase remaining_amount per currency.
         $payableRow = DB::query()->fromSub(function ($q) use ($currency) {
             $q->from('purchases')
-                ->selectRaw("MAX(purchases.total_amount - COALESCE((SELECT SUM(amount) FROM purchase_payments WHERE purchase_payments.purchase_id = purchases.id), 0) - COALESCE((SELECT SUM(total_amount) FROM purchase_returns WHERE purchase_returns.purchase_id = purchases.id AND purchase_returns.status != 'cancelled' AND purchase_returns.currency = purchases.currency), 0), 0) AS remaining")
+                ->selectRaw("MAX(purchases.total_amount - COALESCE((SELECT SUM(amount) FROM purchase_payments WHERE purchase_payments.purchase_id = purchases.id AND purchase_payments.currency = purchases.currency), 0) - COALESCE((SELECT SUM(total_amount) FROM purchase_returns WHERE purchase_returns.purchase_id = purchases.id AND purchase_returns.status != 'cancelled' AND purchase_returns.currency = purchases.currency), 0), 0) AS remaining")
+                ->where('purchases.user_id', Auth::id())
                 ->where('purchases.currency', $currency)
                 ->where('purchases.status', '!=', 'cancelled');
         }, 'per_purchase')->sum('remaining');
@@ -164,6 +192,12 @@ class ReportController extends Controller
         $orderReturns = OrderReturn::where('currency', $currency)->where('status', '!=', 'cancelled')->sum('total_amount');
         $totalRevenue = bcsub((string) $totalRevenue, (string) $orderReturns, 2);
 
+        // Cashbook-in entries are cash income with no order attached (matching cashbook-out
+        // being treated as an expense). They count in Cash in Hand above, so they must also sit
+        // in equity here — otherwise Assets = Liabilities + Equity can never balance.
+        $cashIncome = CashbookEntry::where('type', 'in')->where('currency', $currency)->sum('amount');
+        $totalRevenue = bcadd($totalRevenue, (string) $cashIncome, 2);
+
         $purchasesCost = Purchase::where('currency', $currency)->where('status', '!=', 'cancelled')->sum('total_amount');
         $purchaseReturns = PurchaseReturn::where('currency', $currency)->where('status', '!=', 'cancelled')->sum('total_amount');
         $cogs = bcsub((string) $purchasesCost, (string) $purchaseReturns, 2);
@@ -174,7 +208,7 @@ class ReportController extends Controller
         $operating = bcadd(
             bcadd(
                 (string) CashbookEntry::where('type', 'out')->where('currency', $currency)->sum('amount'),
-                (string) SalaryPayment::where('currency', $currency)->sum('amount'),
+                (string) SalaryPayment::where('currency', $currency)->whereHas('employee', fn ($q) => $q->where('user_id', Auth::id()))->sum('amount'),
                 2
             ),
             (string) Expense::where('currency', $currency)->sum('amount'),
@@ -198,8 +232,8 @@ class ReportController extends Controller
 
         return view('reports.balance_sheet', compact(
             'cashBalance', 'receivables', 'inventoryValue', 'totalAssets',
-            'payables', 'retainedEarnings', 'ownerCapital', 'totalLiabilitiesEquity',
-            'selectedCurrency'
+            'payables', 'retainedEarnings', 'ownerCapital', 'totalEquity',
+            'totalLiabilitiesEquity', 'selectedCurrency'
         ));
     }
 
@@ -211,20 +245,27 @@ class ReportController extends Controller
         $products = Product::select('id', 'name', 'stock', 'category_id')->with('category:id,name')->get();
 
         // One grouped query per relation (not one per product), mapped back per product_id.
+        // Weighted average = SUM(unit_price × quantity) / SUM(quantity). A plain AVG(unit_price)
+        // treats a 1-unit purchase at 100 and a 100-unit purchase at 10 identically (avg 55),
+        // which misstates the average cost a unit of stock is actually carried at (~10.9).
         $avgPurchaseByProduct = DB::table('purchase_items')
             ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
+            ->where('purchases.user_id', Auth::id())
             ->where('purchases.currency', $currency)
             ->where('purchases.status', '!=', 'cancelled')
-            ->select('purchase_items.product_id', DB::raw('AVG(purchase_items.unit_price) as avg_price'))
+            ->select('purchase_items.product_id',
+                DB::raw('SUM(purchase_items.unit_price * purchase_items.quantity) * 1.0 / NULLIF(SUM(purchase_items.quantity), 0) as avg_price'))
             ->groupBy('purchase_items.product_id')
             ->pluck('avg_price', 'product_id')
             ->map(fn ($v) => number_format((float) $v, 2, '.', ''));
 
         $avgSaleByProduct = DB::table('order_items')
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->where('orders.user_id', Auth::id())
             ->where('orders.currency', $currency)
             ->where('orders.status', '!=', 'cancelled')
-            ->select('order_items.product_id', DB::raw('AVG(order_items.unit_price) as avg_price'))
+            ->select('order_items.product_id',
+                DB::raw('SUM(order_items.unit_price * order_items.quantity) * 1.0 / NULLIF(SUM(order_items.quantity), 0) as avg_price'))
             ->groupBy('order_items.product_id')
             ->pluck('avg_price', 'product_id')
             ->map(fn ($v) => number_format((float) $v, 2, '.', ''));
@@ -261,10 +302,27 @@ class ReportController extends Controller
 
     public function daybook(Request $request)
     {
-        $startDate = $request->get('start_date', now()->subDays(30)->toDateString());
-        $endDate = $request->get('end_date', now()->toDateString());
+        $anchor = Carbon::parse($request->get('date_to', now()->toDateString()));
+        $period = $request->get('period', '30');
         $currency = $request->get('currency', 'AFN');
         $selectedCurrency = $currency;
+
+        $anchorDate = $anchor->toDateString();
+        $endDate = $anchor->copy()->endOfDay();
+        $startDate = match ($period) {
+            '7' => $anchor->copy()->subDays(6)->startOfDay(),
+            '90' => $anchor->copy()->subDays(89)->startOfDay(),
+            'month' => $anchor->copy()->startOfMonth(),
+            default => $anchor->copy()->subDays(29)->startOfDay(),
+        };
+
+        $typeLabels = [
+            'sale' => __('messages.type_sale'),
+            'purchase_payment' => __('messages.type_purchase_payment'),
+            'customer_payment' => __('messages.type_customer_payment'),
+            'cash_in' => __('messages.type_cash_in'),
+            'cash_out' => __('messages.type_cash_out'),
+        ];
 
         $transactions = collect();
 
@@ -275,13 +333,15 @@ class ReportController extends Controller
             ->where('currency', $currency)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->get()
-            ->map(function ($order) {
+            ->map(function ($order) use ($typeLabels) {
                 return [
                     'date' => $order->created_at->toDateString(),
                     'type' => 'sale',
+                    'type_label' => $typeLabels['sale'],
                     'description' => __('messages.sales_dash').optional($order->customer)->name,
                     'in_amount' => 0,
                     'out_amount' => 0,
+                    'amount' => (string) $order->total_amount,
                     'created_at' => $order->created_at,
                 ];
             });
@@ -291,13 +351,14 @@ class ReportController extends Controller
             ->where('currency', $currency)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->get()
-            ->map(function ($payment) {
+            ->map(function ($payment) use ($typeLabels) {
                 return [
                     'date' => $payment->created_at->toDateString(),
                     'type' => 'purchase_payment',
+                    'type_label' => $typeLabels['purchase_payment'],
                     'description' => __('messages.pending_purchase_dash').optional($payment->purchase)->party?->name,
                     'in_amount' => 0,
-                    'out_amount' => (float) $payment->amount,
+                    'out_amount' => (string) $payment->amount,
                     'created_at' => $payment->created_at,
                 ];
             });
@@ -307,12 +368,13 @@ class ReportController extends Controller
             ->where('currency', $currency)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->get()
-            ->map(function ($payment) {
+            ->map(function ($payment) use ($typeLabels) {
                 return [
                     'date' => $payment->created_at->toDateString(),
                     'type' => 'customer_payment',
+                    'type_label' => $typeLabels['customer_payment'],
                     'description' => __('messages.supplier_delivery_dash').optional($payment->order->customer)->name,
-                    'in_amount' => (float) $payment->amount,
+                    'in_amount' => (string) $payment->amount,
                     'out_amount' => 0,
                     'created_at' => $payment->created_at,
                 ];
@@ -322,13 +384,14 @@ class ReportController extends Controller
         $cashEntries = CashbookEntry::where('currency', $currency)
             ->whereBetween('entry_date', [$startDate, $endDate])
             ->get()
-            ->map(function ($entry) {
+            ->map(function ($entry) use ($typeLabels) {
                 return [
-                    'date' => $entry->entry_date,
+                    'date' => $entry->entry_date->toDateString(),
                     'type' => 'cash_'.$entry->type,
+                    'type_label' => $entry->type === 'in' ? $typeLabels['cash_in'] : $typeLabels['cash_out'],
                     'description' => __('messages.cashbook_section').': '.($entry->type === 'in' ? __('messages.income') : __('messages.expense_out')).($entry->notes ? ' - '.$entry->notes : ''),
-                    'in_amount' => $entry->type === 'in' ? (float) $entry->amount : 0,
-                    'out_amount' => $entry->type === 'out' ? (float) $entry->amount : 0,
+                    'in_amount' => $entry->type === 'in' ? (string) $entry->amount : 0,
+                    'out_amount' => $entry->type === 'out' ? (string) $entry->amount : 0,
                     'created_at' => $entry->created_at,
                 ];
             });
@@ -347,11 +410,27 @@ class ReportController extends Controller
             ->merge($cashEntries)
             ->sortByDesc('created_at');
 
-        // Group by date and calculate running balance
-        // NOTE: BalanceService::cashBalance only accepts 2 args (current balance,
-        // not date-filtered). Drop the third arg to avoid ArgumentCountError.
-        $openingBalance = $this->balanceService->cashBalance(Auth::id(), $currency);
-        $runningBalance = (float) $openingBalance;
+        $totalIn = '0.00';
+        $totalOut = '0.00';
+        foreach ($transactions as $tx) {
+            $totalIn = bcadd($totalIn, (string) $tx['in_amount'], 2);
+            $totalOut = bcadd($totalOut, (string) $tx['out_amount'], 2);
+        }
+
+        // Opening balance is DERIVED by backing the period's net movement out of
+        // the live cash position (BalanceService::cashBalance is current-only, no
+        // as-of-date variant). This keeps the running balance self-consistent:
+        // the oldest day starts at the true opening and the newest day lands
+        // exactly on the live cash balance. Adding the period net to the current
+        // balance instead would double-count the period's movements.
+        $periodNet = bcsub($totalIn, $totalOut, 2);
+        $openingBalance = bcsub(
+            $this->balanceService->cashBalance(Auth::id(), $currency),
+            $periodNet,
+            2
+        );
+
+        // Group by date
         $dailyTotals = [];
 
         foreach ($transactions as $tx) {
@@ -359,32 +438,34 @@ class ReportController extends Controller
             if (! isset($dailyTotals[$date])) {
                 $dailyTotals[$date] = [
                     'date' => $date,
-                    'in_total' => 0,
-                    'out_total' => 0,
+                    'in_total' => '0.00',
+                    'out_total' => '0.00',
                     'transactions' => [],
                 ];
             }
             $dailyTotals[$date]['transactions'][] = $tx;
-            $dailyTotals[$date]['in_total'] += $tx['in_amount'];
-            $dailyTotals[$date]['out_total'] += $tx['out_amount'];
+            $dailyTotals[$date]['in_total'] = bcadd($dailyTotals[$date]['in_total'], (string) $tx['in_amount'], 2);
+            $dailyTotals[$date]['out_total'] = bcadd($dailyTotals[$date]['out_total'], (string) $tx['out_amount'], 2);
         }
 
-        // Sort by date descending and calculate running balance
-        $dailyTotals = collect($dailyTotals)->sortByDesc('date')->values();
+        // Accumulate oldest → newest so each day carries its true running balance,
+        // then present newest-first. (Accumulating newest → oldest would put the
+        // closing balance on the OLDEST row and only opening+own-net on today's row.)
+        $dailyTotals = collect($dailyTotals)->sortBy('date')->values();
 
-        $runningBalance = (float) $openingBalance;
+        $runningBalance = $openingBalance;
         $dailyTotals = $dailyTotals->map(function ($day) use (&$runningBalance) {
-            $runningBalance += $day['in_total'] - $day['out_total'];
+            $runningBalance = bcadd($runningBalance, bcsub($day['in_total'], $day['out_total'], 2), 2);
             $day['running_balance'] = $runningBalance;
 
             return $day;
-        });
+        })->sortByDesc('date')->values();
 
-        $totalIn = $transactions->sum('in_amount');
-        $totalOut = $transactions->sum('out_amount');
+        $closingBalance = $runningBalance;
 
         return view('reports.daybook', compact(
-            'dailyTotals', 'startDate', 'endDate', 'selectedCurrency', 'totalIn', 'totalOut', 'openingBalance'
+            'dailyTotals', 'anchorDate', 'period', 'selectedCurrency', 'totalIn', 'totalOut',
+            'openingBalance', 'closingBalance'
         ));
     }
 
@@ -392,31 +473,38 @@ class ReportController extends Controller
     {
         $currency = $request->get('currency', 'AFN');
 
-        // Customer aging — based on outstanding orders, grouped by customer.
-        // Orders with no linked customer are grouped as a "Walk-in" customer so they are not dropped.
-        // NOTE: remaining_amount is an accessor, not a column. Compute it via SQL:
+        // Customer aging — outstanding orders grouped by their real party (person_type/person_id),
+        // with customer_id as a legacy fallback. Supplier-type orders keep their supplier's name
+        // instead of being lumped into a fake "Walk-in Customer" bucket.
         // outstanding = total_amount - SUM(payments.amount) - SUM(order_returns.total_amount)
-        // Note: order_returns has no currency column — we trust the parent order's currency.
-        $customerOrders = Order::with(['customer', 'payments'])
+        // Every money side is restricted to the order's own currency: a payment or return recorded
+        // in a different currency must not offset (or silently drop) the balance in this currency.
+        $customerOrders = Order::with(['customer', 'supplier'])
+            ->withSum(['payments as paid_sum' => fn ($q) => $q->whereColumn('payments.currency', 'orders.currency')], 'amount')
+            ->withSum(['orderReturns as returned_sum' => fn ($q) => $q
+                ->whereColumn('order_returns.currency', 'orders.currency')
+                ->where('status', '!=', 'cancelled')], 'total_amount')
             ->where('status', '!=', 'cancelled')
             ->where('currency', $currency)
             ->whereRaw(
                 'orders.total_amount > (
-                    COALESCE((SELECT SUM(amount) FROM payments WHERE payments.order_id = orders.id), 0)
+                    COALESCE((SELECT SUM(amount) FROM payments
+                              WHERE payments.order_id = orders.id
+                                AND payments.currency = orders.currency), 0)
                     +
                     COALESCE((SELECT SUM(total_amount) FROM order_returns
                               WHERE order_returns.order_id = orders.id
-                                AND order_returns.status != ?), 0)
+                                AND order_returns.status != ?
+                                AND order_returns.currency = orders.currency), 0)
                 )',
                 ['cancelled']
             )
             ->get();
 
         $customerAging = collect();
-        foreach ($customerOrders->groupBy(fn ($o) => $o->customer_id ?? 'walkin') as $key => $orderGroup) {
-            $customer = $key === 'walkin'
-                ? (object) ['name' => __('messages.walk_in_customer')]
-                : ($orderGroup->first()->customer ?? (object) ['name' => __('messages.walk_in_customer')]);
+        foreach ($customerOrders->groupBy(fn ($o) => $o->person_id ?? $o->customer_id ?? 'walkin') as $key => $orderGroup) {
+            $party = $orderGroup->first()->party;
+            $customer = $party ?? (object) ['name' => __('messages.walk_in_customer')];
 
             $mapped = $orderGroup->map(function ($order) {
                 $days = (int) Carbon::parse($order->created_at->toDateString())->diffInDays(now());
@@ -425,57 +513,61 @@ class ReportController extends Controller
                 return [
                     'order_id' => $order->id,
                     'order_date' => $order->created_at->toDateString(),
-                    'outstanding' => $order->remaining_amount,
+                    'outstanding' => $this->outstandingAmount($order->total_amount, $order->paid_sum, $order->returned_sum),
                     'days' => $days,
                     'bucket' => $bucket,
                 ];
             })->values();
 
-            $bucketTotals = ['0-30' => 0, '31-60' => 0, '61-90' => 0, '90+' => 0];
+            $bucketTotals = $this->emptyBucketTotals();
             foreach ($mapped as $order) {
-                $bucketTotals[$order['bucket']] += $order['outstanding'];
+                $bucketTotals[$order['bucket']] = bcadd($bucketTotals[$order['bucket']], $order['outstanding'], 2);
             }
 
             $customerAging->push([
                 'customer' => $customer,
                 'orders' => $mapped,
                 'bucket_totals' => $bucketTotals,
-                'total_outstanding' => array_sum($bucketTotals),
+                'total_outstanding' => $this->sumBuckets($bucketTotals),
             ]);
         }
-        $customerAging = $customerAging->filter(fn ($item) => $item['total_outstanding'] > 0)->values();
+        $customerAging = $customerAging
+            ->filter(fn ($item) => bccomp($item['total_outstanding'], '0', 2) > 0)
+            ->sortByDesc('total_outstanding')
+            ->values();
 
-        $customerBucketTotal = [
-            '0-30' => $customerAging->sum(fn ($c) => $c['bucket_totals']['0-30']),
-            '31-60' => $customerAging->sum(fn ($c) => $c['bucket_totals']['31-60']),
-            '61-90' => $customerAging->sum(fn ($c) => $c['bucket_totals']['61-90']),
-            '90+' => $customerAging->sum(fn ($c) => $c['bucket_totals']['90+']),
-        ];
+        $customerBucketTotal = $this->aggregateBuckets($customerAging);
 
-        // Supplier aging — based on outstanding purchases, grouped by supplier.
-        // Purchases with no linked supplier are grouped as a "Walk-in" supplier so they are not dropped.
-        // Same accessor-as-column fix as above, mirrored for purchases.
-        // Note: purchase_returns has no currency column — we trust the parent purchase's currency.
-        $supplierPurchases = Purchase::with(['supplier', 'purchasePayments'])
+        // Supplier aging — outstanding purchases grouped by their real party, supplier_id as a
+        // legacy fallback. Mirrors the customer side: party-aware grouping and currency-matched
+        // payments/returns so foreign-currency money never distorts a currency's balance.
+        $supplierPurchases = Purchase::with(['customer', 'supplier'])
+            ->withSum(['purchasePayments as paid_sum' => fn ($q) => $q->whereColumn('purchase_payments.currency', 'purchases.currency')], 'amount')
+            ->withSum(['purchaseReturns as returned_sum' => fn ($q) => $q
+                ->whereColumn('purchase_returns.currency', 'purchases.currency')
+                ->where('status', '!=', 'cancelled')], 'total_amount')
             ->where('status', '!=', 'cancelled')
             ->where('currency', $currency)
             ->whereRaw(
                 'purchases.total_amount > (
-                    COALESCE((SELECT SUM(amount) FROM purchase_payments WHERE purchase_payments.purchase_id = purchases.id), 0)
+                    COALESCE((SELECT SUM(amount) FROM purchase_payments
+                              WHERE purchase_payments.purchase_id = purchases.id
+                                AND purchase_payments.currency = purchases.currency), 0)
                     +
                     COALESCE((SELECT SUM(total_amount) FROM purchase_returns
                               WHERE purchase_returns.purchase_id = purchases.id
-                                AND purchase_returns.status != ?), 0)
+                                AND purchase_returns.status != ?
+                                AND purchase_returns.currency = purchases.currency), 0)
                 )',
                 ['cancelled']
             )
             ->get();
 
         $supplierAging = collect();
-        foreach ($supplierPurchases->groupBy(fn ($p) => $p->supplier_id ?? 'walkin') as $key => $purchaseGroup) {
-            $supplier = $key === 'walkin'
-                ? (object) ['name' => __('messages.walk_in_supplier')]
-                : ($purchaseGroup->first()->supplier ?? (object) ['name' => __('messages.walk_in_supplier')]);
+        foreach ($supplierPurchases->groupBy(fn ($p) => $p->person_id ?? $p->supplier_id ?? 'walkin') as $key => $purchaseGroup) {
+            $party = $purchaseGroup->first()->party
+                ?? ($purchaseGroup->first()->supplier_id ? Supplier::find($purchaseGroup->first()->supplier_id) : null);
+            $supplier = $party ?? (object) ['name' => __('messages.walk_in_supplier')];
 
             $mapped = $purchaseGroup->map(function ($purchase) {
                 $days = (int) Carbon::parse($purchase->created_at->toDateString())->diffInDays(now());
@@ -484,40 +576,83 @@ class ReportController extends Controller
                 return [
                     'purchase_id' => $purchase->id,
                     'purchase_date' => $purchase->created_at->toDateString(),
-                    'outstanding' => $purchase->remaining_amount,
+                    'outstanding' => $this->outstandingAmount($purchase->total_amount, $purchase->paid_sum, $purchase->returned_sum),
                     'days' => $days,
                     'bucket' => $bucket,
                 ];
             })->values();
 
-            $bucketTotals = ['0-30' => 0, '31-60' => 0, '61-90' => 0, '90+' => 0];
+            $bucketTotals = $this->emptyBucketTotals();
             foreach ($mapped as $purchase) {
-                $bucketTotals[$purchase['bucket']] += $purchase['outstanding'];
+                $bucketTotals[$purchase['bucket']] = bcadd($bucketTotals[$purchase['bucket']], $purchase['outstanding'], 2);
             }
 
             $supplierAging->push([
                 'supplier' => $supplier,
                 'purchases' => $mapped,
                 'bucket_totals' => $bucketTotals,
-                'total_outstanding' => array_sum($bucketTotals),
+                'total_outstanding' => $this->sumBuckets($bucketTotals),
             ]);
         }
-        $supplierAging = $supplierAging->filter(fn ($item) => $item['total_outstanding'] > 0)->values();
+        $supplierAging = $supplierAging
+            ->filter(fn ($item) => bccomp($item['total_outstanding'], '0', 2) > 0)
+            ->sortByDesc('total_outstanding')
+            ->values();
 
-        $supplierBucketTotal = [
-            '0-30' => $supplierAging->sum(fn ($s) => $s['bucket_totals']['0-30']),
-            '31-60' => $supplierAging->sum(fn ($s) => $s['bucket_totals']['31-60']),
-            '61-90' => $supplierAging->sum(fn ($s) => $s['bucket_totals']['61-90']),
-            '90+' => $supplierAging->sum(fn ($s) => $s['bucket_totals']['90+']),
-        ];
+        $supplierBucketTotal = $this->aggregateBuckets($supplierAging);
 
+        $customerGrandTotal = $this->sumBuckets($customerBucketTotal);
+        $supplierGrandTotal = $this->sumBuckets($supplierBucketTotal);
         $selectedCurrency = $currency;
+        $currencySymbol = $currency === 'USD' ? '$' : __('messages.afn');
 
         return view('reports.aging', compact(
             'customerAging', 'customerBucketTotal',
             'supplierAging', 'supplierBucketTotal',
-            'selectedCurrency'
+            'customerGrandTotal', 'supplierGrandTotal',
+            'selectedCurrency', 'currencySymbol'
         ));
+    }
+
+    /**
+     * Outstanding = total - paid - returned, clamped at zero, all in the same currency.
+     * paid/returned come from withSum aggregate columns (null when no rows exist).
+     */
+    private function outstandingAmount(string $total, $paid, $returned): string
+    {
+        $remaining = bcsub((string) $total, (string) ($paid ?? '0'), 2);
+        $remaining = bcsub($remaining, (string) ($returned ?? '0'), 2);
+
+        return bccomp($remaining, '0', 2) >= 0 ? $remaining : '0.00';
+    }
+
+    /**
+     * @return array{0-30: string, 31-60: string, 61-90: string, 90+: string}
+     */
+    private function emptyBucketTotals(): array
+    {
+        return ['0-30' => '0.00', '31-60' => '0.00', '61-90' => '0.00', '90+' => '0.00'];
+    }
+
+    private function sumBuckets(array $bucketTotals): string
+    {
+        return bcadd(
+            bcadd(bcadd($bucketTotals['0-30'], $bucketTotals['31-60'], 2), $bucketTotals['61-90'], 2),
+            $bucketTotals['90+'],
+            2
+        );
+    }
+
+    private function aggregateBuckets($aging): array
+    {
+        $totals = $this->emptyBucketTotals();
+        foreach ($aging as $item) {
+            foreach ($totals as $bucket => $_) {
+                $totals[$bucket] = bcadd($totals[$bucket], $item['bucket_totals'][$bucket], 2);
+            }
+        }
+
+        return $totals;
     }
 
     private function getAgeBucket(int $days): string

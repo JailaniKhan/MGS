@@ -5,11 +5,11 @@
         <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ __('messages.people') }}</h2>
     </div>
 
-    <div class="flex gap-1.5 mb-4 page-enter" style="animation-delay: 0.05s;">
-        <button id="tab-customers" class="tab-btn px-4 py-2 text-xs font-bold rounded-xl bg-primary-500 text-white shadow-sm shadow-primary-500/20" onclick="switchTab('customers')">
+    <div class="segmented mb-4 page-enter" style="animation-delay: 0.05s;">
+        <button id="tab-customers" class="tab-btn segmented-item segmented-item-active" onclick="switchTab('customers')">
             {{ __('messages.customers') }}
         </button>
-        <button id="tab-suppliers" class="tab-btn px-4 py-2 text-xs font-bold rounded-xl bg-ink-100 dark:bg-ink-800 text-ink-600 dark:text-ink-300 border border-ink-200 dark:border-ink-700" onclick="switchTab('suppliers')">
+        <button id="tab-suppliers" class="tab-btn segmented-item" onclick="switchTab('suppliers')">
             {{ __('messages.suppliers') }}
         </button>
     </div>
@@ -27,8 +27,8 @@
                 @forelse ($customers as $customer)
                     <div class="swipe-row">
                         <a href="{{ route('customers.show', $customer) }}" class="swipe-content">
-                            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-secondary-500 to-secondary-700 flex items-center justify-center flex-shrink-0 shadow-sm">
-                                <span class="text-white font-bold text-sm">{{ substr($customer->name, 0, 1) }}</span>
+                            <div class="w-9 h-9 rounded-[0.875rem] bg-secondary-50 dark:bg-secondary-900/30 flex items-center justify-center flex-shrink-0 border border-secondary-100 dark:border-secondary-800/40">
+                                <span class="text-secondary-600 dark:text-secondary-300 font-bold text-sm">{{ substr($customer->name, 0, 1) }}</span>
                             </div>
                             <div class="min-w-0">
                                 <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $customer->name }}</div>
@@ -55,7 +55,7 @@
                     </div>
                 @empty
                     <div class="empty-state">
-                        <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                        <div class="empty-illustration">
                             <x-icon name="user" class="w-6 h-6 text-ink-400"/>
                         </div>
                         <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_customers') }}</p>
@@ -81,8 +81,8 @@
                 @forelse ($suppliers as $supplier)
                     <div class="swipe-row">
                         <div class="swipe-content">
-                            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center flex-shrink-0 shadow-sm">
-                                <span class="text-white font-bold text-sm">{{ substr($supplier->name, 0, 1) }}</span>
+                            <div class="w-9 h-9 rounded-[0.875rem] bg-accent-50 dark:bg-accent-900/30 flex items-center justify-center flex-shrink-0 border border-accent-100 dark:border-accent-800/40">
+                                <span class="text-secondary-600 dark:text-secondary-300 font-bold text-sm">{{ substr($supplier->name, 0, 1) }}</span>
                             </div>
                             <div class="min-w-0">
                                 <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $supplier->name }}</div>
@@ -109,7 +109,7 @@
                     </div>
                 @empty
                     <div class="empty-state">
-                        <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                        <div class="empty-illustration">
                             <x-icon name="user" class="w-6 h-6 text-ink-400"/>
                         </div>
                         <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_suppliers') }}</p>
@@ -216,13 +216,8 @@
     function switchTab(tab) {
         document.querySelectorAll('.tab-section').forEach(el => el.classList.add('hidden'));
         document.getElementById('section-' + tab).classList.remove('hidden');
-        document.querySelectorAll('.tab-btn').forEach(el => {
-            el.classList.remove('bg-primary-500', 'text-white', 'shadow-sm', 'shadow-primary-500/20');
-            el.classList.add('bg-ink-100', 'dark:bg-ink-800', 'text-ink-600', 'dark:text-ink-300', 'border', 'border-ink-200', 'dark:border-ink-700');
-        });
-        const activeBtn = document.getElementById('tab-' + tab);
-        activeBtn.classList.remove('bg-ink-100', 'dark:bg-ink-800', 'text-ink-600', 'dark:text-ink-300', 'border', 'border-ink-200', 'dark:border-ink-700');
-        activeBtn.classList.add('bg-primary-500', 'text-white', 'shadow-sm', 'shadow-primary-500/20');
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('segmented-item-active'));
+        document.getElementById('tab-' + tab).classList.add('segmented-item-active');
     }
 
     @if (request()->has('suppliers_page'))

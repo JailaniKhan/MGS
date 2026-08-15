@@ -2,28 +2,50 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Purchase;
-use App\Models\Supplier;
+use App\Http\Controllers\Concerns\AddsListBalances;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\Purchase;
 use App\Models\PurchasePayment;
 use App\Models\Setting;
 use App\Models\StockMovement;
+use App\Models\Supplier;
 use App\Services\Billing\BillService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class PurchaseController extends Controller
 {
-    public function index()
+    use AddsListBalances;
+
+    public function index(Request $request)
     {
-        $purchases = Purchase::with(['customer', 'supplier'])
+        $search = trim((string) $request->query('search', ''));
+
+        $purchasesQuery = Purchase::with(['customer', 'supplier']);
+
+        if ($search !== '') {
+            if (ctype_digit($search)) {
+                $purchasesQuery->where('purchases.id', (int) $search);
+            } else {
+                $purchasesQuery->where(function ($q) use ($search) {
+                    $q->where(fn ($q) => $q->where('person_type', 'supplier')
+                        ->whereHas('supplier', fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%")));
+                    $q->orWhere(fn ($q) => $q->where('person_type', 'customer')
+                        ->whereHas('customer', fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%")));
+                });
+            }
+        }
+
+        $purchases = $purchasesQuery
             ->orderBy('created_at', 'desc')
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
-        return view('purchases.index', compact('purchases'));
+        // One grouped query instead of the accessors' ~4 queries per row.
+        $this->attachPurchaseListBalances($purchases->getCollection());
+
+        return view('purchases.index', compact('purchases', 'search'));
     }
 
     public function create()
@@ -31,18 +53,16 @@ class PurchaseController extends Controller
         $suppliers = Supplier::orderBy('name')->get();
         $customers = Customer::orderBy('name')->get();
         $products = Product::with('category', 'unit')->orderBy('name')->get();
-        $defaultTaxRate = Setting::get('default_tax_rate', '0');
-        $defaultTaxType = Setting::get('default_tax_type', 'exclusive');
 
         $personOptions = collect($suppliers)
             ->map(fn ($supplier) => [
-                'value' => 'supplier:' . $supplier->id,
+                'value' => 'supplier:'.$supplier->id,
                 'label' => $supplier->name,
                 'sublabel' => $supplier->phone,
                 'group' => __('messages.suppliers'),
             ])
             ->concat($customers->map(fn ($customer) => [
-                'value' => 'customer:' . $customer->id,
+                'value' => 'customer:'.$customer->id,
                 'label' => $customer->name,
                 'sublabel' => $customer->phone,
                 'group' => __('messages.customers'),
@@ -54,14 +74,14 @@ class PurchaseController extends Controller
             ->map(fn ($product) => [
                 'value' => $product->id,
                 'label' => $product->name,
-                'sublabel' => __('messages.stock') . ': ' . $product->stock . ($product->unit ? ' ' . ($product->unit->short_name ?? $product->unit->name) : ''),
+                'sublabel' => __('messages.stock').': '.$product->stock.($product->unit ? ' '.($product->unit->short_name ?? $product->unit->name) : ''),
                 'price' => number_format((float) $product->price),
                 'lot' => $product->lot_number,
             ])
             ->values()
             ->all();
 
-        return view('purchases.create', compact('suppliers', 'customers', 'products', 'defaultTaxRate', 'defaultTaxType', 'personOptions', 'productOptions'));
+        return view('purchases.create', compact('suppliers', 'customers', 'products', 'personOptions', 'productOptions'));
     }
 
     public function store(Request $request)
@@ -69,8 +89,6 @@ class PurchaseController extends Controller
         $validated = $request->validate([
             'person' => ['required', 'string', 'regex:/^(customer|supplier):\d+$/'],
             'currency' => 'required|in:AFN,USD',
-            'tax_rate' => 'nullable|numeric|min:0|max:100',
-            'tax_type' => 'nullable|in:inclusive,exclusive',
             'products' => 'required|array|min:1',
             'products.*.product_id' => 'required|exists:products,id',
             'products.*.quantity' => 'required|integer|min:1',
@@ -107,31 +125,12 @@ class PurchaseController extends Controller
             $product->increment('stock', $item['quantity']);
         }
 
-        $taxRate = $validated['tax_rate'] ?? 0;
-        $taxType = $validated['tax_type'] ?? 'exclusive';
-        $taxAmount = '0.00';
-        $totalAmount = $subtotal;
-
-        if ($taxRate > 0) {
-            if ($taxType === 'exclusive') {
-                $taxAmount = bcmul($subtotal, bcdiv((string) $taxRate, '100', 6), 2);
-                $totalAmount = bcadd($subtotal, $taxAmount, 2);
-            } else {
-                $totalAmount = $subtotal;
-                $taxAmount = bcmul($subtotal, bcdiv((string) $taxRate, bcadd('100', (string) $taxRate, 6), 6), 2);
-                $subtotal = bcsub($totalAmount, $taxAmount, 2);
-            }
-        }
-
         $purchase = Purchase::create([
             'person_type' => $personType,
             'person_id' => $personId,
             'supplier_id' => $personType === 'supplier' ? $personId : null,
             'subtotal' => $subtotal,
-            'tax_rate' => $taxRate,
-            'tax_type' => $taxType,
-            'tax_amount' => $taxAmount,
-            'total_amount' => $totalAmount,
+            'total_amount' => $subtotal,
             'currency' => $validated['currency'],
             'status' => 'pending',
         ]);
@@ -169,8 +168,8 @@ class PurchaseController extends Controller
             'name' => Setting::get('company_name', 'My Business'),
             'address' => Setting::get('company_address', ''),
             'phone' => Setting::get('company_phone', ''),
-            'tax_id' => Setting::get('tax_id', ''),
         ];
+
         return view('purchases.show', compact('purchase', 'company'));
     }
 
@@ -182,10 +181,10 @@ class PurchaseController extends Controller
             'address' => Setting::get('company_address', ''),
             'phone' => Setting::get('company_phone', ''),
             'email' => Setting::get('company_email', ''),
-            'tax_id' => Setting::get('tax_id', ''),
         ];
         $billPrefix = Setting::get('purchase_prefix', 'PUR-');
-        $billNumber = $billPrefix . $purchase->id;
+        $billNumber = $billPrefix.$purchase->id;
+
         return view('purchases.print', compact('purchase', 'company', 'billNumber'));
     }
 
@@ -211,7 +210,7 @@ class PurchaseController extends Controller
     public function status(Purchase $purchase, $status)
     {
         $allowed = ['pending', 'processing', 'completed', 'cancelled'];
-        if (!in_array($status, $allowed, true)) {
+        if (! in_array($status, $allowed, true)) {
             return back()->with('error', __('messages.invalid_status'));
         }
 
@@ -239,6 +238,7 @@ class PurchaseController extends Controller
         }
 
         $purchase->update(['status' => $status]);
+
         return redirect()->route('purchases.show', $purchase)->with('success', __('messages.purchase_status_changed'));
     }
 
@@ -252,6 +252,10 @@ class PurchaseController extends Controller
         ]);
 
         $purchase = Purchase::findOrFail($validated['purchase_id']);
+
+        if ($validated['currency'] !== $purchase->currency) {
+            return back()->with('error', __('messages.payment_currency_mismatch'));
+        }
 
         PurchasePayment::create($validated);
 
@@ -278,6 +282,7 @@ class PurchaseController extends Controller
             }
             $purchase->delete();
         });
+
         return redirect()->route('purchases.index')->with('success', __('messages.purchase_deleted'));
     }
 }

@@ -10,6 +10,7 @@ use App\Services\WhatsApp\OpenWaManager;
 use App\Services\WhatsApp\OpenWaService;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -36,6 +37,11 @@ class AppServiceProvider extends ServiceProvider
             return $model->morphMany(\App\Models\Reminder::class, 'remindable');
         });
 
+        // Bust dashboard cache whenever any transaction-ish model is written.
+        // User-scoped: we forget both today's and yesterday's key (to cover TZ
+        // boundaries around midnight).
+        $this->registerDashboardCacheInvalidation();
+
         $this->registerCommands();
 
         if (config('services.openwa.auto_start', false)) {
@@ -50,6 +56,40 @@ class AppServiceProvider extends ServiceProvider
                 OpenWaInstall::class,
                 OpenWaBundle::class,
             ]);
+        }
+    }
+
+    /**
+     * Dashboard refresh-on-write: bust the dashboard cache whenever any
+     * model that feeds its aggregates changes.
+     */
+    protected function registerDashboardCacheInvalidation(): void
+    {
+        $watched = [
+            \App\Models\Order::class,
+            \App\Models\Purchase::class,
+            \App\Models\Payment::class,
+            \App\Models\PurchasePayment::class,
+            \App\Models\PartyPayment::class,
+            \App\Models\Expense::class,
+            \App\Models\SalaryPayment::class,
+            \App\Models\OrderReturn::class,
+            \App\Models\PurchaseReturn::class,
+            \App\Models\Reminder::class,
+            \App\Models\Product::class,
+        ];
+
+        $bust = function ($model) {
+            if (! $userId = ($model->user_id ?? auth()->id())) return;
+            foreach ([now()->format('Ymd'), now()->subDay()->format('Ymd')] as $day) {
+                Cache::forget("dashboard_v3_{$userId}_{$day}");
+            }
+        };
+
+        foreach ($watched as $class) {
+            $class::created($bust);
+            $class::updated($bust);
+            $class::deleted($bust);
         }
     }
 

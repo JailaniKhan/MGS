@@ -1,12 +1,13 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
     <div class="page-header page-enter">
         <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ __('messages.wallet') }}</h2>
+        <a href="{{ route('payments.create') }}" class="btn-primary btn-sm"><x-icon name="plus" class="w-3.5 h-3.5" strokeWidth="2"/>{{ __('messages.new_payment') }}</a>
     </div>
 
     <div class="card overflow-hidden mb-4 page-enter" style="animation-delay: 0.05s;">
-        <div class="p-4 bg-brand text-white text-white">
+        <div class="p-4 bg-brand text-white">
             <div class="text-xs text-primary-100 mb-1">{{ __('messages.total_balance') }}</div>
             <div class="text-lg font-bold">{{ number_format($balanceAFN, 2) }} {{ __('messages.afn') }}</div>
             <div class="text-base font-semibold text-primary-200 mt-0.5">{{ number_format($balanceUSD, 2) }} $</div>
@@ -49,9 +50,9 @@
             <a href="{{ route('orders.show', $order) }}" class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0">
                 <div class="min-w-0">
                     <div class="text-sm font-medium text-ink-800 dark:text-ink-200 truncate">{{ $order->party?->name ?? __('messages.unknown') }} — {{ __('messages.order') }} #{{ $order->id }}</div>
-                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$order->display_status) }}</div>
+                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$order->list_status) }}</div>
                 </div>
-                <span class="text-sm font-bold flex-shrink-0 ml-3 text-primary-600 dark:text-primary-400">{{ number_format($order->remaining_amount, 2) }} {{ __('messages.afn') }}</span>
+                <span class="text-sm font-bold flex-shrink-0 ms-3 text-primary-600 dark:text-primary-400">{{ number_format($order->remaining, 2) }} {{ __('messages.afn') }}</span>
             </a>
         @empty
             <div class="px-4 py-3 text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_outstanding') }}</div>
@@ -65,9 +66,9 @@
             <a href="{{ route('orders.show', $order) }}" class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0">
                 <div class="min-w-0">
                     <div class="text-sm font-medium text-ink-800 dark:text-ink-200 truncate">{{ $order->party?->name ?? __('messages.unknown') }} — {{ __('messages.order') }} #{{ $order->id }}</div>
-                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$order->display_status) }}</div>
+                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$order->list_status) }}</div>
                 </div>
-                <span class="text-sm font-bold flex-shrink-0 ml-3 text-primary-600 dark:text-primary-400">{{ number_format($order->remaining_amount, 2) }} $</span>
+                <span class="text-sm font-bold flex-shrink-0 ms-3 text-primary-600 dark:text-primary-400">{{ number_format($order->remaining, 2) }} $</span>
             </a>
         @empty
             <div class="px-4 py-3 text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_outstanding') }}</div>
@@ -81,9 +82,9 @@
             <a href="{{ route('purchases.show', $purchase) }}" class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0">
                 <div class="min-w-0">
                     <div class="text-sm font-medium text-ink-800 dark:text-ink-200 truncate">{{ $purchase->party?->name ?? __('messages.unknown') }} — {{ __('messages.purchase') }} #{{ $purchase->id }}</div>
-                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$purchase->display_status) }}</div>
+                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$purchase->list_status) }}</div>
                 </div>
-                <span class="text-sm font-bold flex-shrink-0 ml-3 text-danger-600 dark:text-danger-400">{{ number_format($purchase->remaining_amount, 2) }} {{ __('messages.afn') }}</span>
+                <span class="text-sm font-bold flex-shrink-0 ms-3 text-danger-600 dark:text-danger-400">{{ number_format($purchase->remaining, 2) }} {{ __('messages.afn') }}</span>
             </a>
         @empty
             <div class="px-4 py-3 text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_outstanding') }}</div>
@@ -97,9 +98,9 @@
             <a href="{{ route('purchases.show', $purchase) }}" class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0">
                 <div class="min-w-0">
                     <div class="text-sm font-medium text-ink-800 dark:text-ink-200 truncate">{{ $purchase->party?->name ?? __('messages.unknown') }} — {{ __('messages.purchase') }} #{{ $purchase->id }}</div>
-                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$purchase->display_status) }}</div>
+                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ __('messages.'.$purchase->list_status) }}</div>
                 </div>
-                <span class="text-sm font-bold flex-shrink-0 ml-3 text-danger-600 dark:text-danger-400">{{ number_format($purchase->remaining_amount, 2) }} $</span>
+                <span class="text-sm font-bold flex-shrink-0 ms-3 text-danger-600 dark:text-danger-400">{{ number_format($purchase->remaining, 2) }} $</span>
             </a>
         @empty
             <div class="px-4 py-3 text-xs text-ink-500 dark:text-ink-400">{{ __('messages.no_outstanding') }}</div>
@@ -123,7 +124,7 @@
         </div>
         <div id="pay-tx-list">
         @forelse ($transactions as $tx)
-            <div class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0" data-currency="{{ $tx['currency'] }}">
+            <a href="{{ $tx['link'] ?? '#' }}" class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0 hover:bg-ink-50 dark:hover:bg-ink-800/40 transition-colors" data-currency="{{ $tx['currency'] }}">
                 <div class="flex items-center gap-3 min-w-0">
                     <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 {{ $tx['type'] === 'incoming' ? 'bg-primary-100 dark:bg-primary-900/30' : 'bg-danger-100 dark:bg-danger-900/30' }}">
                         @if ($tx['type'] === 'incoming')
@@ -137,8 +138,8 @@
                         <div class="text-xs text-ink-500 dark:text-ink-400">{{ $tx['date']->format('Y/m/d H:i') }} @if ($tx['notes']) | {{ $tx['notes'] }} @endif</div>
                     </div>
                 </div>
-                <span class="text-sm font-bold flex-shrink-0 ml-3 {{ $tx['type'] === 'incoming' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">{{ $tx['type'] === 'incoming' ? '+' : '-' }}{{ number_format($tx['amount'], 2) }} {{ $tx['currency'] === 'USD' ? '$' : __('messages.afn') }}</span>
-            </div>
+                <span class="text-sm font-bold flex-shrink-0 ms-3 {{ $tx['type'] === 'incoming' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}">{{ $tx['type'] === 'incoming' ? '+' : '-' }}{{ number_format($tx['amount'], 2) }} {{ $tx['currency'] === 'USD' ? '$' : __('messages.afn') }}</span>
+            </a>
         @empty
             <div class="empty-state"><p class="text-sm text-ink-500 dark:text-ink-400">{{ __('messages.no_transactions') }}</p></div>
         @endforelse

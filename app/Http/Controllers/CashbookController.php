@@ -2,17 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\AddsListBalances;
 use App\Models\Customer;
 use App\Models\JournalEntry;
+use App\Models\Order;
+use App\Models\Purchase;
 use App\Models\Supplier;
 use App\Services\Accounting\BalanceService;
 use App\Services\Accounting\TransactionService;
 use App\Services\Billing\BillService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class CashbookController extends Controller
 {
+    use AddsListBalances;
+
     public function index(BalanceService $balanceService)
     {
         $userId = Auth::id();
@@ -43,7 +49,7 @@ class CashbookController extends Controller
                 continue;
             }
 
-            $key = $journal->reference_type . '-' . $journal->reference->id;
+            $key = $journal->reference_type.'-'.$journal->reference->id;
 
             if (! isset($people[$key])) {
                 $people[$key] = [
@@ -113,18 +119,25 @@ class CashbookController extends Controller
 
         // Orders/purchases are linked to a person via person_type / person_id
         // (a customer sells, a supplier can both buy and be sold to). Load them
-        // by that linkage rather than the legacy customer_id relation.
-        $orders = \App\Models\Order::where('person_type', $type)
+        // by that linkage rather than the legacy customer_id relation. Cancelled
+        // documents owe nothing, so they must not count as outstanding.
+        $orders = Order::where('person_type', $type)
             ->where('person_id', $id)
+            ->where('status', '!=', 'cancelled')
             ->orderByDesc('created_at')
-            ->get()
-            ->filter(fn ($order) => ! $order->is_fully_paid);
+            ->get();
 
-        $purchases = \App\Models\Purchase::where('person_type', $type)
+        $this->attachOrderListBalances($orders);
+        $orders = $orders->filter(fn ($order) => bccomp($order->remaining, '0', 2) > 0);
+
+        $purchases = Purchase::where('person_type', $type)
             ->where('person_id', $id)
+            ->where('status', '!=', 'cancelled')
             ->orderByDesc('created_at')
-            ->get()
-            ->filter(fn ($purchase) => ! $purchase->is_fully_paid);
+            ->get();
+
+        $this->attachPurchaseListBalances($purchases);
+        $purchases = $purchases->filter(fn ($purchase) => bccomp($purchase->remaining, '0', 2) > 0);
 
         // Build one combined, chronologically ordered list of everything tied to
         // this person. Cashbook entries drive the In/Out/Net totals; orders and
@@ -148,11 +161,11 @@ class CashbookController extends Controller
                 'kind' => 'order',
                 'id' => $order->id,
                 'direction' => 'in',
-                'label' => __('messages.order') . ' #' . $order->id,
+                'label' => __('messages.order').' #'.$order->id,
                 'date' => $order->created_at,
-                'amount' => (float) $order->remaining_amount,
+                'amount' => (float) $order->remaining,
                 'currency' => $order->currency,
-                'notes' => ucfirst($order->display_status ?? ''),
+                'notes' => ucfirst($order->list_status ?? ''),
             ]);
         }
 
@@ -161,11 +174,11 @@ class CashbookController extends Controller
                 'kind' => 'purchase',
                 'id' => $purchase->id,
                 'direction' => 'out',
-                'label' => __('messages.purchase') . ' #' . $purchase->id,
+                'label' => __('messages.purchase').' #'.$purchase->id,
                 'date' => $purchase->created_at,
-                'amount' => (float) $purchase->remaining_amount,
+                'amount' => (float) $purchase->remaining,
                 'currency' => $purchase->currency,
-                'notes' => ucfirst($purchase->display_status ?? ''),
+                'notes' => ucfirst($purchase->list_status ?? ''),
             ]);
         }
 
@@ -182,8 +195,8 @@ class CashbookController extends Controller
                 'out' => (float) $out,
                 'net' => (float) $in - (float) $out,
             ];
-            $orderTotals[$currency] = (float) $orders->where('currency', $currency)->sum('remaining_amount');
-            $purchaseTotals[$currency] = (float) $purchases->where('currency', $currency)->sum('remaining_amount');
+            $orderTotals[$currency] = (float) $orders->where('currency', $currency)->sum('remaining');
+            $purchaseTotals[$currency] = (float) $purchases->where('currency', $currency)->sum('remaining');
         }
 
         return [
@@ -224,10 +237,26 @@ class CashbookController extends Controller
 
     public function create()
     {
-        return view('cashbook.create', [
-            'customers' => Customer::orderBy('name')->get(),
-            'suppliers' => Supplier::orderBy('name')->get(),
-        ]);
+        $customers = Customer::orderBy('name')->get();
+        $suppliers = Supplier::orderBy('name')->get();
+
+        $personOptions = collect($customers)
+            ->map(fn ($customer) => [
+                'value' => 'customer:'.$customer->id,
+                'label' => $customer->name,
+                'sublabel' => $customer->phone,
+                'group' => __('messages.customers'),
+            ])
+            ->concat($suppliers->map(fn ($supplier) => [
+                'value' => 'supplier:'.$supplier->id,
+                'label' => $supplier->name,
+                'sublabel' => $supplier->phone,
+                'group' => __('messages.suppliers'),
+            ]))
+            ->values()
+            ->all();
+
+        return view('cashbook.create', compact('personOptions'));
     }
 
     public function store(Request $request, TransactionService $transactionService)
@@ -237,8 +266,7 @@ class CashbookController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'currency' => 'required|in:AFN,USD',
             'entry_date' => 'required|date',
-            'person_type' => 'nullable|in:customer,supplier',
-            'person_id' => 'nullable|integer|min:1',
+            'person' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -248,9 +276,23 @@ class CashbookController extends Controller
             'notes' => $validated['notes'] ?? null,
         ];
 
-        if ($validated['person_id']) {
-            $meta['reference_type'] = $validated['person_type'] ?? 'customer';
-            $meta['reference_id'] = $validated['person_id'];
+        if (! empty($validated['person'])) {
+            [$personType, $personId] = array_pad(explode(':', $validated['person'], 2), 2, null);
+
+            $personExists = in_array($personType, ['customer', 'supplier'], true)
+                && ctype_digit((string) $personId)
+                && ($personType === 'customer'
+                    ? Customer::whereKey((int) $personId)->exists()
+                    : Supplier::whereKey((int) $personId)->exists());
+
+            if (! $personExists) {
+                throw ValidationException::withMessages([
+                    'person' => __('messages.select_valid_person'),
+                ]);
+            }
+
+            $meta['reference_type'] = $personType;
+            $meta['reference_id'] = (int) $personId;
         }
 
         $transactionService->postCashbookEntry(

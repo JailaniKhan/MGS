@@ -16,6 +16,7 @@
     },
     "dependencies": {
         "@ai-sdk/openai-compatible": "^3.0.14",
+        "chart.js": "^4.5.1",
         "heroicons": "^2.2.0",
         "tw-shimmer": "^0.4.11"
     }

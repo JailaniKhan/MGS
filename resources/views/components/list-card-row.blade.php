@@ -1,10 +1,10 @@
-@props([
+﻿@props([
     'id' => '',
     'title' => '',
     'subtitle' => '',
     'amount' => 0,
     'currency' => '',
-    'status' => null,
+    'statusBadge' => null,
     'statusColor' => 'warning',
     'route' => '#',
     'avatar' => null,
@@ -30,7 +30,7 @@
         </div>
     </div>
 
-    <div class="text-right flex-shrink-0 ml-3">
+    <div class="text-end flex-shrink-0 ms-3">
         @if ($amount !== '')
             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 tabular-nums">
                 {{ $amount }}

@@ -4,10 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ __('messages.purchase') }} #{{ $purchase->id }}</title>
+    @fonts
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Vazirmatn', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             direction: rtl;
             padding: 20px;
             color: #333;
@@ -181,9 +182,6 @@
                         {{ __('messages.email') }}: {{ $company['email'] }}
                     @endif
                 </p>
-                @if($company['tax_id'])
-                    <p style="margin-top:6px;">{{ __('messages.tax_id') }}: {{ $company['tax_id'] }}</p>
-                @endif
             </div>
             <div class="invoice-badge">
                 <h2>{{ __('messages.purchase') }}</h2>
@@ -246,16 +244,6 @@
 
         <div class="totals">
             <table class="totals-table">
-                @if($purchase->tax_rate > 0)
-                <tr>
-                    <td>{{ __('messages.price_without_tax') }}</td>
-                    <td>{{ number_format($purchase->subtotal) }} {{ $purchase->currency === 'USD' ? '$' : __('messages.afn') }}</td>
-                </tr>
-                <tr>
-                    <td>{{ __('messages.tax_with_paren') }}{{ $purchase->tax_rate }}% {{ $purchase->tax_type === 'inclusive' ? 'شمولوي' : 'اضافي' }})</td>
-                    <td>{{ number_format($purchase->tax_amount) }} {{ $purchase->currency === 'USD' ? '$' : __('messages.afn') }}</td>
-                </tr>
-                @endif
                 <tr class="total-row">
                     <td>{{ __('messages.total_amount') }}</td>
                     <td>{{ number_format($purchase->total_amount) }} {{ $purchase->currency === 'USD' ? '$' : __('messages.afn') }}</td>

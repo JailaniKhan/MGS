@@ -10,7 +10,7 @@
         @forelse ($backups as $backup)
             <div class="list-row">
                 <div class="flex items-center gap-3 min-w-0 flex-1">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <div class="w-9 h-9 rounded-[0.875rem] bg-accent-50 dark:bg-accent-900/30 flex items-center justify-center flex-shrink-0 border border-accent-100 dark:border-accent-800/40">
                         <x-icon name="folder-open" class="w-4 h-4 text-white"/>
                     </div>
                     <div class="min-w-0">
@@ -32,7 +32,7 @@
             </div>
         @empty
             <div class="empty-state">
-                <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                <div class="empty-illustration">
                     <x-icon name="folder-open" class="w-6 h-6 text-ink-400"/>
                     </div>
                     <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_backups') }}</p>

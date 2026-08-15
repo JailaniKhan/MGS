@@ -27,8 +27,8 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 flex-shrink-0 ml-3">
-                        <div class="text-right">
+                    <div class="flex items-center gap-2 flex-shrink-0 ms-3">
+                        <div class="text-end">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100">{{ number_format($product->price) }}</div>
                             <div class="mt-0.5">
                                 <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full
@@ -38,14 +38,14 @@
                                 </span>
                             </div>
                         </div>
-                        <a href="{{ route('products.edit', $product) }}" class="p-2 text-ink-400 hover:text-secondary-500 transition-colors">
+                        <a href="{{ route('products.edit', $product) }}" class="w-10 h-10 rounded-lg flex items-center justify-center text-ink-400 hover:text-secondary-500 hover:bg-ink-100 dark:hover:bg-white/[0.05] transition-colors" aria-label="{{ __('messages.edit') }}">
                             <x-icon name="pencil" class="w-4 h-4"/>
                         </a>
                     </div>
                 </div>
             @empty
                 <div class="empty-state">
-                    <div class="w-12 h-12 rounded-2xl bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
+                    <div class="empty-illustration">
                         <x-icon name="archive-box" class="w-6 h-6 text-ink-400"/>
                     </div>
                     <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_products') }}</p>

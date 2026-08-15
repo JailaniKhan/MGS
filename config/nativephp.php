@@ -232,6 +232,15 @@ return [
         // component named "native", which would also strip
         // vendor/nativephp/mobile/bin/native from the bundle.
         'Error.txt',
+        'Error  (1).txt',
+        'massage.txt',
+        'massage .txt',
+        'package_build_v2.log',
+        'build_now.bat',
+        'build_now_tmp.bat',
+        '.phpunit.result.cache',
+        '.opencode',
+        'tests',
     ],
 
     /*

@@ -159,6 +159,28 @@ class OpenWaBundle extends Command
             });
         }
 
+        // Keep the APK lean: Termux .deb extraction materializes soname
+        // symlinks as duplicate copies (libicudata.so.78 + libicudata.so.78.3,
+        // 31.6MB each) and `npm install` on a Windows host pulls in
+        // platform-specific optional deps (sharp-win32-x64, ~18MB) plus
+        // @types packages that never run on Android. Prune them from BOTH
+        // the build tree and the shipped bootstrap/openwa tree.
+        $this->components->task('Pruning redundant bundle files', function () use ($buildDir) {
+            foreach ([
+                "{$buildDir}/node/lib",
+                base_path('bootstrap/openwa/node/lib'),
+            ] as $libDir) {
+                $this->pruneRedundantLibCopies($libDir);
+            }
+            foreach ([
+                "{$buildDir}/modules",
+                base_path('bootstrap/openwa/modules'),
+            ] as $modulesDir) {
+                $this->pruneNodeModules($modulesDir);
+            }
+            return true;
+        });
+
         $this->newLine();
 
         $this->components->twoColumnDetail('Bundle size', $this->formatSize($this->dirSize($buildDir)));
@@ -348,6 +370,55 @@ class OpenWaBundle extends Command
                 }
                 @copy($path, "{$libDir}/{$alias}");
             }
+        }
+    }
+
+    /**
+     * Remove redundant shared-library copies that bloat the APK bundle.
+     *
+     * The Termux .deb packages ship soname symlinks (libicudata.so.78 ->
+     * libicudata.so.78.3). Windows tar/PharData extraction materializes those
+     * symlinks as full duplicate files, and materializeSonameAliases() then
+     * copies the fully-versioned name to the major-only name the Android
+     * linker requests. After that step the fully-versioned and malformed
+     * variants are pure dead weight — the linker only ever opens the exact
+     * DT_NEEDED filename (e.g. "libicudata.so.78", "libsqlite3.so.3").
+     */
+    protected function pruneRedundantLibCopies(string $libDir): void
+    {
+        if (!is_dir($libDir)) {
+            return;
+        }
+        foreach (scandir($libDir) as $entry) {
+            if ($entry === '.' || $entry === '..') continue;
+            $path = "{$libDir}/{$entry}";
+            if (!is_file($path)) continue;
+            // Fully-versioned copies: libicudata.so.78.3, libz.so.1.3.2,
+            // libsqlite3.so.3.53.4 — the major-only alias is kept.
+            if (preg_match('/^.+\.so\.[0-9]+(\.[0-9]+)+$/', $entry)) {
+                @unlink($path);
+                continue;
+            }
+            // Malformed variants from broken extraction: libsqlite3.53.4.so.
+            if (preg_match('/^.+\.\d+\.\d+\.so$/', $entry)) {
+                @unlink($path);
+            }
+        }
+    }
+
+    /**
+     * Remove npm packages that are dead weight in an Android APK:
+     *   - @img/* (sharp + platform bindings): optional baileys image
+     *     dependency; on a Windows host npm installs sharp-win32-x64, a
+     *     Windows DLL that can never load on Android. Without a linux-arm64
+     *     binding sharp fails at runtime, so nothing is lost by pruning it.
+     *   - @types/*: TypeScript definitions, never used at runtime.
+     *   - sharp (main package): unusable without its platform binding.
+     */
+    protected function pruneNodeModules(string $modulesDir): void
+    {
+        foreach (['@img', '@types', 'sharp'] as $name) {
+            $this->rrmdir("{$modulesDir}/{$name}");
         }
     }
 
