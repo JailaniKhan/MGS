@@ -43,7 +43,6 @@ Thumbs.db
 /*.bat
 /*.html
 /.Error*.txt
-/Error*.txt
 /massage*.txt
 /tmp_*.php
 /openwa_test.php
