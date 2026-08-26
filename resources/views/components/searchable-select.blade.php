@@ -30,6 +30,7 @@
             <option value="{{ $option['value'] ?? '' }}"
                 @if ((string) ($option['value'] ?? '') === (string) $selected) selected @endif
                 @if (array_key_exists('price', $option) && $option['price'] !== null && $option['price'] !== '') data-price="{{ $option['price'] }}" @endif
+                @if (array_key_exists('price_currency', $option) && $option['price_currency']) data-price-currency="{{ $option['price_currency'] }}" @endif
                 @if (array_key_exists('stock', $option) && $option['stock'] !== null && $option['stock'] !== '') data-stock="{{ $option['stock'] }}" @endif
                 @if (array_key_exists('lot', $option) && $option['lot'] !== null && $option['lot'] !== '') data-lot="{{ $option['lot'] }}" @endif
             >{{ $option['label'] ?? '' }}</option>
@@ -75,10 +76,14 @@
         var list = root.querySelector('[data-searchable-list]');
         var opts = mgsOptions(root);
         var q = input.value.trim().toLowerCase();
+        // Optional currency filter (purchase form): options priced in the
+        // other currency disappear; options with no price stay visible.
+        var currencyFilter = root.getAttribute('data-searchable-currency');
         var lastGroup = null;
         list.innerHTML = '';
         root._highlighted = 0;
         opts.forEach(function (o, i) {
+            if (currencyFilter && o.price_currency && o.price_currency !== currencyFilter) return;
             var hay = ((o.label || '') + ' ' + (o.sublabel || '')).toLowerCase();
             if (q && hay.indexOf(q) === -1) return;
             if (o.group && o.group !== lastGroup) {
@@ -108,7 +113,7 @@
             row.appendChild(left);
             var badges = [];
             if (o.stock !== undefined && o.stock !== null && o.stock !== '') badges.push('{{ __('messages.stock') }}: ' + o.stock);
-            if (o.price !== undefined && o.price !== null && o.price !== '') badges.push(o.price);
+            if (o.price !== undefined && o.price !== null && o.price !== '') badges.push(o.price + ' ' + (o.price_currency === 'USD' ? '$' : '{{ __('messages.afn') }}'));
             if (badges.length) {
                 var right = document.createElement('div');
                 right.className = 'text-end text-[11px] font-semibold text-ink-500 dark:text-ink-400 flex-shrink-0';

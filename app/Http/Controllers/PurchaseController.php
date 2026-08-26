@@ -6,13 +6,13 @@ use App\Http\Controllers\Concerns\AddsListBalances;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Purchase;
-use App\Models\PurchasePayment;
 use App\Models\Setting;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Services\Billing\BillService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class PurchaseController extends Controller
 {
@@ -71,13 +71,22 @@ class PurchaseController extends Controller
             ->all();
 
         $productOptions = $products
-            ->map(fn ($product) => [
-                'value' => $product->id,
-                'label' => $product->name,
-                'sublabel' => __('messages.stock').': '.$product->stock.($product->unit ? ' '.($product->unit->short_name ?? $product->unit->name) : ''),
-                'price' => number_format((float) $product->price),
-                'lot' => $product->lot_number,
-            ])
+            ->map(function ($product) {
+                // A lot is priced in one currency; show that price in the picker.
+                // Unpriced products carry no currency so they stay selectable
+                // on both sides of the currency toggle.
+                $afn = (float) $product->price > 0;
+                $usd = ! $afn && (float) ($product->price_usd ?? 0) > 0;
+
+                return [
+                    'value' => $product->id,
+                    'label' => $product->name,
+                    'sublabel' => __('messages.afn').': '.$product->stock_afn.' · '.__('messages.usd').': '.$product->stock_usd.($product->unit ? ' '.($product->unit->short_name ?? $product->unit->name) : ''),
+                    'price' => ($afn || $usd) ? number_format((float) ($usd ? $product->price_usd : $product->price), 2, '.', '') : null,
+                    'price_currency' => $usd ? 'USD' : ($afn ? 'AFN' : null),
+                    'lot' => $product->lot_number,
+                ];
+            })
             ->values()
             ->all();
 
@@ -105,11 +114,33 @@ class PurchaseController extends Controller
             abort_if(! Supplier::where('id', $personId)->exists(), 404);
         }
 
+        // Validate every line BEFORE any stock moves: a product priced in one
+        // currency must never be bought in the other — that would open a pool
+        // the product can never be sold from. Unpriced products have no
+        // currency to match and pass in both.
+        $products = [];
+        foreach ($validated['products'] as $item) {
+            $product = Product::findOrFail($item['product_id']);
+            $pricedCurrency = (float) $product->price > 0 ? 'AFN'
+                : ((float) ($product->price_usd ?? 0) > 0 ? 'USD' : null);
+
+            if ($pricedCurrency !== null && $pricedCurrency !== $validated['currency']) {
+                throw ValidationException::withMessages([
+                    'products' => __('messages.purchase_currency_mismatch', [
+                        'product' => $product->name,
+                        'currency' => $pricedCurrency === 'USD' ? __('messages.usd') : __('messages.afn'),
+                    ]),
+                ]);
+            }
+
+            $products[] = $product;
+        }
+
         $subtotal = '0.00';
         $purchaseItems = [];
 
-        foreach ($validated['products'] as $item) {
-            $product = Product::findOrFail($item['product_id']);
+        foreach ($validated['products'] as $index => $item) {
+            $product = $products[$index];
             $lineTotal = bcmul((string) $item['unit_price'], (string) $item['quantity'], 2);
             $subtotal = bcadd($subtotal, $lineTotal, 2);
 
@@ -121,8 +152,8 @@ class PurchaseController extends Controller
                 'lot_number' => $item['lot_number'] ?? null,
             ];
 
-            // Increase stock when purchasing
-            $product->increment('stock', $item['quantity']);
+            // Purchased goods enter the pool of the currency they were paid in.
+            $product->moveStock($validated['currency'], (int) $item['quantity']);
         }
 
         $purchase = Purchase::create([
@@ -151,6 +182,7 @@ class PurchaseController extends Controller
                 'user_id' => Auth::id(),
                 'product_id' => $item['product_id'],
                 'quantity_change' => $item['quantity'],
+                'currency' => $validated['currency'],
                 'movement_type' => 'purchase',
                 'reference_type' => 'purchase',
                 'reference_id' => $purchase->id,
@@ -222,12 +254,13 @@ class PurchaseController extends Controller
             \DB::transaction(function () use ($purchase) {
                 foreach ($purchase->purchaseItems as $item) {
                     $product = $item->product()->lockForUpdate()->first();
-                    $product->decrement('stock', $item->quantity);
+                    $product->moveStock($purchase->currency, -(int) $item->quantity);
 
                     StockMovement::create([
                         'user_id' => Auth::id(),
                         'product_id' => $item->product_id,
                         'quantity_change' => -$item->quantity,
+                        'currency' => $purchase->currency,
                         'movement_type' => 'purchase_cancelled',
                         'reference_type' => 'purchase',
                         'reference_id' => $purchase->id,
@@ -242,43 +275,27 @@ class PurchaseController extends Controller
         return redirect()->route('purchases.show', $purchase)->with('success', __('messages.purchase_status_changed'));
     }
 
-    public function paymentStore(Request $request)
-    {
-        $validated = $request->validate([
-            'purchase_id' => 'required|exists:purchases,id',
-            'amount' => 'required|numeric|min:0.01',
-            'currency' => 'required|in:AFN,USD',
-            'notes' => 'nullable|string|max:500',
-        ]);
-
-        $purchase = Purchase::findOrFail($validated['purchase_id']);
-
-        if ($validated['currency'] !== $purchase->currency) {
-            return back()->with('error', __('messages.payment_currency_mismatch'));
-        }
-
-        PurchasePayment::create($validated);
-
-        return redirect()->route('purchases.show', $purchase)->with('success', __('messages.payment_created'));
-    }
-
     public function destroy(Purchase $purchase)
     {
         \DB::transaction(function () use ($purchase) {
-            foreach ($purchase->purchaseItems as $item) {
-                $product = $item->product()->lockForUpdate()->first();
-                $product->decrement('stock', $item->quantity);
+            // A cancelled purchase already gave its stock back on cancellation
+            // — decrementing again here would double-count inventory.
+            if ($purchase->status !== 'cancelled') {
+                foreach ($purchase->purchaseItems as $item) {
+                    $product = $item->product()->lockForUpdate()->first();
+                    $product->moveStock($purchase->currency, -(int) $item->quantity);
 
-                // Log stock movement so audit trail exists for the deletion.
-                StockMovement::create([
-                    'user_id' => Auth::id(),
-                    'product_id' => $item->product_id,
-                    'quantity_change' => -$item->quantity,
-                    'movement_type' => 'purchase_deleted',
-                    'reference_type' => 'purchase',
-                    'reference_id' => $purchase->id,
-                    'notes' => __('messages.purchase_deleted'),
-                ]);
+                    StockMovement::create([
+                        'user_id' => Auth::id(),
+                        'product_id' => $item->product_id,
+                        'quantity_change' => -$item->quantity,
+                        'currency' => $purchase->currency,
+                        'movement_type' => 'purchase_deleted',
+                        'reference_type' => 'purchase',
+                        'reference_id' => $purchase->id,
+                        'notes' => __('messages.purchase_deleted'),
+                    ]);
+                }
             }
             $purchase->delete();
         });
