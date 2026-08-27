@@ -13,7 +13,12 @@ class StaffController extends Controller
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
-        return view('staff.index', compact('employees'));
+        $total = Employee::count();
+        $salaryRows = Employee::get(['monthly_salary', 'currency']);
+        $payrollAFN = $salaryRows->where('currency', 'AFN')->sum('monthly_salary');
+        $payrollUSD = $salaryRows->where('currency', 'USD')->sum('monthly_salary');
+
+        return view('staff.index', compact('employees', 'total', 'payrollAFN', 'payrollUSD'));
     }
 
     public function create()

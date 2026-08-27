@@ -4,7 +4,7 @@
     $isRtl = in_array($locale, ['ps', 'fa']);
 @endphp
 <!DOCTYPE html>
-<html lang="{{ $locale }}" dir="{{ $isRtl ? 'rtl' : 'ltr' }}">
+<html lang="{{ $locale }}" dir="{{ $isRtl ? 'rtl' : 'ltr' }}" data-language-url="{{ route('language.update') }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -35,7 +35,7 @@
                 <span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-ink-400 dark:text-ink-500">
                     <x-icon name="language" class="w-3.5 h-3.5"/>
                 </span>
-                <select onchange="changeAuthLanguage(this.value)" aria-label="{{ __('messages.language') }}"
+                <select onchange="changeLanguage(this.value)" aria-label="{{ __('messages.language') }}"
                     class="text-[11px] ps-8 pe-2.5 py-2 rounded-full appearance-none cursor-pointer font-semibold
                            bg-white/90 dark:bg-[#16181c] text-ink-700 dark:text-ink-300
                            border border-ink-200 dark:border-ink-700
@@ -78,19 +78,6 @@
     </div>
 
     <script>
-        function changeAuthLanguage(lang) {
-            fetch('{{ route('language.update') }}', {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({ language: lang }),
-            })
-            .then(() => window.location.reload())
-            .catch(() => window.location.reload());
-        }
-
         document.addEventListener('click', function (e) {
             const btn = e.target.closest('[data-password-toggle]');
             if (!btn) return;

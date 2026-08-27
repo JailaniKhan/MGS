@@ -66,7 +66,23 @@ class OrderController extends Controller
         $this->attachOrderListBalances($orders->getCollection());
         $this->attachPurchaseListBalances($purchases->getCollection());
 
-        return view('orders.index', compact('orders', 'purchases', 'search'));
+        // Month summary tiles (single pass per side, split by currency).
+        $monthStart = now()->startOfMonth();
+        $orderMonth = Order::where('status', '!=', 'cancelled')
+            ->where('created_at', '>=', $monthStart)->get(['total_amount', 'currency']);
+        $orderMonthAFN = $orderMonth->where('currency', 'AFN')->sum('total_amount');
+        $orderMonthUSD = $orderMonth->where('currency', 'USD')->sum('total_amount');
+
+        $purchaseMonth = Purchase::where('status', '!=', 'cancelled')
+            ->where('created_at', '>=', $monthStart)->get(['total_amount', 'currency']);
+        $purchaseMonthAFN = $purchaseMonth->where('currency', 'AFN')->sum('total_amount');
+        $purchaseMonthUSD = $purchaseMonth->where('currency', 'USD')->sum('total_amount');
+
+        return view('orders.index', compact(
+            'orders', 'purchases', 'search',
+            'orderMonthAFN', 'orderMonthUSD',
+            'purchaseMonthAFN', 'purchaseMonthUSD'
+        ));
     }
 
     public function create()
@@ -101,13 +117,20 @@ class OrderController extends Controller
             ->all();
 
         $productOptions = $products
-            ->map(fn ($product) => [
-                'value' => $product->id,
-                'label' => $product->name,
-                'sublabel' => __('messages.stock').': '.$product->stock.($product->unit ? ' '.($product->unit->short_name ?? $product->unit->name) : ''),
-                'price' => number_format((float) $product->price),
-                'lot' => $product->lot_number,
-            ])
+            ->map(function ($product) {
+                // A lot is priced in one currency; surface that price (and its
+                // currency) so the form only autofills on a matching side.
+                $usd = (float) $product->price <= 0 && (float) ($product->price_usd ?? 0) > 0;
+
+                return [
+                    'value' => $product->id,
+                    'label' => $product->name,
+                    'sublabel' => __('messages.afn').': '.$product->stock_afn.' · '.__('messages.usd').': '.$product->stock_usd.($product->unit ? ' '.($product->unit->short_name ?? $product->unit->name) : ''),
+                    'price' => number_format((float) ($usd ? $product->price_usd : $product->price), 2, '.', ''),
+                    'price_currency' => $usd ? 'USD' : 'AFN',
+                    'lot' => $product->lot_number,
+                ];
+            })
             ->values()
             ->all();
 
@@ -146,9 +169,11 @@ class OrderController extends Controller
             foreach ($validated['products'] as $item) {
                 $product = Product::where('id', $item['product_id'])->lockForUpdate()->firstOrFail();
 
-                if ($product->stock < $item['quantity']) {
+                // Stock pools are per currency: a USD sale draws from stock_usd
+                // even when the AFN pool is full.
+                if (! $product->hasStockFor($validated['currency'], (int) $item['quantity'])) {
                     throw ValidationException::withMessages([
-                        'products' => __('messages.insufficient_stock').' د '.$product->name.'! ('.__('messages.pending').': '.$product->stock.')',
+                        'products' => __('messages.insufficient_stock').' د '.$product->name.'! ('.$validated['currency'].': '.$product->stockFor($validated['currency']).')',
                     ]);
                 }
 
@@ -164,7 +189,7 @@ class OrderController extends Controller
                     'lot_number' => $item['lot_number'] ?? null,
                 ];
 
-                $product->decrement('stock', $item['quantity']);
+                $product->moveStock($validated['currency'], -(int) $item['quantity']);
             }
 
             $order = Order::create([
@@ -185,6 +210,7 @@ class OrderController extends Controller
                     'user_id' => Auth::id(),
                     'product_id' => $item['product_id'],
                     'quantity_change' => -$item['quantity'],
+                    'currency' => $validated['currency'],
                     'movement_type' => 'sale',
                     'reference_type' => 'order',
                     'reference_id' => $order->id,
@@ -266,9 +292,7 @@ class OrderController extends Controller
         }
 
         if ($validated['status'] === 'cancelled' && $order->status !== 'cancelled') {
-            foreach ($order->orderItems as $item) {
-                $item->product->increment('stock', $item->quantity);
-            }
+            $this->cancelAndRestoreStock($order);
         }
 
         if (! empty($validated['person'])) {
@@ -313,28 +337,39 @@ class OrderController extends Controller
         }
 
         if ($status === 'cancelled' && $order->status !== 'cancelled') {
-            \DB::transaction(function () use ($order) {
-                foreach ($order->orderItems as $item) {
-                    // Lock the product row so concurrent updates don't race.
-                    $product = $item->product()->lockForUpdate()->first();
-                    $product->increment('stock', $item->quantity);
-
-                    StockMovement::create([
-                        'user_id' => Auth::id(),
-                        'product_id' => $item->product_id,
-                        'quantity_change' => $item->quantity,
-                        'movement_type' => 'order_cancelled',
-                        'reference_type' => 'order',
-                        'reference_id' => $order->id,
-                        'notes' => __('messages.order_cancelled'),
-                    ]);
-                }
-            });
+            $this->cancelAndRestoreStock($order);
         }
 
         $order->update(['status' => $status]);
 
         return redirect()->route('orders.index')->with('success', __('messages.order_status_changed'));
+    }
+
+    /**
+     * Return a live order's stock to the shelf and record one
+     * order_cancelled movement per line — the single implementation shared
+     * by update() and status().
+     */
+    private function cancelAndRestoreStock(Order $order): void
+    {
+        DB::transaction(function () use ($order) {
+            foreach ($order->orderItems as $item) {
+                // Lock the product row so concurrent updates don't race.
+                $product = $item->product()->lockForUpdate()->first();
+                $product->moveStock($order->currency, (int) $item->quantity);
+
+                StockMovement::create([
+                    'user_id' => Auth::id(),
+                    'product_id' => $item->product_id,
+                    'quantity_change' => $item->quantity,
+                    'currency' => $order->currency,
+                    'movement_type' => 'order_cancelled',
+                    'reference_type' => 'order',
+                    'reference_id' => $order->id,
+                    'notes' => __('messages.order_cancelled'),
+                ]);
+            }
+        });
     }
 
     public function destroy(Order $order)
@@ -345,12 +380,13 @@ class OrderController extends Controller
             if ($order->status !== 'cancelled') {
                 foreach ($order->orderItems as $item) {
                     $product = $item->product()->lockForUpdate()->first();
-                    $product->increment('stock', $item->quantity);
+                    $product->moveStock($order->currency, (int) $item->quantity);
 
                     StockMovement::create([
                         'user_id' => Auth::id(),
                         'product_id' => $item->product_id,
                         'quantity_change' => $item->quantity,
+                        'currency' => $order->currency,
                         'movement_type' => 'order_deleted',
                         'reference_type' => 'order',
                         'reference_id' => $order->id,
@@ -362,10 +398,5 @@ class OrderController extends Controller
         });
 
         return redirect()->route('orders.index')->with('success', __('messages.order_deleted'));
-    }
-
-    public function getProductPrice(Product $product)
-    {
-        return response()->json(['price' => $product->price, 'stock' => $product->stock]);
     }
 }

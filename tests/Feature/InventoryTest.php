@@ -64,10 +64,25 @@ class InventoryTest extends TestCase
             'stock_usd' => 80,
         ]);
 
+        // Two-pool product: each pill keeps its currency tag.
+        Product::create([
+            'name' => 'Dual Pool Widget',
+            'category_id' => $category->id,
+            'price' => 100,
+            'price_usd' => 1.5,
+            'stock_afn' => 7,
+            'stock_usd' => 5,
+        ]);
+
         $res = $this->actingAs($user)->get('/inventory');
         $res->assertOk();
         $res->assertSee('20.50');
-        $res->assertSee('USD 80');
+        // Single-pool product: the pill drops the currency prefix — the price
+        // chip above already carries it.
+        $res->assertDontSee('USD 80');
+        // Two-pool products keep tagged pills.
+        $res->assertSee('AFN 7');
+        $res->assertSee('USD 5');
         // Empty pools disappear instead of rendering a "0" row.
         $res->assertDontSee('AFN 0');
     }

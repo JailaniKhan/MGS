@@ -121,7 +121,9 @@ class StockReportTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
-        $product = $this->makeProduct($user, ['name' => 'Dual Currency Product', 'stock' => 10]);
+        // Stock held per pool: 10 units from the AFN purchases and 10 from the
+        // USD purchases — each currency view values its own pool.
+        $product = $this->makeProduct($user, ['name' => 'Dual Currency Product', 'stock_afn' => 10, 'stock_usd' => 10]);
         $supplier = Supplier::create(['name' => 'Dual Currency Supplier', 'phone' => '0700000002']);
 
         $this->addPurchaseItem($this->makePurchase($user, $supplier, ['currency' => 'AFN']), $product, 1, '100.00');
@@ -172,10 +174,38 @@ class StockReportTest extends TestCase
         $response = $this->get('/reports/stock');
 
         $response->assertOk();
-        $response->assertSee('Low Product (5)');
+        // The low-stock banner renders name and stock as separate spans.
+        $response->assertSee('Low Product');
+        $response->assertSee('(5)', false);
         $response->assertSee(__('messages.low_stock_short'));
-        // Exactly at the threshold is NOT low.
-        $response->assertDontSee('Edge Product (10)');
+        // Exactly at the threshold is NOT low — no banner chip for it.
+        $response->assertDontSee('(10)', false);
+    }
+
+    public function test_zero_pools_are_not_flagged_as_low_when_switching_currency(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // AFN-only product with a healthy AFN pool: its untouched USD pool (0)
+        // must not be reported as low stock in the USD view, and the thin AFN
+        // pool must still be flagged in the AFN view.
+        $this->makeProduct($user, ['name' => 'Afn Only Healthy', 'stock' => 15]);
+        $this->makeProduct($user, ['name' => 'Afn Only Low', 'stock' => 3]);
+
+        $usdResponse = $this->get('/reports/stock?currency=USD');
+
+        $usdResponse->assertOk();
+        // No banner, no restock notice, and none of the zero pools chipped as low.
+        $usdResponse->assertDontSee(__('messages.needs_restock'));
+        $usdResponse->assertDontSee('(3)', false);
+
+        $afnResponse = $this->get('/reports/stock?currency=AFN');
+
+        $afnResponse->assertOk();
+        $afnResponse->assertSee('Afn Only Low');
+        $afnResponse->assertSee('(3)', false);
+        $afnResponse->assertDontSee('(15)', false);
     }
 
     public function test_other_users_data_never_leaks_into_the_report(): void

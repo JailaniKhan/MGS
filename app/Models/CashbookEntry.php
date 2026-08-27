@@ -26,6 +26,6 @@ class CashbookEntry extends Model
 
     public function getCurrencySymbolAttribute()
     {
-        return $this->currency === 'USD' ? '$' : 'افغ';
+        return $this->currency === 'USD' ? '$' : 'افغانی';
     }
 }

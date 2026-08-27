@@ -65,18 +65,48 @@ trait AddsListBalances
             )
             ->whereIn('o.id', $purchases->pluck('id'))
             ->groupBy('o.id')
-            ->selectRaw('o.id, o.total_amount - COALESCE(SUM(CASE WHEN p.currency = o.currency THEN p.paid END), 0) - COALESCE(SUM(CASE WHEN r.currency = o.currency THEN r.returned END), 0) as remaining')
-            ->pluck('remaining', 'id');
+            ->selectRaw('o.id, o.total_amount - COALESCE(SUM(CASE WHEN p.currency = o.currency THEN p.paid END), 0) - COALESCE(SUM(CASE WHEN r.currency = o.currency THEN r.returned END), 0) as remaining, COALESCE(SUM(CASE WHEN p.currency = o.currency THEN p.paid END), 0) as paid')
+            ->get()
+            ->keyBy('id');
 
         foreach ($purchases as $purchase) {
-            $this->applyBalanceAttributes($purchase, (string) ($rows[$purchase->id] ?? '0.00'));
+            $row = $rows[$purchase->id] ?? null;
+            $remaining = bccomp((string) ($row->remaining ?? '0'), '0', 2) >= 0
+                ? bcadd((string) ($row->remaining ?? '0'), '0', 2)
+                : '0.00';
+
+            $purchase->setAttribute('remaining', $remaining);
+            $purchase->setAttribute('list_status', $this->purchaseListStatus($purchase, $remaining, (string) ($row->paid ?? '0')));
         }
+    }
+
+    /**
+     * Payment-aware status for purchase list rows: a purchase that still owes
+     * money must never read as "completed". Cancelled wins, then paid (nothing
+     * left), processing, partially paid, else pending.
+     */
+    protected function purchaseListStatus($purchase, string $remaining, string $paid): string
+    {
+        if ($purchase->status === 'cancelled') {
+            return 'cancelled';
+        }
+
+        if (bccomp($remaining, '0', 2) <= 0) {
+            return 'paid';
+        }
+
+        if ($purchase->status === 'processing') {
+            return 'processing';
+        }
+
+        return bccomp($paid, '0', 2) > 0 ? 'partial' : 'pending';
     }
 
     /**
      * Attach `remaining` (clamped at zero) and `list_status` (cancelled /
      * paid / the raw status) as plain attributes so the view never touches
-     * the querying accessors.
+     * the querying accessors. Orders only — purchases use the payment-aware
+     * purchaseListStatus() instead.
      */
     protected function applyBalanceAttributes($model, string $remaining): void
     {

@@ -3,9 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
-use App\Models\Order;
-use App\Models\Payment;
-use App\Models\PartyPayment;
+use App\Services\Billing\PartyBalanceService;
 use Illuminate\Http\Request;
 
 class CustomerController extends Controller
@@ -42,30 +40,19 @@ class CustomerController extends Controller
     {
         $customer->load('orders.orderItems.product');
 
-        $orderIds = Order::where('person_type', 'customer')->where('person_id', $customer->id)->pluck('id');
+        // Canonical balance: only non-cancelled docs, same-currency payments,
+        // returns reduce, per-doc clamp — matches orders, wallet and ledger.
+        $balance = app(PartyBalanceService::class)->partySummary('customer', $customer->id);
 
-        $paymentsFromOrdersAFN = Payment::whereIn('order_id', $orderIds)->where('currency', 'AFN')->sum('amount');
-        $paymentsFromOrdersUSD = Payment::whereIn('order_id', $orderIds)->where('currency', 'USD')->sum('amount');
-
-        $ledgerPaymentsAFN = PartyPayment::where('person_type', 'customer')
-            ->where('person_id', $customer->id)
-            ->where('currency', 'AFN')
-            ->where('type', 'payment_received')
-            ->sum('amount');
-
-        $ledgerPaymentsUSD = PartyPayment::where('person_type', 'customer')
-            ->where('person_id', $customer->id)
-            ->where('currency', 'USD')
-            ->where('type', 'payment_received')
-            ->sum('amount');
-
-        $totalAFN = Order::whereIn('id', $orderIds)->where('currency', 'AFN')->sum('total_amount');
-        $totalUSD = Order::whereIn('id', $orderIds)->where('currency', 'USD')->sum('total_amount');
-        $paidAFN = $paymentsFromOrdersAFN + $ledgerPaymentsAFN;
-        $paidUSD = $paymentsFromOrdersUSD + $ledgerPaymentsUSD;
+        $totalAFN = (float) $balance['total_amount_afn'];
+        $totalUSD = (float) $balance['total_amount_usd'];
+        $paidAFN = (float) $balance['paid_afn'];
+        $paidUSD = (float) $balance['paid_usd'];
+        $remainingAFN = (float) $balance['remaining_afn'];
+        $remainingUSD = (float) $balance['remaining_usd'];
 
         return view('customers.show', compact(
-            'customer', 'totalAFN', 'totalUSD', 'paidAFN', 'paidUSD'
+            'customer', 'totalAFN', 'totalUSD', 'paidAFN', 'paidUSD', 'remainingAFN', 'remainingUSD'
         ));
     }
 

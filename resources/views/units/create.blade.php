@@ -1,19 +1,35 @@
 ﻿@extends('layouts.app')
 
 @section('content')
-    <div class="mb-4 page-enter">
-        <a href="{{ route('units.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>{{ __('messages.back') }}
-        </a>
-        <h2 class="text-lg font-bold text-ink-900 dark:text-white mt-2">{{ __('messages.new_unit') }}</h2>
+    {{-- Header --}}
+    <div class="flex items-center justify-between mb-4 page-enter">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-[0.875rem] bg-primary-500/10 dark:bg-primary-500/15 flex items-center justify-center flex-shrink-0">
+                <x-icon name="hashtag" class="w-4 h-4 text-primary-600 dark:text-primary-400" strokeWidth="1.8"/>
+            </div>
+            <div class="min-w-0">
+                <h2 class="text-lg font-bold text-ink-900 dark:text-white leading-tight">{{ __('messages.new_unit') }}</h2>
+                <p class="text-[11px] text-ink-500 dark:text-ink-400 truncate">{{ __('messages.inventory') }}</p>
+            </div>
+        </div>
+        <x-back-button href="{{ route('inventory.index') }}"/>
     </div>
 
-    <div class="card p-4 page-enter" style="animation-delay: 0.1s;">
-        <form action="{{ route('units.store') }}" method="POST">
+    <div class="card overflow-hidden page-enter" style="animation-delay: 0.1s;">
+        <div class="px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 bg-ink-50 dark:bg-ink-800/40">
+            <div class="flex items-center gap-2">
+                <x-icon name="hashtag" class="w-4 h-4 text-primary-600 dark:text-primary-400"/>
+                <h3 class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.details') }}</h3>
+            </div>
+        </div>
+        <form action="{{ route('units.store') }}" method="POST" class="p-4">
             @csrf
             <div class="mb-4">
                 <label class="form-label">{{ __('messages.name') }}</label>
-                <input type="text" name="name" value="{{ old('name') }}" required class="form-input" placeholder="{{ __('messages.such_as') }}: کیلوګرام, کارتون, ټوټه">
+                <div class="relative">
+                    <input type="text" name="name" value="{{ old('name') }}" required class="form-input ps-10" placeholder="{{ __('messages.such_as') }}: کیلوګرام, کارتون, ټوټه">
+                    <x-icon name="hashtag" class="w-5 h-5 text-ink-400 dark:text-ink-500 pointer-events-none absolute top-1/2 -translate-y-1/2 start-3"/>
+                </div>
                 @error('name') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
             <div class="mb-4">
@@ -21,7 +37,10 @@
                 <input type="text" name="short_name" value="{{ old('short_name') }}" class="form-input" placeholder="{{ __('messages.such_as') }}: کیلو, کار, ټ">
                 @error('short_name') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
-            <button type="submit" class="btn-primary w-full"><x-icon name="check-circle" class="w-4 h-4" strokeWidth="2"/>{{ __('messages.submit') }}</button>
+            <button type="submit" class="btn-primary w-full">
+                <x-icon name="check-circle" class="w-4 h-4" strokeWidth="2"/>
+                {{ __('messages.submit') }}
+            </button>
         </form>
     </div>
 @endsection

@@ -34,12 +34,9 @@
                 </div>
             </div>
         @empty
-            <div class="empty-state">
-                <div class="empty-illustration">
-                    <x-icon name="tag" class="w-6 h-6 text-ink-400"/>
-                </div>
-                <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_categories') }}</p>
-            </div>
+            <x-empty-state title="{{ __('messages.no_categories') }}">
+                <x-icon name="tag" class="w-6 h-6 text-ink-400"/>
+            </x-empty-state>
         @endforelse
     </div>
     @if ($categories->hasPages())

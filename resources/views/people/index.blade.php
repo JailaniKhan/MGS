@@ -123,8 +123,8 @@
     </div>
 
     <!-- Reminder Channel Modal -->
-    <div id="reminder-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 hidden">
-        <div class="card w-[88%] max-w-sm p-5 page-enter">
+    <div id="reminder-modal" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-card">
             <div class="flex items-center gap-2 mb-4">
                 <div class="w-1.5 h-5 rounded-full bg-primary-500"></div>
                 <h3 class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.reminder_confirm_title') }}</h3>
@@ -146,11 +146,11 @@
     function sendReminder(id, name, type) {
         reminderTarget = { id, type, name };
         document.getElementById('reminder-modal-name').textContent = name;
-        document.getElementById('reminder-modal').classList.remove('hidden');
+        document.getElementById('reminder-modal').classList.add('open');
     }
 
     function closeReminderModal() {
-        document.getElementById('reminder-modal').classList.add('hidden');
+        document.getElementById('reminder-modal').classList.remove('open');
     }
 
     function submitReminder(channel) {
@@ -167,7 +167,7 @@
             })
             .then(r => r.json())
             .then(data => {
-                if (data.error) { alert(data.error); return; }
+                if (data.error) { showToast('error', data.error); return; }
                 const phone = data.phone.replace(/[^0-9]/g, '');
                 const msg = encodeURIComponent(data.message);
                 openNativeSms(phone, msg);
@@ -205,10 +205,17 @@
         const smsUrl = 'sms:' + phone + '?body=' + encodedMsg;
         const before = window.location.href;
         window.location.href = smsUrl;
-        // On desktop (no SMS app) the navigation is a no-op; show the message so it's verifiable
+        // On desktop (no SMS app) the navigation is a no-op; copy the message so it stays usable
         setTimeout(() => {
             if (window.location.href === before) {
-                prompt('SMS not supported in this browser. Copy the message below to send it manually:', decodeURIComponent(encodedMsg));
+                const msg = decodeURIComponent(encodedMsg);
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(msg)
+                        .then(() => showToast('success', @js(__('messages.sms_copied'))))
+                        .catch(() => showToast('error', @js(__('messages.sms_copy_failed'))));
+                } else {
+                    showToast('error', @js(__('messages.sms_copy_failed')));
+                }
             }
         }, 600);
     }

@@ -15,10 +15,10 @@
                 </div>
                 <div>
                     <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ $expense->category }}</h2>
-                    <p class="text-xs text-ink-500 dark:text-ink-400">{{ $expense->expense_date->format('Y/m/d') }}</p>
+                    <p class="text-xs text-ink-500 dark:text-ink-400"><bdi>{{ local_date($expense->expense_date, 'Y/m/d') }}</bdi></p>
                 </div>
             </div>
-            <span class="text-sm font-bold text-danger-600 dark:text-danger-400">{{ number_format($expense->amount) }} {{ $expense->currency_symbol }}</span>
+            <span class="text-sm font-bold text-danger-600 dark:text-danger-400"><bdi>{{ number_format($expense->amount) }}</bdi> {{ $expense->currency_symbol }}</span>
         </div>
 
         @if ($expense->notes)

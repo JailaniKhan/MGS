@@ -43,7 +43,7 @@
             <div class="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 dark:border-ink-700/30">
                 <div class="flex items-center gap-2">
                     <span class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.grand_total') }}</span>
-                    <span class="text-lg font-extrabold tabular-nums text-ink-900 dark:text-white">{{ number_format($customerGrandTotal, 2) }} {{ $currencySymbol }}</span>
+                    <span class="text-lg font-extrabold tabular-nums text-ink-900 dark:text-white"><bdi>{{ number_format($customerGrandTotal, 2) }}</bdi> {{ $currencySymbol }}</span>
                 </div>
                 <div class="flex flex-wrap gap-1.5">
                     <span class="{{ $bucketBadge('0-30') }}">0-30: {{ number_format($customerBucketTotal['0-30'], 2) }}</span>
@@ -65,7 +65,7 @@
                         <span class="{{ $bucketBadge('31-60') }}">{{ number_format($aging['bucket_totals']['31-60'], 2) }}</span>
                         <span class="{{ $bucketBadge('61-90') }}">{{ number_format($aging['bucket_totals']['61-90'], 2) }}</span>
                         <span class="{{ $bucketBadge('90+') }}">{{ number_format($aging['bucket_totals']['90+'], 2) }}</span>
-                        <span class="text-sm font-bold tabular-nums text-ink-900 dark:text-white ms-1">{{ number_format($aging['total_outstanding'], 2) }} {{ $currencySymbol }}</span>
+                        <span class="text-sm font-bold tabular-nums text-ink-900 dark:text-white ms-1"><bdi>{{ number_format($aging['total_outstanding'], 2) }}</bdi> {{ $currencySymbol }}</span>
                     </div>
                 </div>
             </div>
@@ -77,7 +77,7 @@
                             <span class="text-xs text-ink-500 dark:text-ink-400 block">{{ $order['order_date'] }} - {{ $order['days'] }} {{ __('messages.days') }}</span>
                         </div>
                         <div class="text-end flex flex-col items-end gap-1">
-                            <span class="text-sm font-semibold tabular-nums text-ink-900 dark:text-ink-100">{{ number_format($order['outstanding'], 2) }} {{ $currencySymbol }}</span>
+                            <span class="text-sm font-semibold tabular-nums text-ink-900 dark:text-ink-100"><bdi>{{ number_format($order['outstanding'], 2) }}</bdi> {{ $currencySymbol }}</span>
                             <span class="{{ $bucketBadge($order['bucket']) }}">{{ $order['bucket'] }}</span>
                         </div>
                     </div>
@@ -97,7 +97,7 @@
             <div class="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 dark:border-ink-700/30">
                 <div class="flex items-center gap-2">
                     <span class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.grand_total') }}</span>
-                    <span class="text-lg font-extrabold tabular-nums text-ink-900 dark:text-white">{{ number_format($supplierGrandTotal, 2) }} {{ $currencySymbol }}</span>
+                    <span class="text-lg font-extrabold tabular-nums text-ink-900 dark:text-white"><bdi>{{ number_format($supplierGrandTotal, 2) }}</bdi> {{ $currencySymbol }}</span>
                 </div>
                 <div class="flex flex-wrap gap-1.5">
                     <span class="{{ $bucketBadge('0-30') }}">0-30: {{ number_format($supplierBucketTotal['0-30'], 2) }}</span>
@@ -119,7 +119,7 @@
                         <span class="{{ $bucketBadge('31-60') }}">{{ number_format($aging['bucket_totals']['31-60'], 2) }}</span>
                         <span class="{{ $bucketBadge('61-90') }}">{{ number_format($aging['bucket_totals']['61-90'], 2) }}</span>
                         <span class="{{ $bucketBadge('90+') }}">{{ number_format($aging['bucket_totals']['90+'], 2) }}</span>
-                        <span class="text-sm font-bold tabular-nums text-ink-900 dark:text-white ms-1">{{ number_format($aging['total_outstanding'], 2) }} {{ $currencySymbol }}</span>
+                        <span class="text-sm font-bold tabular-nums text-ink-900 dark:text-white ms-1"><bdi>{{ number_format($aging['total_outstanding'], 2) }}</bdi> {{ $currencySymbol }}</span>
                     </div>
                 </div>
             </div>
@@ -131,7 +131,7 @@
                             <span class="text-xs text-ink-500 dark:text-ink-400 block">{{ $purchase['purchase_date'] }} - {{ $purchase['days'] }} {{ __('messages.days') }}</span>
                         </div>
                         <div class="text-end flex flex-col items-end gap-1">
-                            <span class="text-sm font-semibold tabular-nums text-ink-900 dark:text-ink-100">{{ number_format($purchase['outstanding'], 2) }} {{ $currencySymbol }}</span>
+                            <span class="text-sm font-semibold tabular-nums text-ink-900 dark:text-ink-100"><bdi>{{ number_format($purchase['outstanding'], 2) }}</bdi> {{ $currencySymbol }}</span>
                             <span class="{{ $bucketBadge($purchase['bucket']) }}">{{ $purchase['bucket'] }}</span>
                         </div>
                     </div>

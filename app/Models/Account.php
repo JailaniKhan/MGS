@@ -55,7 +55,7 @@ class Account extends Model
 
     public function getCurrencySymbolAttribute(): string
     {
-        return $this->currency === 'USD' ? '$' : 'افغ';
+        return $this->currency === 'USD' ? '$' : 'افغانی';
     }
 
     public function getTypeLabelAttribute(): string

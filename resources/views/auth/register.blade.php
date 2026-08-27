@@ -22,7 +22,7 @@
 
         <div>
             <label for="reg-email" class="form-label">{{ __('messages.email') }}</label>
-            <div class="relative">
+            <div class="relative" dir="ltr">
                 <span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-4 text-ink-400 dark:text-ink-500">
                     <x-icon name="at-symbol" class="w-4 h-4"/>
                 </span>
@@ -36,7 +36,7 @@
             <label for="reg-phone" class="form-label">{{ __('messages.phone') }}
                 <span class="text-[10px] font-semibold uppercase tracking-wide text-ink-400 normal-case">· {{ __('messages.optional') }}</span>
             </label>
-            <div class="relative">
+            <div class="relative" dir="ltr">
                 <span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-4 text-ink-400 dark:text-ink-500">
                     <x-icon name="device-phone-mobile" class="w-4 h-4"/>
                 </span>
@@ -49,7 +49,7 @@
 
         <div>
             <label for="reg-password" class="form-label">{{ __('messages.password') }}</label>
-            <div class="relative">
+            <div class="relative" dir="ltr">
                 <span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-4 text-ink-400 dark:text-ink-500">
                     <x-icon name="key" class="w-4 h-4"/>
                 </span>
@@ -67,7 +67,7 @@
 
         <div>
             <label for="reg-password-confirm" class="form-label">{{ __('messages.password_confirmation') }}</label>
-            <div class="relative">
+            <div class="relative" dir="ltr">
                 <span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-4 text-ink-400 dark:text-ink-500">
                     <x-icon name="shield-check" class="w-4 h-4"/>
                 </span>

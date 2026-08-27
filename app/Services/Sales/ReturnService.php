@@ -43,6 +43,9 @@ class ReturnService
             $total = '0.00';
             $returnItems = [];
             $delta = $spec['stock_delta'];
+            // Stock pools are per currency: an order return restocks the pool the
+            // sale drew from; a purchase return removes from the purchase's pool.
+            $currency = $parent->currency;
 
             foreach ($items as $item) {
                 $product = Product::where('id', $item['product_id'])->lockForUpdate()->firstOrFail();
@@ -57,11 +60,7 @@ class ReturnService
                     'subtotal' => $lineTotal,
                 ];
 
-                if ($delta > 0) {
-                    $product->increment('stock', $item['quantity']);
-                } else {
-                    $product->decrement('stock', $item['quantity']);
-                }
+                $product->moveStock($currency, $delta * (int) $item['quantity']);
             }
 
             $return->items()->createMany($returnItems);
@@ -72,6 +71,7 @@ class ReturnService
                     'user_id' => Auth::id(),
                     'product_id' => $item['product_id'],
                     'quantity_change' => $delta * $item['quantity'],
+                    'currency' => $currency,
                     'movement_type' => $spec['movement_type'],
                     'reference_type' => $spec['reference_type'],
                     'reference_id' => $return->id,
@@ -180,19 +180,19 @@ class ReturnService
         $spec = $this->specForCancel($direction);
 
         DB::transaction(function () use ($return, $spec) {
+            $currency = $return->currency;
+
             foreach ($return->items as $item) {
                 $product = Product::where('id', $item->product_id)->lockForUpdate()->firstOrFail();
 
-                if ($spec['stock_delta'] > 0) {
-                    $product->decrement('stock', $item->quantity);
-                } else {
-                    $product->increment('stock', $item->quantity);
-                }
+                // Undo the original return's pool movement.
+                $product->moveStock($currency, -$spec['stock_delta'] * (int) $item->quantity);
 
                 StockMovement::create([
                     'user_id' => Auth::id(),
                     'product_id' => $item->product_id,
                     'quantity_change' => -$spec['stock_delta'] * $item->quantity,
+                    'currency' => $currency,
                     'movement_type' => $spec['cancelled_movement_type'],
                     'reference_type' => $spec['reference_type'],
                     'reference_id' => $return->id,

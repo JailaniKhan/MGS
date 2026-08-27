@@ -18,11 +18,11 @@
                     </div>
                     <div class="min-w-0">
                         <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ __('messages.order') }} #{{ $orderReturn->order_id }} - {{ $orderReturn->order->party?->name }}</div>
-                        <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $orderReturn->return_date->format('d M Y') }}</div>
+                        <div class="text-[11px] text-ink-500 dark:text-ink-400"><bdi>{{ local_date($orderReturn->return_date, 'd M Y') }}</bdi></div>
                     </div>
                 </div>
                 <div class="text-end flex-shrink-0 ms-3">
-                    <div class="text-sm font-bold text-ink-900 dark:text-ink-100">{{ number_format($orderReturn->total_amount) }} {{ $orderReturn->order->currency === 'USD' ? '$' : __('messages.afn') }}</div>
+                    <div class="text-sm font-bold text-ink-900 dark:text-ink-100"><x-money :amount="$orderReturn->total_amount" :currency="$orderReturn->order->currency" symbol-class="text-[10px] font-medium text-ink-500"/></div>
                     <span class="inline-flex items-center gap-1 badge mt-0.5
                         @if($orderReturn->status === 'completed') badge-success
                         @elseif($orderReturn->status === 'processing') badge-info
@@ -38,12 +38,9 @@
                 </div>
             </a>
         @empty
-            <div class="empty-state">
-                <div class="empty-illustration">
-                    <x-icon name="arrow-uturn-left" class="w-6 h-6 text-ink-400"/>
-                </div>
-                <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_order_returns') }}</p>
-            </div>
+            <x-empty-state title="{{ __('messages.no_order_returns') }}">
+                <x-icon name="arrow-uturn-left" class="w-6 h-6 text-ink-400"/>
+            </x-empty-state>
         @endforelse
     </div>
     @if ($orderReturns->hasPages())

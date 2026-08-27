@@ -104,8 +104,9 @@
                 body: JSON.stringify({ pin })
             });
 
-            const result = await response.json();
-            if (result.success) {
+            let result = {};
+            try { result = await response.json(); } catch (e) {}
+            if (response.ok && result.success) {
                 window.location.href = '{{ route("dashboard") }}';
             } else {
                 const wrap = document.getElementById('pin-display');

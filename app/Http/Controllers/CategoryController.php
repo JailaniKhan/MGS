@@ -30,7 +30,7 @@ class CategoryController extends Controller
 
         Category::create($validated);
 
-        return redirect()->route('categories.index')->with('success', __('messages.category_created'));
+        return redirect()->route('inventory.index')->with('success', __('messages.category_created'));
     }
 
     public function edit(Category $category)
@@ -46,15 +46,15 @@ class CategoryController extends Controller
 
         $category->update($validated);
 
-        return redirect()->route('categories.index')->with('success', __('messages.category_updated'));
+        return redirect()->route('inventory.index')->with('success', __('messages.category_updated'));
     }
 
     public function destroy(Category $category)
     {
         if ($category->products()->count() > 0) {
-            return redirect()->route('categories.index')->with('error', __('messages.category_has_products'));
+            return redirect()->route('inventory.index')->with('error', __('messages.category_has_products'));
         }
         $category->delete();
-        return redirect()->route('categories.index')->with('success', __('messages.category_deleted'));
+        return redirect()->route('inventory.index')->with('success', __('messages.category_deleted'));
     }
 }

@@ -12,19 +12,16 @@
                 <h2 class="page-title leading-tight">{{ __('messages.passbook') }}</h2>
                 <p class="text-[11px] text-ink-500 dark:text-ink-400 truncate">
                     @if($dateFrom || $dateTo)
-                        {{ $dateFrom ? \Carbon\Carbon::parse($dateFrom)->format('d M Y') : '...' }}
+                        <bdi>{{ $dateFrom ? local_date(\Carbon\Carbon::parse($dateFrom), 'd M Y') : '...' }}</bdi>
                         &ndash;
-                        {{ $dateTo ? \Carbon\Carbon::parse($dateTo)->format('d M Y') : '...' }}
+                        <bdi>{{ $dateTo ? local_date(\Carbon\Carbon::parse($dateTo), 'd M Y') : '...' }}</bdi>
                     @else
                         {{ __('messages.all') }}
                     @endif
                 </p>
             </div>
         </div>
-        <a href="{{ route('dashboard') }}" aria-label="{{ __('messages.back') }}"
-           class="w-9 h-9 rounded-xl bg-white dark:bg-[#18191a] border border-ink-100 dark:border-white/[0.06] flex items-center justify-center text-ink-500 dark:text-ink-400 hover:text-ink-700 dark:hover:text-ink-200 hover:border-ink-200 dark:hover:border-white/[0.12] transition-all duration-200 active:scale-95">
-            <x-icon name="arrow-left" class="w-4 h-4" strokeWidth="2"/>
-        </a>
+        <x-back-button href="{{ route('dashboard') }}"/>
     </div>
 
     {{-- Cash summary --}}
@@ -33,24 +30,24 @@
             <div class="min-w-0">
                 <span class="metric-label">{{ __('messages.total_in') }}</span>
                 <div class="metric-value text-primary-600 dark:text-primary-400 mt-1">
-                    {{ number_format((float) $totalIn, 2) }}
+                    <bdi>{{ number_format((float) $totalIn, 2) }}</bdi>
                 </div>
                 <div class="text-[10px] font-semibold text-ink-400 dark:text-ink-500 mt-0.5">
                     {{ __('messages.afn') }}
                     @if($totalInUSD > 0)
-                        <span class="text-primary-500 dark:text-primary-400">+ {{ number_format((float) $totalInUSD, 2) }} USD</span>
+                        <span class="text-primary-500 dark:text-primary-400">+ <bdi>{{ number_format((float) $totalInUSD, 2) }}</bdi> USD</span>
                     @endif
                 </div>
             </div>
             <div class="min-w-0 text-end">
                 <span class="metric-label">{{ __('messages.total_out') }}</span>
                 <div class="metric-value text-danger-500 dark:text-danger-400 mt-1">
-                    {{ number_format((float) $totalOut, 2) }}
+                    <bdi>{{ number_format((float) $totalOut, 2) }}</bdi>
                 </div>
                 <div class="text-[10px] font-semibold text-ink-400 dark:text-ink-500 mt-0.5">
                     {{ __('messages.afn') }}
                     @if($totalOutUSD > 0)
-                        <span class="text-danger-500 dark:text-danger-400">+ {{ number_format((float) $totalOutUSD, 2) }} USD</span>
+                        <span class="text-danger-500 dark:text-danger-400">+ <bdi>{{ number_format((float) $totalOutUSD, 2) }}</bdi> USD</span>
                     @endif
                 </div>
             </div>
@@ -116,7 +113,7 @@
                         <div class="min-w-0">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $txn['description'] }}</div>
                             <div class="text-[11px] text-ink-500 dark:text-ink-400 flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
-                                <span>{{ $txn['date']->format('d M Y') }}</span>
+                                <span><bdi>{{ local_date($txn['date'], 'd M Y') }}</bdi></span>
                                 <span class="text-ink-300 dark:text-white/[0.12]">&middot;</span>
                                 <span class="font-semibold text-ink-400 dark:text-ink-500">{{ $txn['reference'] }}</span>
                                 <span class="chip flex-shrink-0">{{ __('messages.' . $txn['type']) }}</span>
@@ -125,18 +122,15 @@
                     </div>
                     <div class="text-end flex-shrink-0 ms-3">
                         <div class="text-sm font-bold tabular-nums {{ $isIn ? 'text-primary-600 dark:text-primary-400' : 'text-danger-500 dark:text-danger-400' }}">
-                            {{ $isIn ? '+' : '-' }}{{ number_format((float) $txn['amount'], 2) }}
+                            <bdi>{{ $isIn ? '+' : '-' }}{{ number_format((float) $txn['amount'], 2) }}</bdi>
                         </div>
                         <span class="text-[10px] font-semibold text-ink-400">{{ $txn['currency'] }}</span>
                     </div>
                 </div>
             @empty
-                <div class="empty-state">
-                    <div class="empty-illustration">
-                        <x-icon name="book-open" class="w-6 h-6 text-ink-400"/>
-                    </div>
-                    <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_transactions') }}</p>
-                </div>
+                <x-empty-state title="{{ __('messages.no_transactions') }}">
+                    <x-icon name="book-open" class="w-6 h-6 text-ink-400"/>
+                </x-empty-state>
             @endforelse
         </div>
     </div>

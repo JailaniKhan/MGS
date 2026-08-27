@@ -14,14 +14,8 @@
             </div>
         </div>
         <div class="flex items-center gap-2">
-            <a href="{{ route('whatsapp.chats.index') }}" aria-label="{{ __('messages.whatsapp_chats') }}"
-               class="w-9 h-9 rounded-xl bg-white dark:bg-[#18191a] border border-ink-100 dark:border-white/[0.06] flex items-center justify-center text-ink-500 dark:text-ink-400 hover:text-ink-700 dark:hover:text-ink-200 hover:border-ink-200 dark:hover:border-white/[0.12] transition-all duration-200 active:scale-95">
-                <x-icon name="chat-bubble-oval-left-ellipsis" class="w-4 h-4" strokeWidth="1.8"/>
-            </a>
-            <a href="{{ route('settings.index') }}" aria-label="{{ __('messages.back') }}"
-               class="w-9 h-9 rounded-xl bg-white dark:bg-[#18191a] border border-ink-100 dark:border-white/[0.06] flex items-center justify-center text-ink-500 dark:text-ink-400 hover:text-ink-700 dark:hover:text-ink-200 hover:border-ink-200 dark:hover:border-white/[0.12] transition-all duration-200 active:scale-95">
-                <x-icon name="arrow-left" class="w-4 h-4 back-chevron" strokeWidth="2"/>
-            </a>
+            <x-icon-button name="chat-bubble-oval-left-ellipsis" href="{{ route('whatsapp.chats.index') }}" label="{{ __('messages.whatsapp_chats') }}" strokeWidth="1.8"/>
+            <x-icon-button label="{{ __('messages.back') }}" href="{{ route('settings.index') }}"><x-icon name="arrow-left" class="w-4 h-4 back-chevron" strokeWidth="2"/></x-icon-button>
         </div>
     </div>
 
@@ -66,14 +60,14 @@
                     @endif
                 </div>
                 <div class="flex items-center gap-2">
-                    <button id="testSendBtn" type="button" class="btn btn-sm btn-primary">
+                    <button id="testSendBtn" type="button" class="btn-sm btn-primary">
                         <span class="btn-label">{{ __('messages.openwa_test_send') }}</span>
                     </button>
-                    <button id="refreshBtn" type="button" class="btn btn-sm btn-secondary">
+                    <button id="refreshBtn" type="button" class="btn-sm btn-secondary">
                         <x-icon name="arrow-path" class="w-3.5 h-3.5"/>
                         <span class="btn-label">{{ __('messages.refresh') }}</span>
                     </button>
-                    <button id="restartBtn" type="button" class="btn btn-sm btn-danger">
+                    <button id="restartBtn" type="button" class="btn-sm btn-danger">
                         <span class="btn-label">{{ __('messages.openwa_restart') }}</span>
                     </button>
                 </div>
@@ -158,7 +152,7 @@
                 <div class="flex items-center gap-2 w-full max-w-xs">
                     <input id="pairingPhone" type="text" inputmode="numeric" placeholder="93700268836"
                            class="form-input flex-1" dir="ltr">
-                    <button id="pairingBtn" type="button" class="btn btn-primary btn-sm whitespace-nowrap">
+                    <button id="pairingBtn" type="button" class="btn-primary btn-sm whitespace-nowrap">
                         {{ __('messages.openwa_generate_code') }}
                     </button>
                 </div>

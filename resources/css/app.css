@@ -183,14 +183,10 @@ html.dark { color-scheme: dark; }
         box-shadow 0.25s var(--ease-smooth),
         border-color 0.25s var(--ease-smooth),
         transform 0.25s var(--ease-smooth);
-    /* Visible lift on hover so every .card feels interactive */
-    &:hover {
-        box-shadow: var(--shadow-card-hover);
-        transform: translateY(-2px);
-        @apply border-primary-200 dark:border-primary-400/30;
-    }
 }
 
+/* Opt-in interactive lift — add alongside .card only when the whole
+   card is a tappable target (static/info cards must not lift). */
 @utility card-hover {
     &:hover {
         box-shadow: var(--shadow-card-hover);
@@ -218,71 +214,6 @@ html.dark { color-scheme: dark; }
     display: grid;
     gap: 0.75rem;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-}
-
-/* A — MINIMALIST: hairline, flat */
-.card-minimal {
-    background: #fff;
-    border-radius: 1.25rem;
-    border: 1px solid var(--color-ink-100);
-    box-shadow: none;
-    transition:
-        border-color 0.25s var(--ease-smooth),
-        transform 0.25s var(--ease-smooth);
-}
-.card-minimal-hover:hover {
-    border-color: var(--color-primary-200);
-    transform: translateY(-1px);
-}
-
-/* B — GLASS */
-.card-glass-hover:hover {
-    border-color: rgba(255, 255, 255, 0.6);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-card-hover);
-}
-
-/* C — MATERIAL: layered elevation, brand accent bar */
-.card-material {
-    background: #fff;
-    border-radius: 1.25rem;
-    overflow: hidden;
-    position: relative;
-    box-shadow: var(--shadow-card-hover);
-    transition:
-        box-shadow 0.25s var(--ease-smooth),
-        transform 0.25s var(--ease-smooth);
-}
-.card-material::before {
-    content: '';
-    display: block;
-    height: 3px;
-    width: 100%;
-    background: linear-gradient(90deg, var(--color-brand), var(--color-primary-400));
-}
-.card-material-hover:hover {
-    box-shadow:
-        0 18px 40px -12px rgb(20 20 20 / 0.14),
-        0 8px 16px -8px rgb(20 20 20 / 0.08);
-    transform: translateY(-2px);
-}
-
-.dark {
-    .card-minimal {
-        background: #18191a;
-        border-color: rgba(255, 255, 255, 0.06);
-    }
-    .card-minimal-hover:hover {
-        border-color: rgba(70, 191, 124, 0.35);
-    }
-    .card-material {
-        background: #1f2022;
-    }
-    .card-material-hover:hover {
-        box-shadow:
-            0 18px 40px -12px rgb(0 0 0 / 0.5),
-            0 8px 16px -8px rgb(0 0 0 / 0.4);
-    }
 }
 
 /* ============================================
@@ -368,6 +299,18 @@ html.dark { color-scheme: dark; }
     @apply form-input appearance-none cursor-pointer;
 }
 
+/* Number inputs: drop the native up/down spin buttons (WebView + desktop).
+   The inputs sit inside icon-affixed fields; spinners covered the icons. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
 /* Tiny caption for inline/line-item number fields (qty, price, lot). Kept
    below the uppercase form-label on purpose so it reads as a column hint,
    not a form section. */
@@ -399,24 +342,69 @@ html.dark { color-scheme: dark; }
 }
 
 /* ============================================
-   BOTTOM NAVIGATION
+   BOTTOM NAVIGATION (floating capsule)
    ============================================ */
 
-@utility nav-item {
-    @apply flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 text-[10px] font-semibold
-           text-ink-400 dark:text-ink-500 transition-all duration-200 relative;
+@utility bottom-nav {
+    @apply fixed bottom-0 inset-x-0 z-50 px-3 pb-2 pt-0;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
+
+@utility bottom-nav-shell {
+    @apply bg-white/92 dark:bg-[#16181c]/92 backdrop-blur-2xl border border-ink-100/90 dark:border-white/[0.06]
+           rounded-[1.375rem] shadow-nav dark:shadow-nav-dark overflow-visible;
+}
+
+@utility nav-item {
+    @apply relative flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-1.5
+           text-[10px] font-semibold text-ink-400 dark:text-ink-500
+           transition-colors duration-200 select-none;
+}
+
+/* Soft pill that lights up behind the active item */
+.nav-item-bg {
+    position: absolute;
+    inset-inline: 0.25rem;
+    top: 0.25rem;
+    bottom: 0.25rem;
+    border-radius: 0.875rem;
+    background: color-mix(in srgb, var(--color-brand) 0%, transparent);
+    transition: background 0.3s var(--ease-smooth);
+    pointer-events: none;
+}
+.nav-item-active .nav-item-bg {
+    background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+}
+.dark .nav-item-active .nav-item-bg {
+    background: color-mix(in srgb, var(--color-brand) 16%, transparent);
+}
+
+.nav-item-icon { @apply w-[22px] h-[22px] relative transition-transform duration-200; }
+.nav-item-label { @apply relative leading-none truncate max-w-full px-1; }
 
 @utility nav-item-active {
-    @apply text-primary-600 dark:text-primary-400;
+    @apply text-brand;
 }
+.nav-item-active .nav-item-icon {
+    transform: translateY(-1px) scale(1.08);
+    animation: navIconPop 0.4s var(--ease-smooth) both;
+}
+@keyframes navIconPop {
+    0% { transform: translateY(2px) scale(0.9); }
+    60% { transform: translateY(-2px) scale(1.12); }
+    100% { transform: translateY(-1px) scale(1.08); }
+}
+.nav-item-active .nav-item-label { @apply font-bold; }
 
-/* Single sliding active-nav pill (positioned by app.js) */
-@utility nav-pill {
-    @apply absolute bottom-1.5 left-0 h-[3px] w-[24px] rounded-full bg-brand;
-    transition: transform 0.35s var(--ease-smooth), opacity 0.3s var(--ease-smooth);
-    opacity: 0;
-    pointer-events: none;
+/* Center elevated FAB inside the nav */
+@utility fab-anchor {
+    @apply relative flex items-end justify-center flex-shrink-0 w-14 cursor-pointer
+           bg-transparent border-0 p-0 -mt-7 mb-0.5;
+}
+@utility fab-circle {
+    @apply w-[52px] h-[52px] rounded-full brand-grad text-white flex items-center justify-center
+           ring-4 ring-ink-50 dark:ring-[#0b0c0e] active:scale-90 transition-transform duration-200;
+    box-shadow: var(--shadow-fab);
 }
 
 /* ============================================
@@ -530,6 +518,14 @@ html.dark { color-scheme: dark; }
     .list-row > *, .swipe-row > * {
         flex-shrink: 0;
     }
+    /* Money/text list rows: let the leading block truncate instead of
+       scrolling the amounts off-screen. Only rows whose lead block opts
+       into truncation (min-w-0 first child) shrink; swipe rows keep the
+       no-shrink behaviour because their lead blocks don't opt in. */
+    .list-row > .min-w-0:first-child {
+        flex-shrink: 1;
+        min-width: 0;
+    }
 }
 
 /* ============================================
@@ -601,6 +597,14 @@ html.dark { color-scheme: dark; }
     @apply border-danger-400 focus:outline-none focus:ring-2 focus:ring-danger-500/30 focus:border-danger-400;
 }
 
+/* Auto-highlight the field directly preceding an inline validation message
+   (@error <p class="text-danger-500">) — pairs input→its own error only. */
+.form-input:has(+ .text-danger-500),
+textarea.form-input:has(+ .text-danger-500) {
+    @apply border-danger-400;
+    box-shadow: 0 0 0 3px rgb(230 85 85 / 0.1);
+}
+
 /* Emerald brand gradient for FAB / hero accents */
 @utility brand-grad {
     background-image: linear-gradient(135deg, var(--color-brand) 0%, var(--color-primary-400) 100%);
@@ -640,57 +644,67 @@ html.dark { color-scheme: dark; }
     position: fixed;
     inset: 0;
     z-index: 45;
-    background: rgba(11, 12, 14, 0.45);
+    background: rgba(11, 12, 14, 0.5);
+    backdrop-filter: blur(3px);
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.3s var(--ease-smooth), visibility 0.3s var(--ease-smooth);
 }
 .fab-backdrop.open { opacity: 1; visibility: visible; }
 .fab-menu {
-    position: absolute;
-    left: 50%;
-    bottom: 4.5rem;
-    transform: translate(-50%, 0.75rem) scale(0.96);
-    transform-origin: bottom center;
-    width: min(20rem, calc(100vw - 2rem));
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0 0.75rem max(0.75rem, env(safe-area-inset-bottom));
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.28s var(--ease-smooth), transform 0.28s var(--ease-smooth), visibility 0.28s var(--ease-smooth);
-}
-
-/* Mobile: single column FAB menu */
-@media (max-width: 480px) {
-    .fab-menu {
-        grid-template-columns: 1fr;
-        width: calc(100vw - 1.5rem);
-    }
-    .fab-menu-item {
-        flex-direction: row;
-        justify-content: flex-start;
-        text-align: left;
-    }
-    .fab-menu-item span {
-        font-size: 0.75rem;
-    }
+    transform: translateY(1.5rem);
+    transition: opacity 0.32s var(--ease-smooth), transform 0.32s var(--ease-smooth), visibility 0.32s var(--ease-smooth);
+    z-index: 60;
 }
 .fab-menu.open {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-    transform: translate(-50%, 0) scale(1);
+    transform: translateY(0);
+}
+.fab-menu-card {
+    @apply mx-auto w-full max-w-md bg-white dark:bg-[#18191a] border border-ink-100 dark:border-white/[0.06]
+           rounded-[1.5rem] shadow-xl overflow-hidden;
+}
+.fab-menu-head {
+    @apply flex items-center gap-2 px-5 pt-4 pb-1 text-[10px] font-bold uppercase tracking-[0.12em]
+           text-ink-400 dark:text-ink-500;
+}
+.fab-menu-dot {
+    @apply w-1.5 h-1.5 rounded-full bg-brand;
+}
+.fab-menu-grid {
+    @apply grid grid-cols-2 gap-2 p-3;
 }
 .fab-menu-item {
-    @apply flex flex-col items-center justify-center gap-2 p-4 rounded-2xl text-center
-           bg-white dark:bg-[#1e2127] text-ink-700 dark:text-ink-200
-           border border-ink-100 dark:border-white/[0.06]
-           shadow-card transition-all duration-200 active:scale-[0.97];
+    @apply flex items-center gap-3 p-3 rounded-2xl text-start
+           bg-ink-50 dark:bg-white/[0.04] text-ink-700 dark:text-ink-200
+           border border-transparent
+           transition-all duration-200 active:scale-[0.96];
 }
-.fab-menu-item svg { @apply w-6 h-6 text-primary-500 dark:text-primary-400; }
-.fab-menu-item span { @apply text-[10px] font-bold leading-tight; }
+.fab-menu-item .fab-tile {
+    @apply w-10 h-10 rounded-[0.875rem] flex items-center justify-center flex-shrink-0;
+}
+.fab-menu-item .fab-tile svg { @apply w-5 h-5; }
+.fab-menu-item > span:last-child {
+    @apply text-[12px] font-bold leading-tight;
+}
+.fab-menu.open .fab-menu-item {
+    animation: fabItemPop 0.4s var(--ease-smooth) both;
+    animation-delay: calc(0.05s + 0.05s * var(--i));
+}
+@keyframes fabItemPop {
+    from { opacity: 0; transform: translateY(0.75rem) scale(0.95); }
+    to { opacity: 1; transform: none; }
+}
 .fab-toggle { transition: transform 0.35s var(--ease-smooth); }
 .fab-toggle.open { transform: rotate(135deg); }
 
@@ -736,6 +750,9 @@ html.dark { color-scheme: dark; }
     transition: opacity 0.3s var(--ease-smooth), visibility 0.3s var(--ease-smooth);
 }
 .sheet-backdrop.open, .modal-backdrop.open { opacity: 1; visibility: visible; }
+/* Reveal the card inside an open backdrop wrapper (e.g. the global confirm sheet) */
+.sheet-backdrop.open .bottom-sheet { transform: translateY(0); }
+.modal-backdrop.open .modal-card { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 .bottom-sheet {
     position: absolute;
     left: 0;
@@ -809,6 +826,15 @@ html.dark { color-scheme: dark; }
 
 /* Segmented control polish (selected item lift) */
 .segmented-item-active { box-shadow: var(--shadow-card); }
+
+/* Count badge on segmented tab buttons (inventory tabs) */
+.tab-count {
+    @apply inline-flex items-center justify-center min-w-5 h-5 px-1.5 ms-1 rounded-full tabular-nums
+           text-[10px] font-bold bg-ink-200/70 dark:bg-white/10 text-ink-500 dark:text-ink-400;
+}
+.segmented-item-active .tab-count {
+    @apply bg-brand/10 dark:bg-brand/25 text-brand;
+}
 
 /* ---- Swipe-to-action list rows ----
    On pointer devices the actions sit inline to the right (no change).
@@ -951,14 +977,6 @@ html.touch .swipe-actions {
     to { opacity: 0; }
 }
 
-/* ---- Animated badge with glow ---- */
-.badge-glow {
-    animation: badgeGlow 2.5s var(--ease-smooth) infinite;
-}
-@keyframes badgeGlow {
-    50% { box-shadow: 0 0 10px var(--color-primary-400 / 0.25); }
-}
-
 /* ---- Input icon wrapper ---- */
 .input-icon {
     @apply relative;
@@ -1051,25 +1069,8 @@ html.touch .swipe-actions {
 }
 
 /* ---- Bottom nav active indicator enhancements ---- */
-.nav-item-active {
-    position: relative;
-}
-.nav-item-active::before {
-    content: '';
-    position: absolute;
-    top: 0.125rem;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 1.25rem;
-    height: 0.25rem;
-    border-radius: 0 0 0.25rem 0.25rem;
-    @apply bg-primary-500/20;
-    animation: navSlideIn 0.35s var(--ease-smooth) both;
-}
-@keyframes navSlideIn {
-    from { width: 0; opacity: 0; }
-    to { width: 1.25rem; opacity: 1; }
-}
+/* Active state renders a soft brand-tinted pill behind the item
+   (.nav-item-bg), animated in via the navIconPop keyframes above. */
 
 /* ---- Button primary shine (reserved) ---- */
 
@@ -1283,9 +1284,12 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
         padding: 2px;
     }
 
-    /* Better form input sizing on mobile */
+    /* Better form input sizing on mobile. The bare-input branch uses :where()
+       so it stays zero-specificity: without it, the (0,3,1) :not() chain would
+       outrank the .form-input.ps-N / .pe-N affix gutters and push text over
+       the leading/trailing icons. */
     .form-input, .form-select,
-    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"])),
     select, textarea {
         font-size: 16px; /* Prevents zoom on iOS + Android Chrome */
         padding: 0.875rem 1rem;
@@ -1329,11 +1333,7 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
     
     /* Bottom nav improvements */
     .nav-item { @apply py-2; }
-    .nav-item span { @apply text-xs; }
-    
-    /* FAB button larger on mobile */
-    #fab-btn { @apply w-12 h-12; }
-    #fab-btn svg { @apply w-6 h-6; }
+    .nav-item-label { @apply text-[11px]; }
     
     /* Header title smaller on mobile */
     header h1 { @apply text-base; }
@@ -1367,8 +1367,6 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
     .metric-tile { @apply p-3; gap: 1rem; }
     .hero-aurora .text-3xl { font-size: 1.5rem !important; }
     .grid-responsive-3 { gap: 0.625rem; }
-    .fab-menu { width: calc(100vw - 1rem); left: 0.5rem; right: auto; transform: translateX(0) scale(0.97) !important; }
-    .fab-menu.open { transform: translateX(0) scale(1) !important; }
     .bottom-sheet { width: calc(100vw - 0.5rem); left: 0.25rem; right: 0.25rem; }
     header .px-4 { padding-left: 0.75rem; padding-right: 0.75rem; }
 }
@@ -1391,8 +1389,9 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
     .page-header { @apply mb-6; }
     /* Bottom nav expands into a floating capsule constrained to content */
     nav { padding-left: 1rem; padding-right: 1rem; }
-    nav > div { max-width: 34rem; margin-left: auto; margin-right: auto; }
-    .fab-menu { width: 26rem; }
+    .bottom-nav-shell { max-width: 34rem; margin-left: auto; margin-right: auto; }
+    .fab-menu { padding-inline: 1.5rem; }
+    .fab-menu-card { max-width: 26rem; }
     .metric-tile { @apply p-5; }
     .metric-value { font-size: 1.375rem; }
     .chart-container { min-height: 220px; }
@@ -1438,8 +1437,6 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
     main { padding: 0 !important; max-width: none !important; }
     .card { box-shadow: none; border: 1px solid #ddd; }
 }
-/* RTL support for sidebar */
-[dir="rtl"] .sidebar-drawer { left: auto; right: 0; }
 
 /* ============================================
    ADVANCED POLISH — premium finishing pass
@@ -1619,15 +1616,7 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
    swipe rows, input icons, bottom sheet cards, and chevrons
    ============================================ */
 
-[dir="rtl"] .fab-menu {
-    left: auto;
-    right: 50%;
-    transform: translate(50%, 0.75rem) scale(0.96);
-    transform-origin: bottom center;
-}
-[dir="rtl"] .fab-menu.open {
-    transform: translate(50%, 0) scale(1);
-}
+/* FAB menu is a centered fixed sheet — symmetric in both directions */
 
 /* Bottom-sheet handle should be in the same place */
 [dir="rtl"] .bottom-sheet {
@@ -1666,14 +1655,6 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
 [dir="rtl"] .input-icon textarea {
     padding-left: 1rem;
     padding-right: 2.5rem;
-}
-
-/* Metric-tile accent bar flips to right edge (logical props handle it; kept for safety) */
-[dir="rtl"] .metric-tile::before {
-    left: auto;
-    right: 0;
-    border-radius: 0 3px 3px 0;
-    background: color-mix(in srgb, var(--color-brand) 35%, transparent);
 }
 
 /* Card list left-border decorations */
@@ -1729,15 +1710,7 @@ html.touch[dir="rtl"] .swipe-content {
     direction: rtl;
 }
 
-/* FAB icon */
-[dir="rtl"] .fab-menu-item {
-    flex-direction: row-reverse;
-    align-items: center;
-    text-align: right;
-}
-[dir="rtl"] .fab-menu-item span {
-    text-align: right;
-}
+/* FAB menu items use flex gap + text-start, which adapt to RTL automatically */
 
 /* Bottom-sheet */
 [dir="rtl"] .bottom-sheet .sheet-handle {
@@ -1755,17 +1728,14 @@ html.touch[dir="rtl"] .swipe-content {
     flex-direction: row-reverse;
 }
 
-/* badge glow for RTL */
-[dir="rtl"] .badge-glow {
-    animation: badgeGlowRtl 2.5s var(--ease-smooth) infinite;
-}
-@keyframes badgeGlowRtl {
-    50% { box-shadow: 0 0 10px var(--color-primary-400 / 0.25); }
-}
-
 /* Local numbering stays LTR in RTL content */
-[dir="rtl"] .ltr, [dir="rtl"] .tabular-nums {
+[dir="rtl"] .ltr {
     direction: ltr;
+    unicode-bidi: isolate;
+}
+/* Isolate numeric runs from surrounding RTL text WITHOUT forcing LTR base
+   direction — mixed word+number lines (labels, totals) keep natural order. */
+[dir="rtl"] .tabular-nums {
     unicode-bidi: isolate;
 }
 
@@ -1780,17 +1750,35 @@ html.touch[dir="rtl"] .swipe-content {
     .pt-safe { padding-top: max(1rem, env(safe-area-inset-top)); }
 }
 
-/* Focus visible improvements for keyboard navigation */
-:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--color-surface, #fff), 0 0 0 4px var(--color-brand);
-    border-radius: 0.625rem;
+/* Icon-affixed inputs: the mobile refinement resets .form-input padding,
+   pushing the text over the leading/trailing affix. Restore every gutter
+   variant actually used across views (ps-10/11, pe-10..16). Unlayered +
+   higher specificity beats both the base style and the mobile reset. */
+.form-input.ps-10 {
+    padding-inline-start: calc(var(--spacing) * 10);
+}
+.form-input.ps-11 {
+    padding-inline-start: calc(var(--spacing) * 11);
+}
+.form-input.pe-10 {
+    padding-inline-end: calc(var(--spacing) * 10);
+}
+.form-input.pe-11 {
+    padding-inline-end: calc(var(--spacing) * 11);
+}
+.form-input.pe-12 {
+    padding-inline-end: calc(var(--spacing) * 12);
+}
+.form-input.pe-14 {
+    padding-inline-end: calc(var(--spacing) * 14);
+}
+.form-input.pe-16 {
+    padding-inline-end: calc(var(--spacing) * 16);
 }
 
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-        animation-duration: 0.001ms !important;
-        transition-duration: 0.001ms !important;
-    }
+/* Search inputs use a custom clear button — drop the native one */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
 }

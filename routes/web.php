@@ -1,24 +1,37 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AppLockController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\CustomerController;
-use App\Http\Controllers\CategoryController;
-use App\Http\Controllers\ProductController;
-use App\Http\Controllers\OrderController;
-use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\UnitController;
-use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\PurchaseController;
-use App\Http\Controllers\ExpenseController;
-use App\Http\Controllers\OrderReturnController;
-use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\CashbookController;
-use App\Http\Controllers\StaffController;
-use App\Http\Controllers\SalaryController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\LedgerController;
+use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\OrderReturnController;
+use App\Http\Controllers\PassbookController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PeopleController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\PurchaseController;
+use App\Http\Controllers\PurchaseReturnController;
+use App\Http\Controllers\ReminderController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SalaryController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\SpendBreakdownController;
+use App\Http\Controllers\StaffController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\TransactionsController;
+use App\Http\Controllers\UnitController;
+use App\Http\Controllers\WhatsAppChatController;
+use App\Http\Controllers\WhatsAppMessageController;
+use Illuminate\Support\Facades\Route;
 
 // Auth routes (no auth middleware)
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
@@ -38,28 +51,30 @@ Route::get('/reset-password', [PasswordResetController::class, 'showReset'])->na
 Route::post('/reset-password', [PasswordResetController::class, 'reset'])->name('password.update')->middleware('throttle:5,1');
 
 // Language preference must be switchable from the guest auth pages too.
-Route::post('/language', [App\Http\Controllers\SettingsController::class, 'updateLanguage'])->name('language.update');
+// Guests only ever touch their own session (see SettingsController), but the
+// endpoint is still public — keep it throttled against abuse.
+Route::post('/language', [SettingsController::class, 'updateLanguage'])->name('language.update')->middleware('throttle:10,1');
 
 // Protected routes (require authentication)
 Route::middleware('auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
-    Route::get('/settings', [App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
-    Route::post('/settings', [App\Http\Controllers\SettingsController::class, 'update'])->name('settings.update');
-    Route::get('/settings/openwa', [App\Http\Controllers\SettingsController::class, 'openwa'])->name('settings.openwa');
-    Route::get('/settings/openwa/qr', [App\Http\Controllers\SettingsController::class, 'openwaQr'])->name('settings.openwa.qr');
-    Route::post('/settings/openwa/pairing-code', [App\Http\Controllers\SettingsController::class, 'openwaPairingCode'])->name('settings.openwa.pairing');
-    Route::get('/settings/openwa/pairing-status', [App\Http\Controllers\SettingsController::class, 'openwaPairingStatus'])->name('settings.openwa.pairing-status');
-    Route::post('/settings/openwa/test-send', [App\Http\Controllers\SettingsController::class, 'openwaTestSend'])->name('settings.openwa.test');
-    Route::post('/settings/openwa/restart', [App\Http\Controllers\SettingsController::class, 'openwaRestart'])->name('settings.openwa.restart');
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+    Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
+    Route::get('/settings/openwa', [SettingsController::class, 'openwa'])->name('settings.openwa');
+    Route::get('/settings/openwa/qr', [SettingsController::class, 'openwaQr'])->name('settings.openwa.qr');
+    Route::post('/settings/openwa/pairing-code', [SettingsController::class, 'openwaPairingCode'])->name('settings.openwa.pairing');
+    Route::get('/settings/openwa/pairing-status', [SettingsController::class, 'openwaPairingStatus'])->name('settings.openwa.pairing-status');
+    Route::post('/settings/openwa/test-send', [SettingsController::class, 'openwaTestSend'])->name('settings.openwa.test');
+    Route::post('/settings/openwa/restart', [SettingsController::class, 'openwaRestart'])->name('settings.openwa.restart');
 
-    Route::get('/people', [App\Http\Controllers\PeopleController::class, 'index'])->name('people.index');
-    Route::get('/transactions', [App\Http\Controllers\TransactionsController::class, 'index'])->name('transactions.index');
-    Route::get('/inventory', [App\Http\Controllers\InventoryController::class, 'index'])->name('inventory.index');
-    Route::get('/ledger', [App\Http\Controllers\LedgerController::class, 'index'])->name('ledger.index');
-    Route::get('/ledger/{type}/{id}', [App\Http\Controllers\LedgerController::class, 'show'])->name('ledger.show');
-    Route::get('/ledger/{type}/{id}/pdf', [App\Http\Controllers\LedgerController::class, 'downloadPdf'])->name('ledger.pdf');
-    Route::post('/ledger/{type}/{id}/payment', [App\Http\Controllers\LedgerController::class, 'paymentStore'])->name('ledger.payment.store');
+    Route::get('/people', [PeopleController::class, 'index'])->name('people.index');
+    Route::get('/transactions', [TransactionsController::class, 'index'])->name('transactions.index');
+    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::get('/ledger', [LedgerController::class, 'index'])->name('ledger.index');
+    Route::get('/ledger/{type}/{id}', [LedgerController::class, 'show'])->name('ledger.show');
+    Route::get('/ledger/{type}/{id}/pdf', [LedgerController::class, 'downloadPdf'])->name('ledger.pdf');
+    Route::post('/ledger/{type}/{id}/payment', [LedgerController::class, 'paymentStore'])->name('ledger.payment.store');
 
     Route::resource('customers', CustomerController::class);
     Route::resource('categories', CategoryController::class);
@@ -69,7 +84,6 @@ Route::middleware('auth')->group(function () {
     Route::resource('suppliers', SupplierController::class);
     Route::resource('purchases', PurchaseController::class)->except(['edit', 'update']);
     Route::post('/purchases/{purchase}/status/{status}', [PurchaseController::class, 'status'])->name('purchases.status');
-    Route::post('/purchases/payment', [PurchaseController::class, 'paymentStore'])->name('purchases.payment.store');
     Route::get('/purchases/{purchase}/print', [PurchaseController::class, 'print'])->name('purchases.print');
     Route::post('/purchases/{purchase}/send-whatsapp', [PurchaseController::class, 'sendWhatsApp'])->name('purchases.send-whatsapp');
     Route::resource('orders', OrderController::class)->except(['show']);
@@ -78,7 +92,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/orders/{order}/print', [OrderController::class, 'print'])->name('orders.print');
     Route::post('/orders/{order}/send-whatsapp', [OrderController::class, 'sendWhatsApp'])->name('orders.send-whatsapp');
     Route::post('/orders/{order}/status/{status}', [OrderController::class, 'status'])->name('orders.status');
-    Route::get('/orders/product-price/{product}', [OrderController::class, 'getProductPrice'])->name('orders.product-price');
 
     Route::prefix('orders/returns')->name('orders.returns.')->group(function () {
         Route::get('/', [OrderReturnController::class, 'index'])->name('index');
@@ -97,18 +110,20 @@ Route::middleware('auth')->group(function () {
     });
 
     // Reports
-    Route::get('/reports/profit-loss', [App\Http\Controllers\ReportController::class, 'profitLoss'])->name('reports.profit-loss');
-    Route::get('/reports/balance-sheet', [App\Http\Controllers\ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
-    Route::get('/reports/stock', [App\Http\Controllers\ReportController::class, 'stockReport'])->name('reports.stock');
-    Route::get('/reports/daybook', [App\Http\Controllers\ReportController::class, 'daybook'])->name('reports.daybook');
-    Route::get('/reports/aging', [App\Http\Controllers\ReportController::class, 'aging'])->name('reports.aging');
+    Route::get('/reports/profit-loss', [ReportController::class, 'profitLoss'])->name('reports.profit-loss');
+    Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
+    Route::get('/reports/stock', [ReportController::class, 'stockReport'])->name('reports.stock');
+    Route::get('/reports/daybook', [ReportController::class, 'daybook'])->name('reports.daybook');
+    Route::get('/reports/aging', [ReportController::class, 'aging'])->name('reports.aging');
 
     // Payments
     Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
     Route::get('/payments/create', [PaymentController::class, 'create'])->name('payments.create');
     Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
     Route::get('/payments/customers', [PaymentController::class, 'customerPaymentsPage'])->name('payments.customers');
-    Route::get('/payments/order/{order}', [PaymentController::class, 'show'])->name('payments.show');
+    // JSON feed for the customers page — lives on the session-authed web
+    // group because its only consumer is a Blade page (no bearer token).
+    Route::get('/payments-data', [PaymentController::class, 'customerIndex'])->name('payments.data');
     Route::delete('/payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
 
     // Backup
@@ -126,35 +141,40 @@ Route::middleware('auth')->group(function () {
     Route::post('/cashbook/person/{type}/{id}/send-statement', [CashbookController::class, 'sendStatement'])->name('cashbook.send-statement')->where('type', 'customer|supplier');
 
     // Staff
-    Route::resource('staff', StaffController::class);
+    Route::resource('staff', StaffController::class)->parameters(['staff' => 'employee']);
     Route::post('/staff/{employee}/salary', [SalaryController::class, 'store'])->name('staff.salary.store');
 
     // Reminders
-    Route::post('/reminders/customer/{customer}', [App\Http\Controllers\ReminderController::class, 'sendCustomerReminder'])->name('reminders.customer');
-    Route::post('/reminders/supplier/{supplier}', [App\Http\Controllers\ReminderController::class, 'sendSupplierReminder'])->name('reminders.supplier');
-    Route::get('/reminders', [App\Http\Controllers\ReminderController::class, 'history'])->name('reminders.history');
+    Route::post('/reminders/customer/{customer}', [ReminderController::class, 'sendCustomerReminder'])->name('reminders.customer');
+    Route::post('/reminders/supplier/{supplier}', [ReminderController::class, 'sendSupplierReminder'])->name('reminders.supplier');
+    Route::get('/reminders', [ReminderController::class, 'history'])->name('reminders.history');
 
     // WhatsApp chats (reminder messages in a WhatsApp-style UI)
-    Route::get('/whatsapp-chats', [App\Http\Controllers\WhatsAppChatController::class, 'index'])->name('whatsapp.chats.index');
-    Route::get('/whatsapp-chats/{type}/{id}', [App\Http\Controllers\WhatsAppChatController::class, 'show'])->name('whatsapp.chats.show')->where('type', 'customer|supplier');
+    Route::get('/whatsapp-chats', [WhatsAppChatController::class, 'index'])->name('whatsapp.chats.index');
+    Route::get('/whatsapp-chats/{type}/{id}', [WhatsAppChatController::class, 'show'])->name('whatsapp.chats.show')->where('type', 'customer|supplier');
+
+    // Free-form messages (custom text / voice notes) from the chats hub
+    Route::post('/customers/{customer}/message', [WhatsAppMessageController::class, 'storeCustomer'])->name('customers.message');
+    Route::post('/suppliers/{supplier}/message', [WhatsAppMessageController::class, 'storeSupplier'])->name('suppliers.message');
+    Route::get('/whatsapp-media/{reminder}', [WhatsAppMessageController::class, 'media'])->name('whatsapp.chats.media');
 
     // Digital Passbook
-    Route::get('/passbook', [App\Http\Controllers\PassbookController::class, 'index'])->name('passbook.index');
+    Route::get('/passbook', [PassbookController::class, 'index'])->name('passbook.index');
 
     // Spend Breakdown
-    Route::get('/spend-breakdown', [App\Http\Controllers\SpendBreakdownController::class, 'index'])->name('spend-breakdown.index');
+    Route::get('/spend-breakdown', [SpendBreakdownController::class, 'index'])->name('spend-breakdown.index');
 
     // App Lock
-    Route::get('/app-lock', [App\Http\Controllers\AppLockController::class, 'index'])->name('app-lock.index');
-    Route::post('/app-lock/set-pin', [App\Http\Controllers\AppLockController::class, 'setPin'])->name('app-lock.set-pin');
-    Route::delete('/app-lock/remove-pin', [App\Http\Controllers\AppLockController::class, 'removePin'])->name('app-lock.remove-pin');
-    Route::post('/app-lock/toggle-biometric', [App\Http\Controllers\AppLockController::class, 'toggleBiometric'])->name('app-lock.toggle-biometric');
-    Route::post('/app-lock/verify-pin', [App\Http\Controllers\AppLockController::class, 'verifyPin'])->name('app-lock.verify-pin')->middleware('throttle:5,1');
-    Route::get('/lock', [App\Http\Controllers\AppLockController::class, 'lockScreen'])->name('app-lock.lock');
+    Route::get('/app-lock', [AppLockController::class, 'index'])->name('app-lock.index');
+    Route::post('/app-lock/set-pin', [AppLockController::class, 'setPin'])->name('app-lock.set-pin');
+    Route::delete('/app-lock/remove-pin', [AppLockController::class, 'removePin'])->name('app-lock.remove-pin');
+    Route::post('/app-lock/toggle-biometric', [AppLockController::class, 'toggleBiometric'])->name('app-lock.toggle-biometric');
+    Route::post('/app-lock/verify-pin', [AppLockController::class, 'verifyPin'])->name('app-lock.verify-pin')->middleware('throttle:5,1');
+    Route::get('/lock', [AppLockController::class, 'lockScreen'])->name('app-lock.lock');
 
     // Onboarding
-    Route::get('/onboarding', [App\Http\Controllers\OnboardingController::class, 'index'])->name('onboarding.index');
-    Route::post('/onboarding/step1', [App\Http\Controllers\OnboardingController::class, 'storeStep1'])->name('onboarding.step1');
-    Route::post('/onboarding/step2', [App\Http\Controllers\OnboardingController::class, 'storeStep2'])->name('onboarding.step2');
-    Route::post('/onboarding/step3', [App\Http\Controllers\OnboardingController::class, 'storeStep3'])->name('onboarding.step3');
+    Route::get('/onboarding', [OnboardingController::class, 'index'])->name('onboarding.index');
+    Route::post('/onboarding/step1', [OnboardingController::class, 'storeStep1'])->name('onboarding.step1');
+    Route::post('/onboarding/step2', [OnboardingController::class, 'storeStep2'])->name('onboarding.step2');
+    Route::post('/onboarding/step3', [OnboardingController::class, 'storeStep3'])->name('onboarding.step3');
 });

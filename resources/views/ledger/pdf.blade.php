@@ -22,13 +22,13 @@
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            border-bottom: 3px solid #0d9488;
+            border-bottom: 3px solid #0c8c53;
             padding-bottom: 20px;
             margin-bottom: 20px;
         }
         .company-info h1 {
             font-size: 24px;
-            color: #0d9488;
+            color: #0c8c53;
             margin-bottom: 8px;
         }
         .company-info p {
@@ -41,7 +41,7 @@
         }
         .ledger-title h2 {
             font-size: 22px;
-            color: #0d9488;
+            color: #0c8c53;
             margin-bottom: 4px;
         }
         .ledger-title p {
@@ -57,7 +57,7 @@
         }
         .person-section h3 {
             font-size: 14px;
-            color: #0d9488;
+            color: #0c8c53;
             margin-bottom: 10px;
             padding-bottom: 5px;
             border-bottom: 1px solid #e5e7eb;
@@ -84,7 +84,7 @@
         .balance-card {
             flex: 1;
             background: #fff;
-            border: 2px solid #0d9488;
+            border: 2px solid #0c8c53;
             border-radius: 6px;
             padding: 12px 15px;
             display: flex;
@@ -98,7 +98,7 @@
             color: #6b7280;
         }
         .balance-card.closing .balance-value {
-            color: #0d9488;
+            color: #0c8c53;
         }
         .balance-card .balance-label {
             font-size: 13px;
@@ -115,7 +115,7 @@
             margin-bottom: 20px;
         }
         th {
-            background: #0d9488;
+            background: #0c8c53;
             color: #fff;
             padding: 10px 12px;
             font-size: 13px;
@@ -170,7 +170,7 @@
             background: #f3f4f6;
         }
         .summary-table .total-row {
-            background: #0d9488;
+            background: #0c8c53;
             color: #fff;
             font-size: 15px;
         }
@@ -191,7 +191,7 @@
             text-align: center;
         }
         .btn-print {
-            background: #0d9488;
+            background: #0c8c53;
             color: #fff;
             border: none;
             padding: 10px 30px;
@@ -200,7 +200,7 @@
             cursor: pointer;
         }
         .btn-print:hover {
-            background: #0f766e;
+            background: #0a6d44;
         }
         @media print {
             body { padding: 0; }
@@ -283,10 +283,10 @@
                             / {{ number_format($closingBalanceUSD) }}$
                         @endif
                     @elseif($closingBalanceAFN < 0 || $closingBalanceUSD < 0)
-                        {{ number_format(abs($closingBalanceAFN)) }} {{ __('messages.afn') }}
-                        @if($closingBalanceUSD < 0)
-                            / {{ number_format(abs($closingBalanceUSD)) }}$
-                        @endif
+                        {{ __('messages.credit') }}:
+                        @if($closingBalanceAFN < 0){{ number_format(abs($closingBalanceAFN)) }} {{ __('messages.afn') }}@endif
+                        @if($closingBalanceAFN < 0 && $closingBalanceUSD < 0) / @endif
+                        @if($closingBalanceUSD < 0){{ number_format(abs($closingBalanceUSD)) }}$@endif
                     @else
                         {{ __('messages.zero') }}
                     @endif
@@ -295,19 +295,19 @@
         </div>
 
         @if(count($transactions) > 0)
-            <div style="font-size:14px;font-weight:700;color:#0d9488;margin:20px 0 10px 0;padding-bottom:5px;border-bottom:2px dashed #e5e7eb;">
+            <div style="font-size:14px;font-weight:700;color:#0c8c53;margin:20px 0 10px 0;padding-bottom:5px;border-bottom:2px dashed #e5e7eb;">
                 {{ __('messages.account_history') }}
             </div>
             <table>
-                <thead>
+                <th scope="col"ead>
                     <tr>
-                        <th>{{ __('messages.date') }}</th>
-                        <th>{{ __('messages.description') }}</th>
-                        <th>{{ __('messages.reference') }}</th>
-                        <th>{{ __('messages.unit') }}</th>
-                        <th>{{ __('messages.subtotal') }} Dr</th>
-                        <th>Cr</th>
-                        <th>{{ __('messages.balance') }}</th>
+                        <th scope="col">{{ __('messages.date') }}</th>
+                        <th scope="col">{{ __('messages.description') }}</th>
+                        <th scope="col">{{ __('messages.reference') }}</th>
+                        <th scope="col">{{ __('messages.unit') }}</th>
+                        <th scope="col">{{ __('messages.subtotal') }} Dr</th>
+                        <th scope="col">Cr</th>
+                        <th scope="col">{{ __('messages.balance') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -334,7 +334,7 @@
             </div>
         @endif
 
-        <div style="font-size:14px;font-weight:700;color:#0d9488;margin:20px 0 10px 0;padding-bottom:5px;border-bottom:2px dashed #e5e7eb;">
+        <div style="font-size:14px;font-weight:700;color:#0c8c53;margin:20px 0 10px 0;padding-bottom:5px;border-bottom:2px dashed #e5e7eb;">
             {{ __('messages.summary') }}
         </div>
         <div class="summary">
@@ -363,6 +363,16 @@
                     <td>{{ __('messages.pending') }} {{ __('messages.usd') }}</td>
                     <td>{{ number_format($remainingUSD) }}$</td>
                 </tr>
+                @if($creditAFN > 0 || $creditUSD > 0)
+                <tr class="summary-row">
+                    <td>{{ __('messages.credit') }} {{ __('messages.afn') }}</td>
+                    <td>{{ number_format($creditAFN) }} {{ __('messages.afn') }}</td>
+                </tr>
+                <tr class="summary-row">
+                    <td>{{ __('messages.credit') }} {{ __('messages.usd') }}</td>
+                    <td>{{ number_format($creditUSD) }}$</td>
+                </tr>
+                @endif
                 <tr class="total-row">
                     <td>{{ __('messages.paid_short') }} {{ __('messages.afn') }}</td>
                     <td>{{ number_format($totalPaidAFN) }} {{ __('messages.afn') }}</td>

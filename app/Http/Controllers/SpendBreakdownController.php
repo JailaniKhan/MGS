@@ -3,12 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Expense;
+use App\Services\Reporting\UnitProfitService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class SpendBreakdownController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, UnitProfitService $unitProfit)
     {
         $period = $request->get('period', 'month');
         $dateFrom = $request->get('date_from');
@@ -60,9 +61,13 @@ class SpendBreakdownController extends Controller
             ];
         })->sortBy('date')->values();
 
+        // Per-unit profit/loss for sales in the same period (cost = weighted
+        // average purchase price per product per currency, no conversion).
+        $profit = $unitProfit->forPeriod($dateFrom->copy()->startOfDay(), $dateTo);
+
         return view('spend-breakdown.index', compact(
             'byCategory', 'totalAFN', 'totalUSD',
-            'dailyTrend', 'period', 'dateFrom', 'dateTo'
+            'dailyTrend', 'period', 'dateFrom', 'dateTo', 'profit'
         ))->with([
             'dateFromInput' => $anchor->toDateString(),
         ]);

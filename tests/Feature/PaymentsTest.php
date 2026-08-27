@@ -257,6 +257,26 @@ class PaymentsTest extends TestCase
         $this->assertDatabaseCount('purchase_payments', 1);
     }
 
+    public function test_purchase_show_links_to_shared_payment_form(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $supplier = $this->makeSupplier('Purchase Link Supplier');
+        $purchase = $this->makePurchase($supplier, ['total_amount' => '200.00']);
+        PurchasePayment::create(['purchase_id' => $purchase->id, 'amount' => '80.00', 'currency' => 'AFN']);
+
+        $this->get(route('purchases.show', $purchase))
+            ->assertOk()
+            ->assertSee('type=purchase&purchase_id='.$purchase->id, false);
+
+        // A fully paid purchase no longer offers the add-payment entry point.
+        PurchasePayment::create(['purchase_id' => $purchase->id, 'amount' => '120.00', 'currency' => 'AFN']);
+
+        $this->get(route('purchases.show', $purchase))
+            ->assertOk()
+            ->assertDontSee(__('messages.add_payment'));
+    }
+
     public function test_destroy_deletes_a_payment(): void
     {
         $user = User::factory()->create();
@@ -276,5 +296,156 @@ class PaymentsTest extends TestCase
         $this->actingAs($user);
 
         $this->get(route('payments.customers'))->assertOk();
+    }
+
+    public function test_create_renders_searchable_document_picker_with_outstanding_documents(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $customer = $this->makeCustomer('Picker Customer');
+        $order = $this->makeOrder($customer, ['total_amount' => '150.00']);
+
+        $response = $this->get(route('payments.create'))->assertOk();
+
+        $response->assertSee('doc-search');
+        $response->assertSee('doc-dropdown');
+        $response->assertSee('order-id-input');
+        $response->assertSee('purchase-id-input');
+        $response->assertSee('type-input');
+        $response->assertSee('Picker Customer', false);
+    }
+
+    public function test_store_ignores_stale_mismatched_document_id(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $customer = $this->makeCustomer('Stale Id Customer');
+        $order = $this->makeOrder($customer, ['total_amount' => '100.00']);
+
+        $this->from(route('payments.create'))->post(route('payments.store'), [
+            'type' => 'order',
+            'order_id' => $order->id,
+            'purchase_id' => '999999',
+            'amount' => '40.00',
+            'currency' => 'AFN',
+        ])->assertRedirect(route('payments.index'));
+
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->id,
+            'amount' => '40.00',
+            'currency' => 'AFN',
+        ]);
+    }
+
+    public function test_store_rejects_missing_type(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $customer = $this->makeCustomer('No Type Customer');
+        $order = $this->makeOrder($customer, ['total_amount' => '100.00']);
+
+        $this->from(route('payments.create'))->post(route('payments.store'), [
+            'order_id' => $order->id,
+            'amount' => '40.00',
+            'currency' => 'AFN',
+        ])->assertSessionHasErrors('type');
+
+        $this->assertDatabaseCount('payments', 0);
+    }
+
+    public function test_ledger_show_links_to_party_scoped_payment_form(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $customer = $this->makeCustomer('Ledger Link Customer');
+        $this->makeOrder($customer, ['total_amount' => '100.00']);
+
+        $this->get(route('ledger.show', ['customer', $customer->id]))
+            ->assertOk()
+            ->assertSee(route('payments.create', ['party_type' => 'customer', 'party_id' => $customer->id]))
+            // The old inline ledger form is gone — payments go through the shared page.
+            ->assertDontSee(__('messages.record_payment'));
+    }
+
+    public function test_ledger_show_hides_add_payment_when_fully_paid(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $customer = $this->makeCustomer('Ledger Settled Customer');
+        $order = $this->makeOrder($customer, ['total_amount' => '100.00']);
+        Payment::create(['order_id' => $order->id, 'amount' => '100.00', 'currency' => 'AFN']);
+
+        $this->get(route('ledger.show', ['customer', $customer->id]))
+            ->assertOk()
+            ->assertDontSee(__('messages.add_payment'));
+    }
+
+    public function test_create_filters_documents_by_party(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $scoped = $this->makeCustomer('Scoped Customer');
+        $other = $this->makeCustomer('Other Customer');
+        $scopedOrder = $this->makeOrder($scoped, ['total_amount' => '100.00']);
+        $otherOrder = $this->makeOrder($other, ['total_amount' => '50.00']);
+
+        $response = $this->get(route('payments.create', ['party_type' => 'customer', 'party_id' => $scoped->id]))
+            ->assertOk();
+
+        $this->assertSame([$scopedOrder->id], $response->viewData('orders')->pluck('id')->all());
+        $this->assertSame('Scoped Customer', $response->viewData('partyName'));
+        $this->assertSame('customer', $response->viewData('partyType'));
+        $this->assertNotContains($otherOrder->id, $response->viewData('orderPicker')->pluck('id')->all());
+    }
+
+    public function test_create_defaults_to_purchase_when_party_has_only_purchases(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $supplier = $this->makeSupplier('Purchase Only Supplier');
+        $purchase = $this->makePurchase($supplier, ['total_amount' => '200.00']);
+
+        $response = $this->get(route('payments.create', ['party_type' => 'supplier', 'party_id' => $supplier->id]))
+            ->assertOk();
+
+        $this->assertSame('purchase', $response->viewData('selectedType'));
+        $this->assertSame([$purchase->id], $response->viewData('purchases')->pluck('id')->all());
+        $this->assertTrue($response->viewData('orderPicker')->isEmpty());
+    }
+
+    public function test_create_404s_for_another_shops_party(): void
+    {
+        User::factory()->create();
+        $intruder = User::factory()->create();
+        $this->actingAs($intruder);
+
+        $foreign = Customer::create(['name' => 'Foreign Customer']);
+        $foreign->user_id = User::first()->id;
+        $foreign->save();
+
+        $this->get(route('payments.create', ['party_type' => 'customer', 'party_id' => $foreign->id]))
+            ->assertNotFound();
+    }
+
+    public function test_store_returns_to_ledger_when_return_to_is_ledger(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $customer = $this->makeCustomer('Ledger Return Customer');
+        $order = $this->makeOrder($customer, ['total_amount' => '100.00']);
+
+        $this->post(route('payments.store'), [
+            'type' => 'order',
+            'order_id' => $order->id,
+            'amount' => '40.00',
+            'currency' => 'AFN',
+            'return_to' => 'ledger',
+        ])->assertRedirect(route('ledger.show', ['customer', $customer->id]));
+
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->id,
+            'amount' => '40.00',
+            'currency' => 'AFN',
+        ]);
     }
 }

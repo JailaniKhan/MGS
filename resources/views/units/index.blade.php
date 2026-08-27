@@ -37,12 +37,9 @@
                 </div>
             </div>
         @empty
-            <div class="empty-state">
-                <div class="empty-illustration">
-                    <x-icon name="bars-3" class="w-6 h-6 text-ink-400"/>
-                </div>
-                <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_units') }}</p>
-            </div>
+            <x-empty-state title="{{ __('messages.no_units') }}">
+                <x-icon name="bars-3" class="w-6 h-6 text-ink-400"/>
+            </x-empty-state>
         @endforelse
     </div>
     @if ($units->hasPages())

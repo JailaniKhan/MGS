@@ -5,14 +5,24 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\Supplier;
 use App\Models\Order;
+use App\Models\OrderReturn;
 use App\Models\Purchase;
+use App\Models\PurchaseReturn;
 use App\Models\Payment;
 use App\Models\PurchasePayment;
 use App\Models\PartyPayment;
+use App\Models\Setting;
+use App\Services\Billing\PartyBalanceService;
+use App\Services\Billing\PaymentAllocationService;
 use Illuminate\Http\Request;
 
 class LedgerController extends Controller
 {
+    public function __construct(
+        private PartyBalanceService $balances,
+        private PaymentAllocationService $allocator,
+    ) {}
+
     public function index()
     {
         // Build a lightweight people list first, paginate it, then summarize only the page.
@@ -36,6 +46,15 @@ class LedgerController extends Controller
             ->sortBy('name')
             ->values();
 
+        // Shop-wide outstanding totals for the header tiles via the canonical
+        // balance service (same per-doc clamped math as every other page).
+        $totals = $this->balances->outstandingByPartyType();
+
+        $counts = [
+            'customer' => $peopleList->where('type', 'customer')->count(),
+            'supplier' => $peopleList->where('type', 'supplier')->count(),
+        ];
+
         $people = $this->paginateCollection($peopleList);
 
         $people->setCollection(
@@ -44,42 +63,16 @@ class LedgerController extends Controller
             })
         );
 
-        return view('ledger.index', compact('people'));
+        return view('ledger.index', compact('people', 'totals', 'counts'));
     }
 
+    /**
+     * Outstanding balance per party currency, across every document the party
+     * holds — the canonical math shared with orders, wallet and reports.
+     */
     protected function summarizePerson(string $type, int $id): array
     {
-        $orderIds = Order::where('person_type', $type)->where('person_id', $id)->pluck('id');
-        $purchaseIds = Purchase::where('person_type', $type)->where('person_id', $id)->pluck('id');
-
-        $paymentsFromOrdersAFN = Payment::whereIn('order_id', $orderIds)->where('currency', 'AFN')->sum('amount');
-        $paymentsFromOrdersUSD = Payment::whereIn('order_id', $orderIds)->where('currency', 'USD')->sum('amount');
-        $paymentsFromPurchasesAFN = PurchasePayment::whereIn('purchase_id', $purchaseIds)->where('currency', 'AFN')->sum('amount');
-        $paymentsFromPurchasesUSD = PurchasePayment::whereIn('purchase_id', $purchaseIds)->where('currency', 'USD')->sum('amount');
-
-        $ledgerType = $type === 'customer' ? 'payment_received' : 'payment_made';
-        $ledgerPaymentsAFN = PartyPayment::where('person_type', $type)->where('person_id', $id)
-            ->where('currency', 'AFN')->where('type', $ledgerType)->sum('amount');
-        $ledgerPaymentsUSD = PartyPayment::where('person_type', $type)->where('person_id', $id)
-            ->where('currency', 'USD')->where('type', $ledgerType)->sum('amount');
-
-        $paidAFN = $paymentsFromOrdersAFN + $paymentsFromPurchasesAFN + $ledgerPaymentsAFN;
-        $paidUSD = $paymentsFromOrdersUSD + $paymentsFromPurchasesUSD + $ledgerPaymentsUSD;
-
-        $totalAFN = Order::whereIn('id', $orderIds)->where('currency', 'AFN')->sum('total_amount')
-                    + Purchase::whereIn('id', $purchaseIds)->where('currency', 'AFN')->sum('total_amount');
-        $totalUSD = Order::whereIn('id', $orderIds)->where('currency', 'USD')->sum('total_amount')
-                    + Purchase::whereIn('id', $purchaseIds)->where('currency', 'USD')->sum('total_amount');
-
-        return [
-            'total_documents' => $orderIds->count() + $purchaseIds->count(),
-            'total_amount_afn' => $totalAFN,
-            'total_amount_usd' => $totalUSD,
-            'paid_afn' => $paidAFN,
-            'paid_usd' => $paidUSD,
-            'remaining_afn' => max(0, $totalAFN - $paidAFN),
-            'remaining_usd' => max(0, $totalUSD - $paidUSD),
-        ];
+        return $this->balances->partySummary($type, $id);
     }
 
     public function show($type, $id)
@@ -93,43 +86,108 @@ class LedgerController extends Controller
         } else {
             abort(404);
         }
-        $personType = $type;
 
-        $orderIds = Order::where('person_type', $personType)->where('person_id', $id)->pluck('id');
-        $purchaseIds = Purchase::where('person_type', $personType)->where('person_id', $id)->pluck('id');
+        // Reuse the exact summary the index shows, so list and detail agree.
+        $summary = $this->summarizePerson($type, (int) $id);
 
-        $paymentsFromOrdersAFN = Payment::whereIn('order_id', $orderIds)->where('currency', 'AFN')->sum('amount');
-        $paymentsFromOrdersUSD = Payment::whereIn('order_id', $orderIds)->where('currency', 'USD')->sum('amount');
-        $paymentsFromPurchasesAFN = PurchasePayment::whereIn('purchase_id', $purchaseIds)->where('currency', 'AFN')->sum('amount');
-        $paymentsFromPurchasesUSD = PurchasePayment::whereIn('purchase_id', $purchaseIds)->where('currency', 'USD')->sum('amount');
+        // Full payment history: document-linked payments (allocated) plus any
+        // on-account ledger entries, so the ledger shows the same money that
+        // settled the orders/purchases pages.
+        $entries = $this->paymentHistory($type, (int) $id);
 
-        $ledgerType = $type === 'customer' ? 'payment_received' : 'payment_made';
-        $ledgerPaymentsAFN = PartyPayment::where('person_type', $personType)->where('person_id', $id)
-            ->where('currency', 'AFN')->where('type', $ledgerType)->sum('amount');
-        $ledgerPaymentsUSD = PartyPayment::where('person_type', $personType)->where('person_id', $id)
-            ->where('currency', 'USD')->where('type', $ledgerType)->sum('amount');
-
-        $paidAFN = $paymentsFromOrdersAFN + $paymentsFromPurchasesAFN + $ledgerPaymentsAFN;
-        $paidUSD = $paymentsFromOrdersUSD + $paymentsFromPurchasesUSD + $ledgerPaymentsUSD;
-
-        $totalAFN = Order::whereIn('id', $orderIds)->where('currency', 'AFN')->sum('total_amount')
-                    + Purchase::whereIn('id', $purchaseIds)->where('currency', 'AFN')->sum('total_amount');
-        $totalUSD = Order::whereIn('id', $orderIds)->where('currency', 'USD')->sum('total_amount')
-                    + Purchase::whereIn('id', $purchaseIds)->where('currency', 'USD')->sum('total_amount');
-
-        $entries = PartyPayment::where('person_type', $personType)
-            ->where('person_id', $id)
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        return view('ledger.show', compact(
-            'person', 'personType', 'personLabel',
-            'totalAFN', 'totalUSD',
-            'paidAFN', 'paidUSD',
-            'entries'
-        ));
+        return view('ledger.show', [
+            'person' => $person,
+            'personType' => $type,
+            'personLabel' => $personLabel,
+            'summary' => $summary,
+            'entries' => $entries,
+        ]);
     }
 
+    /**
+     * Merged, newest-first payment history for one party across orders,
+     * purchases, returns and on-account ledger entries. Returns credit the
+     * party the same direction a payment does, so they carry the same entry
+     * type with a 'return' kind for distinct rendering.
+     */
+    protected function paymentHistory(string $type, int $id): array
+    {
+        $entries = [];
+        $entryType = $type === 'customer' ? 'payment_received' : 'payment_made';
+
+        $orderIds = Order::where('person_type', $type)->where('person_id', $id)
+            ->where('status', '!=', 'cancelled')->pluck('id');
+        foreach (Payment::whereIn('order_id', $orderIds)->get() as $payment) {
+            $entries[] = (object) [
+                'type' => $entryType,
+                'kind' => 'payment',
+                'amount' => (string) $payment->amount,
+                'currency' => $payment->currency,
+                'label' => __('messages.order').' #'.$payment->order_id,
+                'notes' => $payment->notes,
+                'created_at' => $payment->created_at,
+            ];
+        }
+        foreach (OrderReturn::whereIn('order_id', $orderIds)->where('status', '!=', 'cancelled')->get() as $return) {
+            $entries[] = (object) [
+                'type' => $entryType,
+                'kind' => 'return',
+                'amount' => (string) $return->total_amount,
+                'currency' => $return->currency,
+                'label' => __('messages.returned').' — '.__('messages.order').' #'.$return->order_id,
+                'notes' => $return->reason,
+                'created_at' => $return->created_at,
+            ];
+        }
+
+        $purchaseIds = Purchase::where('person_type', $type)->where('person_id', $id)
+            ->where('status', '!=', 'cancelled')->pluck('id');
+        foreach (PurchasePayment::whereIn('purchase_id', $purchaseIds)->get() as $payment) {
+            $entries[] = (object) [
+                'type' => $entryType,
+                'kind' => 'payment',
+                'amount' => (string) $payment->amount,
+                'currency' => $payment->currency,
+                'label' => __('messages.purchase').' #'.$payment->purchase_id,
+                'notes' => $payment->notes,
+                'created_at' => $payment->created_at,
+            ];
+        }
+        foreach (PurchaseReturn::whereIn('purchase_id', $purchaseIds)->where('status', '!=', 'cancelled')->get() as $return) {
+            $entries[] = (object) [
+                'type' => $entryType,
+                'kind' => 'return',
+                'amount' => (string) $return->total_amount,
+                'currency' => $return->currency,
+                'label' => __('messages.returned').' — '.__('messages.purchase').' #'.$return->purchase_id,
+                'notes' => $return->reason,
+                'created_at' => $return->created_at,
+            ];
+        }
+
+        foreach (PartyPayment::where('person_type', $type)->where('person_id', $id)->get() as $entry) {
+            $entries[] = (object) [
+                'type' => $entry->type,
+                'kind' => 'payment',
+                'amount' => (string) $entry->amount,
+                'currency' => $entry->currency,
+                'label' => __('messages.ledger_close'),
+                'notes' => $entry->notes,
+                'created_at' => $entry->created_at,
+            ];
+        }
+
+        usort($entries, fn ($a, $b) => $b->created_at <=> $a->created_at);
+
+        return $entries;
+    }
+
+    /**
+     * Record a payment from the ledger page. The amount is allocated onto the
+     * party's open documents (oldest first, same currency) so every page —
+     * orders, purchases, wallet, dashboard — sees the money settle the same
+     * documents. Anything that cannot be allocated stays on account.
+     */
     public function paymentStore(Request $request, $type, $id)
     {
         $validated = $request->validate([
@@ -138,23 +196,20 @@ class LedgerController extends Controller
             'notes' => 'nullable|string|max:500',
         ]);
 
+        if (! in_array($type, ['customer', 'supplier'], true)) {
+            abort(404);
+        }
+
+        // findOrFail() runs through the BelongsToUser global scope, so a party
+        // belonging to another shop 404s instead of accepting the payment.
         $person = $type === 'customer'
             ? Customer::findOrFail($id)
             : Supplier::findOrFail($id);
 
-        $entryType = $type === 'customer' ? 'payment_received' : 'payment_made';
-
-        PartyPayment::create([
-            'person_type' => $type === 'customer' ? 'customer' : 'supplier',
-            'person_id' => $id,
-            'amount' => $validated['amount'],
-            'currency' => $validated['currency'],
-            'type' => $entryType,
-            'notes' => $validated['notes'],
-        ]);
+        $this->allocator->allocate($type, $person->id, (string) $validated['amount'], $validated['currency'], $validated['notes'] ?? null);
 
         $personLabel = $type === 'customer' ? __('messages.customer') : __('messages.supplier');
-        return redirect()->route('ledger.show', [$type, $id])
+        return redirect()->route('ledger.show', [$type, $person->id])
             ->with('success', __('messages.payment_created_for') . ' ' . $personLabel . '!');
     }
 
@@ -174,15 +229,28 @@ class LedgerController extends Controller
             abort(404);
         }
 
+        $personSide = $type === 'customer' ? 'payment_received' : 'payment_made';
         $orders = Order::with('payments')
             ->where('person_type', $personType)
             ->where('person_id', $id)
+            ->where('status', '!=', 'cancelled')
             ->orderBy('created_at', 'asc')
             ->get();
 
         $purchases = Purchase::with('purchasePayments')
             ->where('person_type', $personType)
             ->where('person_id', $id)
+            ->where('status', '!=', 'cancelled')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        $orderReturns = OrderReturn::whereIn('order_id', $orders->pluck('id'))
+            ->where('status', '!=', 'cancelled')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        $purchaseReturns = PurchaseReturn::whereIn('purchase_id', $purchases->pluck('id'))
+            ->where('status', '!=', 'cancelled')
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -191,10 +259,16 @@ class LedgerController extends Controller
             ->orderBy('created_at', 'asc')
             ->get();
 
-        $totalOrdersAFN = $orders->where('currency', 'AFN')->sum('total_amount')
-                        + $purchases->where('currency', 'AFN')->sum('total_amount');
-        $totalOrdersUSD = $orders->where('currency', 'USD')->sum('total_amount')
-                        + $purchases->where('currency', 'USD')->sum('total_amount');
+        // Canonical totals so the PDF summary agrees with the ledger screen.
+        $summary = $this->balances->partySummary($personType, (int) $id);
+        $totalOrdersAFN = (float) $summary['total_amount_afn'];
+        $totalOrdersUSD = (float) $summary['total_amount_usd'];
+        $totalReturnedAFN = (float) $summary['returned_afn'];
+        $totalReturnedUSD = (float) $summary['returned_usd'];
+        $totalPaidAFN = (float) $summary['paid_afn'];
+        $totalPaidUSD = (float) $summary['paid_usd'];
+        $remainingAFN = (float) $summary['remaining_afn'];
+        $remainingUSD = (float) $summary['remaining_usd'];
 
         $transactions = [];
 
@@ -202,23 +276,19 @@ class LedgerController extends Controller
             $transactions[] = [
                 'date' => $order->created_at,
                 'description' => __('messages.order') . ' #' . $order->id,
-                'type' => 'order',
                 'ref' => 'ORD-' . $order->id,
-                'amount' => $order->total_amount,
+                'amount' => (float) $order->total_amount,
                 'currency' => $order->currency,
-                'balance' => 0,
                 'is_positive' => true,
             ];
 
             foreach ($order->payments as $payment) {
                 $transactions[] = [
                     'date' => $payment->created_at,
-                    'description' => __('messages.order_of') . ' #' . $order->id,
-                    'type' => 'payment',
+                    'description' => __('messages.paid_short') . ' — ' . __('messages.order') . ' #' . $order->id,
                     'ref' => 'PAY-' . $payment->id,
-                    'amount' => $payment->amount,
+                    'amount' => (float) $payment->amount,
                     'currency' => $payment->currency,
-                    'balance' => 0,
                     'is_positive' => false,
                 ];
             }
@@ -228,64 +298,71 @@ class LedgerController extends Controller
             $transactions[] = [
                 'date' => $purchase->created_at,
                 'description' => __('messages.purchase') . ' #' . $purchase->id,
-                'type' => 'purchase',
                 'ref' => 'PUR-' . $purchase->id,
-                'amount' => $purchase->total_amount,
+                'amount' => (float) $purchase->total_amount,
                 'currency' => $purchase->currency,
-                'balance' => 0,
                 'is_positive' => true,
             ];
 
             foreach ($purchase->purchasePayments as $purchasePayment) {
                 $transactions[] = [
                     'date' => $purchasePayment->created_at,
-                    'description' => __('messages.purchase_of') . ' #' . $purchase->id,
-                    'type' => 'purchase_payment',
+                    'description' => __('messages.paid_short') . ' — ' . __('messages.purchase') . ' #' . $purchase->id,
                     'ref' => 'PPAY-' . $purchasePayment->id,
-                    'amount' => $purchasePayment->amount,
+                    'amount' => (float) $purchasePayment->amount,
                     'currency' => $purchasePayment->currency,
-                    'balance' => 0,
                     'is_positive' => false,
                 ];
             }
         }
 
-        $ledgerSign = $type === 'customer' ? 'payment_made' : 'payment_received';
+        // Returns credit the party (reduce what is owed on that document).
+        foreach ($orderReturns as $return) {
+            $transactions[] = [
+                'date' => $return->created_at,
+                'description' => __('messages.returned') . ' — ' . __('messages.order') . ' #' . $return->order_id,
+                'ref' => 'RET-' . $return->id,
+                'amount' => (float) $return->total_amount,
+                'currency' => $return->currency,
+                'is_positive' => false,
+            ];
+        }
+        foreach ($purchaseReturns as $return) {
+            $transactions[] = [
+                'date' => $return->created_at,
+                'description' => __('messages.returned') . ' — ' . __('messages.purchase') . ' #' . $return->purchase_id,
+                'ref' => 'PRET-' . $return->id,
+                'amount' => (float) $return->total_amount,
+                'currency' => $return->currency,
+                'is_positive' => false,
+            ];
+        }
+
         foreach ($ledgerEntries as $entry) {
             $description = $entry->notes ?? ($entry->type === 'payment_received' ? __('messages.receipt_amount') : __('messages.paid_short'));
             $transactions[] = [
                 'date' => $entry->created_at,
                 'description' => $description,
-                'type' => 'ledger',
                 'ref' => 'LE-' . $entry->id,
-                'amount' => $entry->amount,
+                'amount' => (float) $entry->amount,
                 'currency' => $entry->currency,
-                'balance' => 0,
-                'is_positive' => $entry->type === $ledgerSign,
+                // A receipt from a customer (payment_made from a supplier) credits
+                // their balance; the opposite direction adds to it.
+                'is_positive' => $entry->type !== $personSide,
             ];
         }
 
-        usort($transactions, function ($a, $b) {
-            return $a['date']->lte($b['date']) ? -1 : 1;
-        });
+        usort($transactions, fn ($a, $b) => $a['date'] <=> $b['date']);
 
-        $balances = ['AFN' => 0, 'USD' => 0];
+        $balances = ['AFN' => 0.0, 'USD' => 0.0];
         foreach ($transactions as &$tx) {
-            $curr = $tx['currency'];
-            $balances[$curr] += $tx['is_positive'] ? $tx['amount'] : -$tx['amount'];
-            $tx['balance'] = $balances[$curr];
+            $balances[$tx['currency']] += $tx['is_positive'] ? $tx['amount'] : -$tx['amount'];
+            $tx['balance'] = $balances[$tx['currency']];
         }
         unset($tx);
 
         $openingBalanceAFN = 0;
         $openingBalanceUSD = 0;
-        $closingBalanceAFN = $balances['AFN'];
-        $closingBalanceUSD = $balances['USD'];
-
-        $totalPaidAFN = max(0, -$balances['AFN']);
-        $totalPaidUSD = max(0, -$balances['USD']);
-        $remainingAFN = max(0, $balances['AFN']);
-        $remainingUSD = max(0, $balances['USD']);
 
         $totalDrAFN = 0;
         $totalCrAFN = 0;
@@ -293,19 +370,18 @@ class LedgerController extends Controller
         $totalCrUSD = 0;
         foreach ($transactions as $tx) {
             if ($tx['currency'] === 'AFN') {
-                if ($tx['is_positive']) {
-                    $totalDrAFN += $tx['amount'];
-                } else {
-                    $totalCrAFN += $tx['amount'];
-                }
+                $tx['is_positive'] ? $totalDrAFN += $tx['amount'] : $totalCrAFN += $tx['amount'];
             } else {
-                if ($tx['is_positive']) {
-                    $totalDrUSD += $tx['amount'];
-                } else {
-                    $totalCrUSD += $tx['amount'];
-                }
+                $tx['is_positive'] ? $totalDrUSD += $tx['amount'] : $totalCrUSD += $tx['amount'];
             }
         }
+
+        // Credit (on-account money beyond what the documents owe) makes the
+        // closing balance negative so it agrees with the running balance.
+        $creditAFN = (float) $summary['credit_afn'];
+        $creditUSD = (float) $summary['credit_usd'];
+        $closingBalanceAFN = $remainingAFN - $creditAFN;
+        $closingBalanceUSD = $remainingUSD - $creditUSD;
 
         $company = [
             'name' => Setting::get('company_name', 'My Business'),
@@ -319,8 +395,10 @@ class LedgerController extends Controller
             'transactions', 'openingBalanceAFN', 'openingBalanceUSD',
             'closingBalanceAFN', 'closingBalanceUSD',
             'totalOrdersAFN', 'totalOrdersUSD',
+            'totalReturnedAFN', 'totalReturnedUSD',
             'totalPaidAFN', 'totalPaidUSD',
             'remainingAFN', 'remainingUSD',
+            'creditAFN', 'creditUSD',
             'totalDrAFN', 'totalCrAFN', 'totalDrUSD', 'totalCrUSD'
         ));
     }

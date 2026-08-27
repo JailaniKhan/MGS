@@ -1,14 +1,13 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\Api\V1\OtpAuthController;
-use App\Http\Controllers\Api\V1\OpenWaWebhookController;
-use App\Http\Controllers\Api\V1\GoogleController;
-use App\Http\Controllers\Api\V1\SyncController;
 use App\Http\Controllers\Api\V1\AccountController;
-use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\GoogleController;
+use App\Http\Controllers\Api\V1\OpenWaWebhookController;
+use App\Http\Controllers\Api\V1\OtpAuthController;
+use App\Http\Controllers\Api\V1\SyncController;
+use App\Http\Controllers\Api\V1\TransactionController;
+use Illuminate\Support\Facades\Route;
 
 // Protected API routes (require Sanctum authentication)
 Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
@@ -26,10 +25,6 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
 
     // Dashboard summary
     Route::get('/dashboard', [DashboardController::class, '__invoke']);
-
-    // Customer payment data (protected)
-    Route::get('/payments-data', [PaymentController::class, 'customerIndex']);
-    Route::get('/payments/customers', [PaymentController::class, 'customerPaymentsPage']);
 });
 
 // OTP Auth (intentionally public — no auth required to request/verify OTP)

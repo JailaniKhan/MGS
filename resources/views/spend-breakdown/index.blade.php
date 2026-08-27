@@ -10,13 +10,10 @@
             </div>
             <div class="min-w-0">
                 <h2 class="text-lg font-bold text-ink-900 dark:text-white leading-tight">{{ __('messages.spend_breakdown') }}</h2>
-                <p class="text-[11px] text-ink-500 dark:text-ink-400 truncate">{{ $dateFrom->format('d M Y') }} &ndash; {{ $dateTo->format('d M Y') }}</p>
+                <p class="text-[11px] text-ink-500 dark:text-ink-400 truncate"><bdi>{{ local_date($dateFrom, 'd M Y') }}</bdi> &ndash; <bdi>{{ local_date($dateTo, 'd M Y') }}</bdi></p>
             </div>
         </div>
-        <a href="{{ route('dashboard') }}" aria-label="{{ __('messages.back') }}"
-           class="w-9 h-9 rounded-xl bg-white dark:bg-[#18191a] border border-ink-100 dark:border-white/[0.06] flex items-center justify-center text-ink-500 dark:text-ink-400 hover:text-ink-700 dark:hover:text-ink-200 hover:border-ink-200 dark:hover:border-white/[0.12] transition-all duration-200 active:scale-95">
-            <x-icon name="arrow-left" class="w-4 h-4" strokeWidth="2"/>
-        </a>
+        <x-back-button href="{{ route('dashboard') }}"/>
     </div>
 
     {{-- Period filter --}}
@@ -84,12 +81,9 @@
                     </div>
                 </div>
             @empty
-                <div class="empty-state">
-                    <div class="empty-illustration">
-                        <x-icon name="banknotes" class="w-6 h-6 text-ink-400"/>
-                    </div>
-                    <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_expenses') }}</p>
-                </div>
+                <x-empty-state title="{{ __('messages.no_expenses') }}">
+                    <x-icon name="banknotes" class="w-6 h-6 text-ink-400"/>
+                </x-empty-state>
             @endforelse
         </div>
     </div>
@@ -106,15 +100,125 @@
             </div>
         </div>
     @endif
+
+    {{-- Sales profit / loss (per-unit, weighted avg purchase cost) --}}
+    @php($plAfn = $profit['totals']['AFN'])
+    @php($plUsd = $profit['totals']['USD'])
+    @php($hasSales = $plAfn['qty'] > 0 || $plUsd['qty'] > 0)
+
+    @if($hasSales)
+        <div class="flex items-center gap-2 mb-3">
+            <div class="w-9 h-9 rounded-[0.875rem] bg-primary-50 dark:bg-primary-900/30 border border-primary-100 dark:border-primary-800/40 flex items-center justify-center flex-shrink-0">
+                <x-icon name="arrow-trending-up" class="w-4 h-4 text-primary-600 dark:text-primary-400" strokeWidth="1.8"/>
+            </div>
+            <h3 class="text-sm font-bold text-ink-900 dark:text-white">{{ __('messages.unit_profit_loss') }}</h3>
+        </div>
+
+        {{-- P/L totals per currency --}}
+        <div class="grid grid-cols-2 gap-2 mb-4">
+            @foreach ([['AFN', $plAfn], ['USD', $plUsd]] as [$cur, $t])
+                @if($t['qty'] > 0)
+                    @php($pos = bccomp($t['profit'], '0', 2) >= 0)
+                    <div class="stat-card">
+                        <span class="metric-label">{{ $pos ? __('messages.profit') : __('messages.loss') }} ({{ __('messages.'.strtolower($cur)) }})</span>
+                        <span class="metric-value {{ $pos ? 'text-primary-600 dark:text-primary-400' : 'text-danger-500' }}">
+                            <x-money :amount="$t['profit']" :currency="$cur" decimals="2" sign="true" symbol-class="text-[10px] font-medium text-ink-400"/>
+                        </span>
+                        <span class="text-[9px] text-ink-400 tabular-nums">
+                            {{ __('messages.revenue') }} <bdi>{{ number_format((float) $t['revenue'], 2) }}</bdi>
+                            &middot; {{ __('messages.cost') }} <bdi>{{ number_format((float) $t['cost'], 2) }}</bdi>
+                        </span>
+                        @if($t['missing_cost_lines'] > 0)
+                            <span class="text-[9px] text-accent-600 dark:text-accent-400">{{ $t['missing_cost_lines'] }} {{ __('messages.no_cost_data') }}</span>
+                        @endif
+                    </div>
+                @endif
+            @endforeach
+        </div>
+
+        {{-- Per product --}}
+        @if($profit['by_product']->isNotEmpty())
+            <div class="card overflow-hidden mb-4">
+                <div class="section-header">
+                    <div class="w-1 h-4 rounded-full bg-primary-400"></div>
+                    <span class="section-header-title">{{ __('messages.per_product') }}</span>
+                </div>
+                <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
+                    @foreach ($profit['by_product'] as $row)
+                        @php($pos = bccomp($row['profit'], '0', 2) >= 0)
+                        <div class="list-row">
+                            <div class="flex items-center gap-3 min-w-0 flex-1">
+                                <div class="w-9 h-9 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center flex-shrink-0">
+                                    <x-icon name="cube" class="w-4 h-4 text-primary-600 dark:text-primary-400"/>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $row['product_name'] }}</div>
+                                    <div class="text-[11px] text-ink-500 dark:text-ink-400 tabular-nums">
+                                        {{ __('messages.qty_sold') }} <bdi>{{ $row['qty'] }}</bdi>
+                                        &middot; {{ __('messages.avg_cost') }} <bdi>{{ number_format((float) $row['avg_cost'], 2) }}</bdi>
+                                        &middot; {{ __('messages.avg_sell') }} <bdi>{{ number_format((float) $row['avg_sell'], 2) }}</bdi>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-end flex-shrink-0 ms-3">
+                                <div class="text-sm font-bold {{ $pos ? 'text-primary-600 dark:text-primary-400' : 'text-danger-500' }}">
+                                    <x-money :amount="$row['profit']" :currency="$row['currency']" decimals="2" sign="true" symbol-class="text-[10px] font-medium text-ink-400"/>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
+        {{-- Per sale --}}
+        @if($profit['sale_lines']->isNotEmpty())
+            <div class="card overflow-hidden mb-4">
+                <div class="section-header">
+                    <div class="w-1 h-4 rounded-full bg-primary-400"></div>
+                    <span class="section-header-title">{{ __('messages.per_sale') }}</span>
+                </div>
+                <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
+                    @foreach ($profit['sale_lines'] as $line)
+                        <a href="{{ route('orders.show', $line['order_id']) }}" class="list-row">
+                            <div class="flex items-center gap-3 min-w-0 flex-1">
+                                <div class="w-9 h-9 rounded-xl bg-brand/10 dark:bg-brand/20 text-brand flex items-center justify-center flex-shrink-0">
+                                    <span class="font-bold text-xs tabular-nums">#{{ $line['order_id'] }}</span>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $line['product_name'] }}</div>
+                                    <div class="text-[11px] text-ink-500 dark:text-ink-400">
+                                        <bdi>{{ local_date($line['date'], 'd M') }}</bdi>
+                                        &middot; <span class="tabular-nums">{{ $line['qty'] }}</span> &times; <bdi>{{ number_format((float) $line['sell_unit'], 2) }}</bdi>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-end flex-shrink-0 ms-3">
+                                @if($line['has_cost'])
+                                    @php($pos = bccomp($line['profit'], '0', 2) >= 0)
+                                    <div class="text-sm font-bold {{ $pos ? 'text-primary-600 dark:text-primary-400' : 'text-danger-500' }}">
+                                        <x-money :amount="$line['profit']" :currency="$line['currency']" decimals="2" sign="true" symbol-class="text-[10px] font-medium text-ink-400"/>
+                                    </div>
+                                    <div class="text-[10px] text-ink-400 tabular-nums">{{ __('messages.avg_cost') }} <bdi>{{ number_format((float) $line['cost_unit'], 2) }}</bdi></div>
+                                @else
+                                    <span class="badge badge-warning">{{ __('messages.no_cost_data') }}</span>
+                                @endif
+                            </div>
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+    @endif
 </div>
 
 @push('scripts')
 @vite('resources/js/charts.js')
 <script>
-(async function () {
-    let tries = 0;
-    while (!window.Chart && tries < 100) { await new Promise(r => setTimeout(r, 50)); tries++; }
-    if (!window.Chart) return;
+document.addEventListener('DOMContentLoaded', function () {
+MGSCharts.ready(function (Chart) {
+    const C = MGSCharts.colors;
+    MGSCharts.applyDefaults();
     @if($dailyTrend->count() > 0)
     const ctx = document.getElementById('dailyTrendChart').getContext('2d');
     new Chart(ctx, {
@@ -125,33 +229,26 @@
                 {
                     label: '{{ __('messages.afn') }}',
                     data: @json($dailyTrend->pluck('afn')->values()),
-                    backgroundColor: 'rgba(239, 68, 68, 0.5)',
-                    borderColor: '#ef4444',
+                    backgroundColor: MGSCharts.alpha(C.danger, 0.5),
+                    borderColor: C.danger,
                     borderWidth: 0,
                     borderRadius: 4
                 },
                 {
                     label: '{{ __('messages.usd') }}',
                     data: @json($dailyTrend->pluck('usd')->values()),
-                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                    borderColor: '#3b82f6',
+                    backgroundColor: MGSCharts.alpha(C.secondary, 0.5),
+                    borderColor: C.secondary,
                     borderWidth: 0,
                     borderRadius: 4
                 }
             ]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: true, labels: { font: { size: 9 } } } },
-            scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 9 } } },
-                x: { grid: { display: false }, ticks: { font: { size: 9 } } }
-            }
-        }
+        options: MGSCharts.baseOptions({ legend: true })
     });
     @endif
-})();
+    });
+});
 </script>
 @endpush
 @endsection

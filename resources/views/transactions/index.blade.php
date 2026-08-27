@@ -31,11 +31,11 @@
                         </div>
                         <div class="min-w-0">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $order->party?->name }}</div>
-                            <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $order->created_at->format('d M, H:i') }}</div>
+                            <div class="text-[11px] text-ink-500 dark:text-ink-400"><bdi>{{ local_date($order->created_at) }}</bdi></div>
                         </div>
                     </div>
                     <div class="text-end flex-shrink-0 ms-3">
-                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100">{{ number_format($order->total_amount) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</div>
+                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100"><x-money :amount="$order->total_amount" :currency="$order->currency" symbol-class="text-[10px] font-medium text-ink-500"/></div>
                         <span class="inline-flex items-center gap-1 badge mt-0.5
                             @if($order->display_status === 'paid' || $order->display_status === 'completed') badge-success
                             @elseif($order->display_status === 'processing') badge-info
@@ -52,12 +52,9 @@
                     </div>
                 </a>
             @empty
-                <div class="empty-state">
-                    <div class="empty-illustration">
-                        <x-icon name="clipboard-document-list" class="w-6 h-6 text-ink-400"/>
-                    </div>
-                    <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_orders') }}</p>
-                </div>
+                <x-empty-state title="{{ __('messages.no_orders') }}">
+                    <x-icon name="clipboard-document-list" class="w-6 h-6 text-ink-400"/>
+                </x-empty-state>
             @endforelse
         </div>
         @if ($orders->hasPages())
@@ -82,33 +79,32 @@
                         </div>
                         <div class="min-w-0">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $purchase->party?->name ?? __('messages.unknown') }}</div>
-                            <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $purchase->created_at->format('d M, H:i') }}</div>
+                            <div class="text-[11px] text-ink-500 dark:text-ink-400"><bdi>{{ local_date($purchase->created_at) }}</bdi></div>
                         </div>
                     </div>
                     <div class="text-end flex-shrink-0 ms-3">
-                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100">{{ number_format($purchase->total_amount) }} {{ $purchase->currency === 'USD' ? '$' : __('messages.afn') }}</div>
+                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100"><x-money :amount="$purchase->total_amount" :currency="$purchase->currency" symbol-class="text-[10px] font-medium text-ink-500"/></div>
                         <span class="inline-flex items-center gap-1 badge mt-0.5
                             @if($purchase->display_status === 'paid' || $purchase->display_status === 'completed') badge-success
                             @elseif($purchase->display_status === 'processing') badge-info
                             @elseif($purchase->display_status === 'cancelled') badge-danger
+                            @elseif($purchase->display_status === 'partial') badge-info
                             @else badge-warning @endif">
                             @switch($purchase->display_status)
                                 @case('paid') {{ __('messages.paid') }} @break
                                 @case('completed') {{ __('messages.completed') }} @break
                                 @case('processing') {{ __('messages.processing') }} @break
                                 @case('cancelled') {{ __('messages.cancelled') }} @break
+                                @case('partial') {{ __('messages.partially_paid') }} @break
                                 @default {{ __('messages.pending') }}
                             @endswitch
                         </span>
                     </div>
                 </a>
             @empty
-                <div class="empty-state">
-                    <div class="empty-illustration">
-                        <x-icon name="shopping-bag" class="w-6 h-6 text-ink-400"/>
-                    </div>
-                    <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_purchases') }}</p>
-                </div>
+                <x-empty-state title="{{ __('messages.no_purchases') }}">
+                    <x-icon name="shopping-bag" class="w-6 h-6 text-ink-400"/>
+                </x-empty-state>
             @endforelse
         </div>
         @if ($purchases->hasPages())

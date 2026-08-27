@@ -11,6 +11,7 @@ use App\Models\Purchase;
 use App\Models\PurchasePayment;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PaymentController extends Controller
 {
@@ -175,21 +176,46 @@ class PaymentController extends Controller
             'pay_usd_page'
         );
 
+        // Outstanding totals for the wallet hero summary tiles.
+        $receivablesTotalAFN = $outstandingOrders->where('currency', 'AFN')->sum('remaining');
+        $receivablesTotalUSD = $outstandingOrders->where('currency', 'USD')->sum('remaining');
+        $payablesTotalAFN = $outstandingPurchases->where('currency', 'AFN')->sum('remaining');
+        $payablesTotalUSD = $outstandingPurchases->where('currency', 'USD')->sum('remaining');
+
         return view('payments.index', compact(
             'incomingAFN', 'incomingUSD',
             'outgoingAFN', 'outgoingUSD',
             'balanceAFN', 'balanceUSD',
             'transactions',
             'receivablesAFN', 'receivablesUSD',
-            'payablesAFN', 'payablesUSD'
+            'payablesAFN', 'payablesUSD',
+            'receivablesTotalAFN', 'receivablesTotalUSD',
+            'payablesTotalAFN', 'payablesTotalUSD'
         ));
     }
 
     public function create()
     {
+        // Optional party scope: coming from a ledger page narrows the document
+        // picker to that customer/supplier's open documents. findOrFail() runs
+        // through the BelongsToUser scope, so another shop's party 404s.
+        $partyType = in_array(request('party_type'), ['customer', 'supplier'], true) ? request('party_type') : null;
+        $partyId = null;
+        $partyName = null;
+
+        if ($partyType) {
+            $party = $partyType === 'customer'
+                ? Customer::findOrFail(request('party_id'))
+                : Supplier::findOrFail(request('party_id'));
+
+            $partyId = $party->id;
+            $partyName = $party->name;
+        }
+
         // The party may be a customer OR a supplier, so both must be eager-loaded.
         $orders = Order::with(['customer', 'supplier'])
             ->where('status', '!=', 'cancelled')
+            ->when($partyType, fn ($q) => $q->where('person_type', $partyType)->where('person_id', $partyId))
             ->orderBy('created_at', 'desc')
             ->get();
         $this->attachOrderListBalances($orders);
@@ -200,6 +226,7 @@ class PaymentController extends Controller
         // Purchases too — this page records payments against both orders and purchases.
         $purchases = Purchase::with(['customer', 'supplier'])
             ->where('status', '!=', 'cancelled')
+            ->when($partyType, fn ($q) => $q->where('person_type', $partyType)->where('person_id', $partyId))
             ->orderBy('created_at', 'desc')
             ->get();
         $this->attachPurchaseListBalances($purchases);
@@ -208,65 +235,103 @@ class PaymentController extends Controller
         })->values();
 
         $selectedType = in_array(request('type'), ['order', 'purchase'], true) ? request('type') : 'order';
+        // A party-scoped visit may only hold one document type — default to it.
+        if ($partyType && $orders->isEmpty() && $purchases->isNotEmpty()) {
+            $selectedType = 'purchase';
+        }
         $selectedOrderId = request('order_id');
         $selectedPurchaseId = request('purchase_id');
 
-        return view('payments.create', compact('orders', 'purchases', 'selectedType', 'selectedOrderId', 'selectedPurchaseId'));
+        $orderPicker = $orders->map(fn ($o) => [
+            'id' => $o->id,
+            'party' => $o->party?->name ?? '',
+            'total' => (float) $o->total_amount,
+            'remaining' => (float) $o->remaining,
+            'currency' => $o->currency,
+        ])->values();
+
+        $purchasePicker = $purchases->map(fn ($p) => [
+            'id' => $p->id,
+            'party' => $p->party?->name ?? '',
+            'total' => (float) $p->total_amount,
+            'remaining' => (float) $p->remaining,
+            'currency' => $p->currency,
+        ])->values();
+
+        return view('payments.create', compact('orders', 'purchases', 'selectedType', 'selectedOrderId', 'selectedPurchaseId', 'orderPicker', 'purchasePicker', 'partyType', 'partyId', 'partyName'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'type' => 'required|in:order,purchase',
-            'order_id' => 'required_if:type,order|exists:orders,id',
-            'purchase_id' => 'required_if:type,purchase|exists:purchases,id',
+            'order_id' => 'exclude_unless:type,order|required|exists:orders,id',
+            'purchase_id' => 'exclude_unless:type,purchase|required|exists:purchases,id',
             'amount' => 'required|numeric|min:0.01',
             'currency' => 'required|in:AFN,USD',
             'notes' => 'nullable|string|max:500',
         ]);
 
-        if ($validated['type'] === 'order') {
-            $document = Order::findOrFail($validated['order_id']);
+        $rejected = null;
+        $document = null;
+
+        // The document is read under row lock inside the transaction so two
+        // concurrent payments can't both pass the remaining-balance check
+        // against the same stale number and overpay the document.
+        DB::transaction(function () use ($validated, &$rejected, &$document) {
+            $document = $validated['type'] === 'order'
+                ? Order::whereKey($validated['order_id'])->lockForUpdate()->first()
+                : Purchase::whereKey($validated['purchase_id'])->lockForUpdate()->first();
+
+            if (! $document) {
+                abort(404);
+            }
+
+            if ($validated['currency'] !== $document->currency) {
+                $rejected = __('messages.payment_currency_mismatch');
+
+                return;
+            }
+
             $remaining = $document->remaining_amount;
-        } else {
-            $document = Purchase::findOrFail($validated['purchase_id']);
-            $remaining = $document->remaining_amount;
+
+            if (bccomp((string) $validated['amount'], (string) $remaining, 2) > 0) {
+                $symbol = $document->currency === 'USD' ? '$' : __('messages.afn');
+                $rejected = __('messages.payment_exceeds_balance').' ('.__('messages.pending').': '.number_format($remaining).' '.$symbol.')';
+
+                return;
+            }
+
+            if ($validated['type'] === 'order') {
+                Payment::create([
+                    'order_id' => $document->id,
+                    'amount' => $validated['amount'],
+                    'currency' => $validated['currency'],
+                    'notes' => $validated['notes'] ?? null,
+                ]);
+            } else {
+                PurchasePayment::create([
+                    'purchase_id' => $document->id,
+                    'amount' => $validated['amount'],
+                    'currency' => $validated['currency'],
+                    'notes' => $validated['notes'] ?? null,
+                ]);
+            }
+        });
+
+        if ($rejected !== null) {
+            return back()->with('error', $rejected);
         }
 
-        if ($validated['currency'] !== $document->currency) {
-            return back()->with('error', __('messages.payment_currency_mismatch'));
-        }
-
-        if ($validated['amount'] > $remaining) {
-            $symbol = $document->currency === 'USD' ? '$' : __('messages.afn');
-
-            return back()->with('error', __('messages.payment_exceeds_balance').' ('.__('messages.pending').': '.number_format($remaining).' '.$symbol.')');
-        }
-
-        if ($validated['type'] === 'order') {
-            Payment::create([
-                'order_id' => $document->id,
-                'amount' => $validated['amount'],
-                'currency' => $validated['currency'],
-                'notes' => $validated['notes'] ?? null,
-            ]);
-        } else {
-            PurchasePayment::create([
-                'purchase_id' => $document->id,
-                'amount' => $validated['amount'],
-                'currency' => $validated['currency'],
-                'notes' => $validated['notes'] ?? null,
-            ]);
+        // Ledger pages send the shopper here with return_to=ledger; send them
+        // back to the paid document's party. The party comes from the document
+        // itself, never from the request, so the target can't be tampered with.
+        if ($request->input('return_to') === 'ledger' && $document) {
+            return redirect()->route('ledger.show', [$document->person_type, $document->person_id])
+                ->with('success', __('messages.payment_created'));
         }
 
         return redirect()->route('payments.index')->with('success', __('messages.payment_created'));
-    }
-
-    public function show(Order $order)
-    {
-        $order->load('customer', 'payments');
-
-        return view('payments.show', compact('order'));
     }
 
     public function destroy(Payment $payment)

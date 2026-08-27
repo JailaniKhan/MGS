@@ -1,10 +1,19 @@
 @extends('layouts.app')
 
 @section('content')
-    <a href="{{ route('cashbook.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400 mb-4">
-        <x-icon name="chevron-left" class="w-4 h-4" strokeWidth="1.8"/>
-        {{ __('messages.back_to_cashbook') }}
-    </a>
+    {{-- Header --}}
+    <div class="flex items-center justify-between mb-4 page-enter">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-[0.875rem] bg-primary-500/10 dark:bg-primary-500/15 flex items-center justify-center flex-shrink-0">
+                <x-icon name="wallet" class="w-4 h-4 text-primary-600 dark:text-primary-400" strokeWidth="1.8"/>
+            </div>
+            <div class="min-w-0">
+                <h2 class="text-lg font-bold text-ink-900 dark:text-white leading-tight truncate">{{ __('messages.cashbook') }}</h2>
+                <p class="text-[11px] text-ink-500 dark:text-ink-400 truncate">{{ $person->name }}</p>
+            </div>
+        </div>
+        <x-back-button href="{{ route('cashbook.index') }}"/>
+    </div>
 
     <!-- Profile Hero Card -->
     <div class="card p-4 mb-4 page-enter" style="animation-delay: 0.05s;">
@@ -55,13 +64,13 @@
                 <span class="text-[10px] font-bold tracking-wider text-white/60 uppercase">{{ __('messages.cashbook_net') }}</span>
                 <span class="text-[10px] font-extrabold bg-white/15 text-white px-2 py-0.5 rounded-full">{{ $currency }}</span>
             </div>
-            <div class="text-3xl font-extrabold {{ $total['net'] >= 0 ? 'text-emerald-300' : 'text-red-300' }}">
+            <div class="text-3xl font-extrabold {{ $total['net'] >= 0 ? 'text-primary-200' : 'text-danger-200' }}">
                 {{ $total['net'] >= 0 ? '+' : '-' }}{{ number_format(abs($total['net']), 2) }}
             </div>
             <div class="grid grid-cols-2 gap-3 mt-4">
                 <div class="flex items-center gap-2.5 min-w-0">
                     <div class="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
-                        <x-icon name="arrow-down-circle" class="w-4 h-4 text-emerald-300"/>
+                        <x-icon name="arrow-down-circle" class="w-4 h-4 text-primary-200"/>
                     </div>
                     <div class="min-w-0">
                         <div class="text-[10px] text-white/60 truncate">{{ __('messages.cashbook_in_total') }}</div>
@@ -70,7 +79,7 @@
                 </div>
                 <div class="flex items-center gap-2.5 min-w-0">
                     <div class="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
-                        <x-icon name="arrow-up-circle" class="w-4 h-4 text-red-300"/>
+                        <x-icon name="arrow-up-circle" class="w-4 h-4 text-danger-200"/>
                     </div>
                     <div class="min-w-0">
                         <div class="text-[10px] text-white/60 truncate">{{ __('messages.cashbook_out_total') }}</div>
@@ -83,7 +92,7 @@
                 <span class="text-[10px] font-bold tracking-wider text-white/60 uppercase">{{ __('messages.cashbook_net') }}</span>
                 <span class="text-[10px] font-extrabold bg-white/15 text-white px-2 py-0.5 rounded-full">AFN</span>
             </div>
-            <div class="text-3xl font-extrabold text-emerald-300">0.00</div>
+            <div class="text-3xl font-extrabold text-primary-200">0.00</div>
         @endforelse
     </div>
 
@@ -126,7 +135,7 @@
         foreach ($transactions as $tx) {
             $key = $tx->date->isToday()
                 ? __('messages.today')
-                : ($tx->date->isYesterday() ? __('messages.yesterday') : $tx->date->format('d M Y'));
+                : ($tx->date->isYesterday() ? __('messages.yesterday') : local_date($tx->date, 'd M Y'));
             $groups[$key][] = $tx;
         }
     @endphp
@@ -198,22 +207,16 @@
                     @endforeach
                 </div>
             @empty
-                <div class="empty-state">
-                    <div class="empty-illustration">
-                        <x-icon name="wallet" class="w-6 h-6 text-ink-400"/>
-                    </div>
-                    <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_person_transactions') }}</p>
-                </div>
+                <x-empty-state title="{{ __('messages.no_person_transactions') }}">
+                    <x-icon name="wallet" class="w-6 h-6 text-ink-400"/>
+                </x-empty-state>
             @endforelse
         </div>
     @else
         <div class="card overflow-hidden page-enter" style="animation-delay: 0.1s;">
-            <div class="empty-state">
-                <div class="empty-illustration">
-                    <x-icon name="wallet" class="w-6 h-6 text-ink-400"/>
-                </div>
-                <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_person_transactions') }}</p>
-            </div>
+            <x-empty-state title="{{ __('messages.no_person_transactions') }}">
+                <x-icon name="wallet" class="w-6 h-6 text-ink-400"/>
+            </x-empty-state>
         </div>
     @endif
 @endsection

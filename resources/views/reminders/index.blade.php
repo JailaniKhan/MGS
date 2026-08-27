@@ -30,7 +30,7 @@
                                 </span>
                             </div>
                             <div class="text-xs text-ink-500 dark:text-ink-400 mt-0.5 truncate">{{ $reminder->message }}</div>
-                            <div class="text-[10px] text-ink-400 mt-0.5">{{ $reminder->created_at->format('Y/m/d H:i') }}</div>
+                            <div class="text-[10px] text-ink-400 mt-0.5"><bdi>{{ local_date($reminder->created_at, 'Y/m/d H:i') }}</bdi></div>
                         </div>
                     </div>
                     <div class="text-end flex-shrink-0 ms-3">
@@ -43,12 +43,9 @@
                     </div>
                 </div>
             @empty
-                <div class="empty-state">
-                    <div class="empty-illustration">
-                        <x-icon name="bell" class="w-6 h-6 text-ink-400"/>
-                    </div>
-                    <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_reminders') }}</p>
-                </div>
+                <x-empty-state title="{{ __('messages.no_reminders') }}">
+                    <x-icon name="bell" class="w-6 h-6 text-ink-400"/>
+                </x-empty-state>
             @endforelse
         </div>
 

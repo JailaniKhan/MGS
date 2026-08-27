@@ -4,21 +4,27 @@ namespace App\Http\Controllers;
 
 use App\Models\Setting;
 use App\Services\WhatsApp\OpenWaManager;
+use App\Services\WhatsApp\OpenWaService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 
 class SettingsController extends Controller
 {
     public function index()
     {
+        // Only settings the app actually consumes. `currency` and `language`
+        // were dropped: currency is chosen per-document (nothing reads the
+        // global value) and language is switched live from the sidebar, which
+        // keeps one source of truth for the locale.
         $settings = [
             'company_name' => Setting::get('company_name', 'My Business'),
             'company_address' => Setting::get('company_address', ''),
             'company_phone' => Setting::get('company_phone', ''),
             'company_email' => Setting::get('company_email', ''),
             'invoice_prefix' => Setting::get('invoice_prefix', 'INV-'),
-            'currency' => Setting::get('currency', 'AFN'),
-            'language' => Setting::get('language', 'ps'),
+            'purchase_prefix' => Setting::get('purchase_prefix', 'PUR-'),
+            'usd_to_afn_rate' => Setting::get('usd_to_afn_rate', 80),
+            'min_stock_threshold' => Setting::get('min_stock_threshold', 10),
         ];
 
         return view('settings.index', compact('settings'));
@@ -32,8 +38,9 @@ class SettingsController extends Controller
             'company_phone' => 'nullable|string|max:50',
             'company_email' => 'nullable|email|max:255',
             'invoice_prefix' => 'nullable|string|max:50',
-            'currency' => 'nullable|string|max:3',
-            'language' => 'nullable|string|in:en,ps,fa',
+            'purchase_prefix' => 'nullable|string|max:50',
+            'usd_to_afn_rate' => 'nullable|numeric|min:0.01|max:100000',
+            'min_stock_threshold' => 'nullable|integer|min:0|max:100000',
         ]);
 
         foreach ($validated as $key => $value) {
@@ -49,7 +56,13 @@ class SettingsController extends Controller
             'language' => 'required|string|in:en,ps,fa',
         ]);
 
-        Setting::set('language', $validated['language']);
+        // Guests (login/register screens) may only change their own session —
+        // never the shop-wide setting. Authenticated users persist it.
+        if (! Auth::check()) {
+            session(['locale' => $validated['language']]);
+        } else {
+            Setting::set('language', $validated['language']);
+        }
 
         return redirect()->back()->with('success', __('messages.saved_successfully'));
     }
@@ -59,7 +72,7 @@ class SettingsController extends Controller
      * The QR is fetched on demand from the self-hosted OpenWA gateway so it
      * can be scanned directly inside the app.
      */
-    public function openwa(\App\Services\WhatsApp\OpenWaService $openWa, OpenWaManager $manager)
+    public function openwa(OpenWaService $openWa, OpenWaManager $manager)
     {
         $configured = $openWa->isConfigured();
         ['gatewayRunning' => $gatewayRunning, 'status' => $status, 'qr' => $qr] =
@@ -84,9 +97,9 @@ class SettingsController extends Controller
      *
      * @return array{gateway_running: bool, status: ?array, qr: ?string}
      */
-    protected function resolveOpenwaState(\App\Services\WhatsApp\OpenWaService $openWa, OpenWaManager $manager): array
+    protected function resolveOpenwaState(OpenWaService $openWa, OpenWaManager $manager): array
     {
-        if (!$manager->isRunning()) {
+        if (! $manager->isRunning()) {
             $manager->ensureStarted();
         }
 
@@ -110,7 +123,7 @@ class SettingsController extends Controller
         // gateway reports "qr_ready" slightly before the base64 data URL is
         // ready and keeps a stale QR around after "disconnected", so a
         // strict status check would hide a perfectly scannable QR.
-        $qr = $status && !in_array($state, ['ready', 'connected', 'dead'], true)
+        $qr = $status && ! in_array($state, ['ready', 'connected', 'dead'], true)
             ? $openWa->qrCode()
             : null;
 
@@ -121,9 +134,9 @@ class SettingsController extends Controller
      * AJAX endpoint that returns a fresh QR code + session status as JSON,
      * so the settings page can refresh without a full reload.
      */
-    public function openwaQr(\App\Services\WhatsApp\OpenWaService $openWa, OpenWaManager $manager)
+    public function openwaQr(OpenWaService $openWa, OpenWaManager $manager)
     {
-        if (!$openWa->isConfigured()) {
+        if (! $openWa->isConfigured()) {
             return response()->json(['configured' => false], 200);
         }
 
@@ -153,9 +166,9 @@ class SettingsController extends Controller
      * Generate an 8-character pairing code (alternative to scanning the QR)
      * so the session can be linked by typing the code into WhatsApp.
      */
-    public function openwaPairingCode(Request $request, \App\Services\WhatsApp\OpenWaService $openWa)
+    public function openwaPairingCode(Request $request, OpenWaService $openWa)
     {
-        if (!$openWa->isConfigured()) {
+        if (! $openWa->isConfigured()) {
             return response()->json(['configured' => false], 200);
         }
 
@@ -165,7 +178,7 @@ class SettingsController extends Controller
 
         $pairing = $openWa->requestPairingCode($validated['phone']);
 
-        if (!$pairing || empty($pairing['pairingCode'])) {
+        if (! $pairing || empty($pairing['pairingCode'])) {
             return response()->json(['error' => 'Could not generate pairing code.'], 422);
         }
 
@@ -180,9 +193,9 @@ class SettingsController extends Controller
      * once the code has expired so the page can automatically request a new
      * one without the user noticing a dead code on screen.
      */
-    public function openwaPairingStatus(\App\Services\WhatsApp\OpenWaService $openWa)
+    public function openwaPairingStatus(OpenWaService $openWa)
     {
-        if (!$openWa->isConfigured()) {
+        if (! $openWa->isConfigured()) {
             return response()->json(['configured' => false], 200);
         }
 
@@ -211,17 +224,20 @@ class SettingsController extends Controller
      * Send a test WhatsApp message via the connected OpenWA gateway so the
      * user can verify delivery without running the test suite.
      */
-    public function openwaTestSend(\App\Services\WhatsApp\OpenWaService $openWa, OpenWaManager $manager)
+    public function openwaTestSend(OpenWaService $openWa, OpenWaManager $manager)
     {
-        if (!$openWa->isConfigured()) {
-            return response()->json(['success' => false, 'error' => 'OpenWA is not configured.'], 200);
+        // Errors use real status codes (the UI keys off the success flag, so
+        // the payload shape is unchanged): 503 = gateway unavailable, 422 =
+        // gateway fine but session state can't send, 502 = send rejected.
+        if (! $openWa->isConfigured()) {
+            return response()->json(['success' => false, 'error' => 'OpenWA is not configured.'], 503);
         }
 
-        if (!$manager->isRunning()) {
+        if (! $manager->isRunning()) {
             return response()->json([
                 'success' => false,
                 'error' => __('messages.openwa_unreachable_test') ?? 'OpenWA gateway is not running. Start it first.',
-            ], 200);
+            ], 503);
         }
 
         $status = $openWa->sessionStatus();
@@ -231,29 +247,33 @@ class SettingsController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => __('messages.openwa_unreachable_test') ?? 'OpenWA gateway is not reachable. Start it first.',
-            ], 200);
+            ], 503);
         }
 
         if (($status['status'] ?? null) !== 'ready' && ($status['status'] ?? null) !== 'connected') {
             return response()->json([
                 'success' => false,
-                'error' => 'Session is not connected (state: ' . ($status['status'] ?? 'unknown') . '). Link the device first.',
-            ], 200);
+                'error' => 'Session is not connected (state: '.($status['status'] ?? 'unknown').'). Link the device first.',
+            ], 422);
         }
 
         $phone = $status['phone'] ?? config('services.openwa.test_chat_id');
 
-        if (!$phone) {
-            return response()->json(['success' => false, 'error' => 'No connected phone number found.'], 200);
+        if (! $phone) {
+            return response()->json(['success' => false, 'error' => 'No connected phone number found.'], 422);
         }
 
         $message = __('messages.openwa_test_message', ['time' => now()->format('Y-m-d H:i')]);
 
         $sent = $openWa->send($phone, $message);
 
-        return response()->json([
-            'success' => $sent,
-            'error' => $sent ? null : 'Gateway rejected the message. Check the session and try again.',
-        ]);
+        if (! $sent) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Gateway rejected the message. Check the session and try again.',
+            ], 502);
+        }
+
+        return response()->json(['success' => true, 'error' => null]);
     }
 }

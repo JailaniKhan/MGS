@@ -51,4 +51,37 @@ class WhatsAppService
 
         return false;
     }
+
+    /**
+     * Send text through the OpenWA gateway, surfacing the provider id.
+     *
+     * @return array{ok: bool, id: ?string}
+     */
+    public function openWaSendText(string $phone, string $message): array
+    {
+        if ($this->openWa && $this->openWa->isConfigured()) {
+            return $this->openWa->sendText($phone, $message);
+        }
+
+        Log::info('WhatsApp skipped (not configured)', compact('phone', 'message'));
+
+        return ['ok' => false, 'id' => null];
+    }
+
+    /**
+     * Send a voice note (PTT). Voice requires the self-hosted OpenWA
+     * gateway — the Meta Cloud API path is not implemented for media.
+     *
+     * @return array{ok: bool, id: ?string}
+     */
+    public function sendVoice(string $phone, string $filePath, bool $ptt = true): array
+    {
+        if ($this->openWa && $this->openWa->isConfigured()) {
+            return $this->openWa->sendVoice($phone, $filePath, $ptt);
+        }
+
+        Log::info('WhatsApp voice skipped (not configured)', compact('phone', 'filePath'));
+
+        return ['ok' => false, 'id' => null];
+    }
 }

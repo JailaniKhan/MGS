@@ -25,6 +25,11 @@
                     </div>
                 </div>
                 <div class="swipe-actions">
+                    @if ($supplier->phone)
+                        <a href="{{ route('whatsapp.chats.show', ['supplier', $supplier->id]) }}" class="act-edit !bg-brand" aria-label="{{ __('messages.wa_open_chat') }}">
+                            <x-icon name="chat-bubble-left-right" class="w-4 h-4"/>
+                        </a>
+                    @endif
                     <a href="{{ route('suppliers.edit', $supplier) }}" class="act-edit" aria-label="{{ __('messages.edit') }}">
                         <x-icon name="pencil-square" class="w-4 h-4"/>
                     </a>
@@ -37,12 +42,9 @@
                 </div>
             </div>
         @empty
-            <div class="empty-state">
-                <div class="empty-illustration">
-                    <x-icon name="shopping-bag" class="w-6 h-6 text-ink-400"/>
-                </div>
-                <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_suppliers') }}</p>
-            </div>
+            <x-empty-state title="{{ __('messages.no_suppliers') }}">
+                <x-icon name="shopping-bag" class="w-6 h-6 text-ink-400"/>
+            </x-empty-state>
         @endforelse
     </div>
     @if ($suppliers->hasPages())

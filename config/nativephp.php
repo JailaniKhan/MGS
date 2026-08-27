@@ -241,6 +241,59 @@ return [
         '.phpunit.result.cache',
         '.opencode',
         'tests',
+        // Local tooling/IDE state — never needed on-device.
+        '.repowise',
+        '.claude',
+        '.vscode',
+        // mPDF ships ~66MB of world-script fonts; this app only renders
+        // Latin (DejaVu/Free*) + Arabic (XB Riyaz) via BackupPdfService,
+        // so the unused-script fonts are excluded from the bundle.
+        'vendor/mpdf/mpdf/ttfonts/Sun-ExtA.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Sun-ExtB.ttf',
+        'vendor/mpdf/mpdf/ttfonts/UnBatang_0613.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Aegyptus.otf',
+        'vendor/mpdf/mpdf/ttfonts/Jomolhari.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Aegean.otf',
+        'vendor/mpdf/mpdf/ttfonts/Akkadian.otf',
+        'vendor/mpdf/mpdf/ttfonts/Quivira.otf',
+        'vendor/mpdf/mpdf/ttfonts/damase_v.2.ttf',
+        'vendor/mpdf/mpdf/ttfonts/AboriginalSansREGULAR.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Padauk-book.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Tharlon-Regular.ttf',
+        'vendor/mpdf/mpdf/ttfonts/ZawgyiOne.ttf',
+        'vendor/mpdf/mpdf/ttfonts/KhmerOS.ttf',
+        'vendor/mpdf/mpdf/ttfonts/lannaalif-v1-03.ttf',
+        'vendor/mpdf/mpdf/ttfonts/kaputaunicode.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Lohit-Kannada.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Pothana2000.ttf',
+        'vendor/mpdf/mpdf/ttfonts/TaiHeritagePro.ttf',
+        'vendor/mpdf/mpdf/ttfonts/LateefRegOT.ttf',
+        'vendor/mpdf/mpdf/ttfonts/SyrCOMEdessa.otf',
+        'vendor/mpdf/mpdf/ttfonts/TaameyDavidCLM-Medium.ttf',
+        'vendor/mpdf/mpdf/ttfonts/SundaneseUnicode-1.0.5.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Eeyek-Regular.ttf',
+        'vendor/mpdf/mpdf/ttfonts/ocrb10.ttf',
+        'vendor/mpdf/mpdf/ttfonts/DBSILBR.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Dhyana-Regular.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Dhyana-Bold.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Garuda.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Garuda-Bold.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Garuda-Oblique.ttf',
+        'vendor/mpdf/mpdf/ttfonts/Garuda-BoldOblique.ttf',
+        'vendor/mpdf/mpdf/ttfonts/ayar.ttf',
+        // Node module dev junk inside the on-device OpenWA gateway bundle.
+        // Unanchored names (no root-level dir of that name) so the 7-Zip
+        // converter emits an any-depth pattern; all of these are safe to
+        // drop from vendor packages as well.
+        '.github',
+        'test',
+        'coverage',
+        'docsify',
+        'benchmarks',
+        'fixtures',
+        '.husky',
+        '*.d.ts',
+        '*.js.map',
     ],
 
     /*
@@ -337,13 +390,15 @@ return [
         |
         */
         'build' => [
-            // R8/ProGuard Configuration - currently disabled
+            // R8/ProGuard Configuration — enabled via .env for release builds
             'minify_enabled' => env('NATIVEPHP_ANDROID_MINIFY_ENABLED', false),
             'shrink_resources' => env('NATIVEPHP_ANDROID_SHRINK_RESOURCES', false),
             'obfuscate' => env('NATIVEPHP_ANDROID_OBFUSCATE', false),
 
-            // Debug Symbol Configuration - currently enabled
-            'debug_symbols' => env('NATIVEPHP_ANDROID_DEBUG_SYMBOLS', 'FULL'),
+            // Debug Symbol Configuration - release ships NONE (they occupied
+            // ~20MB of the previous APK; upload .aab native debug symbols
+            // separately if Play requires them).
+            'debug_symbols' => env('NATIVEPHP_ANDROID_DEBUG_SYMBOLS', 'NONE'),
             'generate_mapping_files' => env('NATIVEPHP_ANDROID_MAPPING_FILES', false),
             'mapping_file_path' => env('NATIVEPHP_ANDROID_MAPPING_PATH', 'build/outputs/mapping/release/'),
 

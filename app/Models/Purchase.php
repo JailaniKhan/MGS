@@ -97,11 +97,21 @@ class Purchase extends Model
             return 'paid';
         }
 
-        return $this->status;
+        if ($this->status === 'processing') {
+            return 'processing';
+        }
+
+        // Payment-aware: a purchase that still owes money must never read as
+        // "completed" — show whether anything has been settled yet.
+        if (bccomp($this->paid_amount, '0', 2) > 0) {
+            return 'partial';
+        }
+
+        return 'pending';
     }
 
     public function getCurrencySymbolAttribute()
     {
-        return $this->currency === 'USD' ? '$' : 'افغ';
+        return $this->currency === 'USD' ? '$' : 'افغانی';
     }
 }

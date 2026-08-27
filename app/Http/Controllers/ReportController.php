@@ -17,6 +17,7 @@ use App\Models\SalaryPayment;
 use App\Models\Setting;
 use App\Models\Supplier;
 use App\Services\Accounting\BalanceService;
+use App\Services\Reporting\UnitProfitService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,6 +27,7 @@ class ReportController extends Controller
 {
     public function __construct(
         private BalanceService $balanceService,
+        private UnitProfitService $unitProfit,
     ) {}
 
     public function profitLoss(Request $request)
@@ -59,19 +61,15 @@ class ReportController extends Controller
             ->sum('total_amount');
         $totalRevenue = bcsub((string) $totalRevenue, (string) $orderReturns, 2);
 
-        // Cost of Goods Sold: cost of inventory actually purchased (net of purchase returns).
-        // (Proper per-unit COGS tracking is a future enhancement; this uses purchased cost
-        // which is the standard simplification when no sales-level cost is recorded.)
-        $purchasesCost = Purchase::where('status', '!=', 'cancelled')
-            ->where('currency', $currency)
-            ->whereBetween('created_at', [$startDateTime, $endDateTime])
-            ->sum('total_amount');
-        $purchaseReturns = PurchaseReturn::where('status', '!=', 'cancelled')
-            ->where('currency', $currency)
-            ->where('return_date', '>=', $startDateTime->toDateString())
-            ->where('return_date', '<', $toExclusive)
-            ->sum('total_amount');
-        $totalCOGS = bcsub((string) $purchasesCost, (string) $purchaseReturns, 2);
+        // True per-unit margin: cost of goods SOLD = weighted average purchase
+        // price per product per currency × sold quantity (not purchases made in
+        // the period — stock bought but unsold stays out of this P&L).
+        // Purchase returns do NOT adjust the cost basis; sales without any
+        // matching purchase in this currency count revenue at zero cost and are
+        // surfaced to the view as missing_cost_lines.
+        $unitProfitData = $this->unitProfit->forPeriod($startDateTime, $endDateTime, 50, $currency);
+        $unitTotals = $unitProfitData['totals'][$currency];
+        $totalCOGS = $unitTotals['cost'];
 
         // Operating expenses
         $cashExpenses = CashbookEntry::where('type', 'out')
@@ -101,6 +99,7 @@ class ReportController extends Controller
         return view('reports.profit_loss', compact(
             'totalRevenue', 'totalCOGS', 'cashExpenses', 'salaryExpenses', 'operatingExpenses',
             'totalExpenses', 'netProfit', 'grossProfit', 'netMarginPercent',
+            'unitProfitData', 'unitTotals',
             'anchorDate', 'period', 'selectedCurrency'
         ));
     }
@@ -143,12 +142,15 @@ class ReportController extends Controller
         // Accounts Receivable (what customers owe us) = sum of order remaining_amount per currency.
         // Single grouped SQL: each order's remaining is computed via subselects, clamped to 0 per row,
         // then the outer query sums. One round trip instead of two SQL per order.
+        // groupBy(orders.id) is REQUIRED: without it SQLite's bare-column aggregation picks an
+        // arbitrary single row, silently returning one order's remainder instead of the sum.
         $receivableRow = DB::query()->fromSub(function ($q) use ($currency) {
             $q->from('orders')
                 ->selectRaw("MAX(orders.total_amount - COALESCE((SELECT SUM(amount) FROM payments WHERE payments.order_id = orders.id AND payments.currency = orders.currency), 0) - COALESCE((SELECT SUM(total_amount) FROM order_returns WHERE order_returns.order_id = orders.id AND order_returns.status != 'cancelled' AND order_returns.currency = orders.currency), 0), 0) AS remaining")
                 ->where('orders.user_id', Auth::id())
                 ->where('orders.currency', $currency)
-                ->where('orders.status', '!=', 'cancelled');
+                ->where('orders.status', '!=', 'cancelled')
+                ->groupBy('orders.id');
         }, 'per_order')->sum('remaining');
         $receivables = bcadd('0.00', (string) ($receivableRow ?: '0'), 2);
 
@@ -166,9 +168,10 @@ class ReportController extends Controller
             ->map(fn ($v) => number_format((float) $v, 2, '.', ''));
 
         $inventoryValue = '0.00';
-        foreach (Product::select('id', 'stock')->get() as $product) {
+        foreach (Product::select('id', 'stock_afn', 'stock_usd')->get() as $product) {
             $avgPrice = $avgPurchaseByProduct[$product->id] ?? '0.00';
-            $lineValue = bcmul((string) $product->stock, $avgPrice, 2);
+            // Value the pool that matches the currency: USD stock × USD avg cost.
+            $lineValue = bcmul((string) $product->stockFor($currency), $avgPrice, 2);
             $inventoryValue = bcadd($inventoryValue, $lineValue, 2);
         }
 
@@ -177,12 +180,14 @@ class ReportController extends Controller
 
         // LIABILITIES
         // Accounts Payable (what we owe suppliers) = sum of purchase remaining_amount per currency.
+        // groupBy(purchases.id): see the receivables query above for why bare MAX is unsafe.
         $payableRow = DB::query()->fromSub(function ($q) use ($currency) {
             $q->from('purchases')
                 ->selectRaw("MAX(purchases.total_amount - COALESCE((SELECT SUM(amount) FROM purchase_payments WHERE purchase_payments.purchase_id = purchases.id AND purchase_payments.currency = purchases.currency), 0) - COALESCE((SELECT SUM(total_amount) FROM purchase_returns WHERE purchase_returns.purchase_id = purchases.id AND purchase_returns.status != 'cancelled' AND purchase_returns.currency = purchases.currency), 0), 0) AS remaining")
                 ->where('purchases.user_id', Auth::id())
                 ->where('purchases.currency', $currency)
-                ->where('purchases.status', '!=', 'cancelled');
+                ->where('purchases.status', '!=', 'cancelled')
+                ->groupBy('purchases.id');
         }, 'per_purchase')->sum('remaining');
         $payables = bcadd('0.00', (string) ($payableRow ?: '0'), 2);
 
@@ -242,7 +247,7 @@ class ReportController extends Controller
         $currency = $request->get('currency', 'AFN');
         $minStockThreshold = Setting::get('min_stock_threshold', 10);
 
-        $products = Product::select('id', 'name', 'stock', 'category_id')->with('category:id,name')->get();
+        $products = Product::select('id', 'name', 'lot_number', 'stock_afn', 'stock_usd', 'category_id')->with('category:id,name')->get();
 
         // One grouped query per relation (not one per product), mapped back per product_id.
         // Weighted average = SUM(unit_price × quantity) / SUM(quantity). A plain AVG(unit_price)
@@ -270,19 +275,25 @@ class ReportController extends Controller
             ->pluck('avg_price', 'product_id')
             ->map(fn ($v) => number_format((float) $v, 2, '.', ''));
 
-        $stockData = $products->map(function ($product) use ($minStockThreshold, $avgPurchaseByProduct, $avgSaleByProduct) {
+        $stockData = $products->map(function ($product) use ($currency, $minStockThreshold, $avgPurchaseByProduct, $avgSaleByProduct) {
             $avgPurchasePrice = $avgPurchaseByProduct[$product->id] ?? '0.00';
             $avgSalePrice = $avgSaleByProduct[$product->id] ?? '0.00';
 
             // bcmul returns a string; keep it string to preserve precision up to the view layer.
-            $stockValue = bcmul((string) $product->stock, $avgPurchasePrice, 2);
+            // Value the pool matching the report's currency.
+            $poolQty = $product->stockFor($currency);
+            $stockValue = bcmul((string) $poolQty, $avgPurchasePrice, 2);
 
             return [
                 'product' => $product,
+                'pool_qty' => $poolQty,
                 'avg_purchase_price' => $avgPurchasePrice,
                 'avg_sale_price' => $avgSalePrice,
                 'stock_value' => $stockValue,
-                'is_low_stock' => $product->stock < $minStockThreshold,
+                // Same rule as Dashboard/Inventory: a pool only runs "low" when it
+                // exists but ran thin — a zero pool just means this currency was
+                // never traded, which must not flood the banner on currency switch.
+                'is_low_stock' => $minStockThreshold > 0 && $poolQty > 0 && $poolQty < $minStockThreshold,
             ];
         });
 
@@ -502,7 +513,9 @@ class ReportController extends Controller
             ->get();
 
         $customerAging = collect();
-        foreach ($customerOrders->groupBy(fn ($o) => $o->person_id ?? $o->customer_id ?? 'walkin') as $key => $orderGroup) {
+        // Group key includes person_type: a customer and a supplier can share the same
+        // person_id, and lumping them together would merge unrelated debts under one name.
+        foreach ($customerOrders->groupBy(fn ($o) => ($o->person_type ?? 'customer').':'.($o->person_id ?? $o->customer_id ?? 'walkin')) as $key => $orderGroup) {
             $party = $orderGroup->first()->party;
             $customer = $party ?? (object) ['name' => __('messages.walk_in_customer')];
 
@@ -533,7 +546,9 @@ class ReportController extends Controller
         }
         $customerAging = $customerAging
             ->filter(fn ($item) => bccomp($item['total_outstanding'], '0', 2) > 0)
-            ->sortByDesc('total_outstanding')
+            // Cast to float: total_outstanding is a decimal string, and a lexicographic
+            // sort would rank "900.00" above "1000.00".
+            ->sortByDesc(fn ($item) => (float) $item['total_outstanding'])
             ->values();
 
         $customerBucketTotal = $this->aggregateBuckets($customerAging);
@@ -564,7 +579,8 @@ class ReportController extends Controller
             ->get();
 
         $supplierAging = collect();
-        foreach ($supplierPurchases->groupBy(fn ($p) => $p->person_id ?? $p->supplier_id ?? 'walkin') as $key => $purchaseGroup) {
+        // Same person_type-aware grouping as the customer side (see note above).
+        foreach ($supplierPurchases->groupBy(fn ($p) => ($p->person_type ?? 'supplier').':'.($p->person_id ?? $p->supplier_id ?? 'walkin')) as $key => $purchaseGroup) {
             $party = $purchaseGroup->first()->party
                 ?? ($purchaseGroup->first()->supplier_id ? Supplier::find($purchaseGroup->first()->supplier_id) : null);
             $supplier = $party ?? (object) ['name' => __('messages.walk_in_supplier')];
@@ -596,7 +612,7 @@ class ReportController extends Controller
         }
         $supplierAging = $supplierAging
             ->filter(fn ($item) => bccomp($item['total_outstanding'], '0', 2) > 0)
-            ->sortByDesc('total_outstanding')
+            ->sortByDesc(fn ($item) => (float) $item['total_outstanding'])
             ->values();
 
         $supplierBucketTotal = $this->aggregateBuckets($supplierAging);

@@ -17,6 +17,8 @@ class Reminder extends Model
         'currency',
         'channel',
         'message',
+        'media_path',
+        'media_type',
         'status',
         'provider_message_id',
         'error_message',

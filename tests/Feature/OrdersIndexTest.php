@@ -10,6 +10,7 @@ use App\Models\OrderReturn;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Purchase;
+use App\Models\PurchaseItem;
 use App\Models\PurchasePayment;
 use App\Models\Supplier;
 use App\Models\User;
@@ -151,6 +152,54 @@ class OrdersIndexTest extends TestCase
         $this->assertSame('75.00', $row->remaining);
     }
 
+    public function test_purchase_list_status_reflects_payment_state_not_raw_status(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $supplier = $this->makeSupplier('Status Supplier');
+
+        // Unpaid — even with raw status "completed" — must read as pending.
+        $unpaid = $this->makePurchase($supplier, ['total_amount' => '100.00', 'status' => 'completed']);
+
+        $partial = $this->makePurchase($supplier, ['total_amount' => '100.00', 'status' => 'completed']);
+        PurchasePayment::create(['purchase_id' => $partial->id, 'amount' => '40.00', 'currency' => 'AFN']);
+
+        $paid = $this->makePurchase($supplier, ['total_amount' => '100.00', 'status' => 'pending']);
+        PurchasePayment::create(['purchase_id' => $paid->id, 'amount' => '100.00', 'currency' => 'AFN']);
+
+        // A foreign-currency payment settles nothing.
+        $foreign = $this->makePurchase($supplier, ['total_amount' => '100.00', 'status' => 'completed']);
+        PurchasePayment::create(['purchase_id' => $foreign->id, 'amount' => '100.00', 'currency' => 'USD']);
+
+        $cancelled = $this->makePurchase($supplier, ['total_amount' => '100.00', 'status' => 'cancelled']);
+
+        $response = $this->get(route('orders.index'))->assertOk();
+        $byId = $response->viewData('purchases')->getCollection()->keyBy('id');
+
+        $this->assertSame('pending', $byId[$unpaid->id]->list_status);
+        $this->assertSame('partial', $byId[$partial->id]->list_status);
+        $this->assertSame('paid', $byId[$paid->id]->list_status);
+        $this->assertSame('pending', $byId[$foreign->id]->list_status);
+        $this->assertSame('cancelled', $byId[$cancelled->id]->list_status);
+    }
+
+    public function test_purchase_display_status_is_payment_aware(): void
+    {
+        $supplier = $this->makeSupplier('Display Supplier');
+
+        $unpaid = $this->makePurchase($supplier, ['total_amount' => '50.00', 'status' => 'completed']);
+
+        $partial = $this->makePurchase($supplier, ['total_amount' => '50.00', 'status' => 'completed']);
+        PurchasePayment::create(['purchase_id' => $partial->id, 'amount' => '20.00', 'currency' => 'AFN']);
+
+        $paid = $this->makePurchase($supplier, ['total_amount' => '50.00', 'status' => 'pending']);
+        PurchasePayment::create(['purchase_id' => $paid->id, 'amount' => '50.00', 'currency' => 'AFN']);
+
+        $this->assertSame('pending', $unpaid->display_status);
+        $this->assertSame('partial', $partial->display_status);
+        $this->assertSame('paid', $paid->display_status);
+    }
+
     public function test_destroy_does_not_restore_stock_twice_for_cancelled_orders(): void
     {
         $user = User::factory()->create();
@@ -174,6 +223,43 @@ class OrdersIndexTest extends TestCase
 
         $this->assertSame(10, (int) Product::find($product->id)->stock);
         $this->assertDatabaseMissing('orders', ['id' => $order->id]);
+    }
+
+    public function test_purchase_destroy_does_not_adjust_stock_twice_for_cancelled_purchases(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $supplier = $this->makeSupplier('Destroy Supplier');
+        $category = Category::create(['name' => 'Purchase Destroy Category']);
+        $product = Product::create(['name' => 'Purchase Destroy Product', 'category_id' => $category->id, 'stock' => 5]);
+
+        $purchase = $this->makePurchase($supplier, ['status' => 'cancelled', 'total_amount' => '30.00']);
+        PurchaseItem::create([
+            'purchase_id' => $purchase->id,
+            'product_id' => $product->id,
+            'quantity' => 3,
+            'unit_price' => '10.00',
+            'subtotal' => '30.00',
+        ]);
+
+        // Cancelling earlier already returned the stock; deleting must not
+        // decrement it a second time.
+        $this->delete(route('purchases.destroy', $purchase));
+
+        $this->assertSame(5, (int) Product::find($product->id)->stock);
+        $this->assertDatabaseMissing('purchases', ['id' => $purchase->id]);
+    }
+
+    public function test_order_status_change_requires_post(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $customer = $this->makeCustomer('Status Customer');
+        $order = $this->makeOrder($customer, ['status' => 'pending']);
+
+        $this->get(route('orders.status', [$order, 'completed']))->assertStatus(405);
+
+        $this->assertSame('pending', Order::find($order->id)->status);
     }
 
     public function test_update_cannot_un_cancel_an_order(): void

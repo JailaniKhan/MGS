@@ -1,170 +1,204 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
-    <div class="mb-4 page-enter">
-        <a href="{{ route('customers.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>{{ __('messages.back') }}
-        </a>
+@php
+    $tileStyles = [
+        'bg-brand/10 dark:bg-brand/20 text-brand',
+        'bg-secondary-500/10 dark:bg-secondary-500/15 text-secondary-600 dark:text-secondary-400',
+        'bg-accent-500/10 dark:bg-accent-500/15 text-accent-600 dark:text-accent-400',
+    ];
+    $initials = mb_strtoupper(mb_substr($customer->name, 0, 1));
+    $avatarClass = ['bg-brand', 'bg-secondary-500', 'bg-accent-500'][crc32($customer->name) % 3];
+    $remainingAFN = $remainingAFN ?? max(0, $totalAFN - $paidAFN);
+    $remainingUSD = $remainingUSD ?? max(0, $totalUSD - $paidUSD);
+@endphp
+
+    {{-- Header --}}
+    <div class="flex items-center justify-between mb-4 page-enter">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 {{ $avatarClass }}">
+                {{ $initials }}
+            </div>
+            <div class="min-w-0">
+                <h2 class="text-lg font-bold text-ink-900 dark:text-white leading-tight truncate">{{ $customer->name }}</h2>
+                <p class="text-[11px] text-ink-500 dark:text-ink-400 truncate">{{ __('messages.customer') }} &middot; {{ $customer->orders->count() }} {{ __('messages.orders') }}</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+            <x-icon-button name="bell" label="{{ __('messages.remind') }}"
+                           onclick="document.getElementById('reminder-panel').classList.toggle('hidden')"/>
+            <x-back-button href="{{ route('people.index') }}"/>
+        </div>
     </div>
 
-    <!-- Customer Header Card -->
-    <div class="card p-4 mb-4 page-enter" style="animation-delay: 0.05s;">
-        <div class="flex items-start justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-brand text-white flex items-center justify-center shadow-sm">
-                    <x-icon name="user" class="w-5 h-5 text-white"/>
-                </div>
-                <div>
-                    <h2 class="text-lg font-bold text-ink-900 dark:text-white">{{ $customer->name }}</h2>
-                    @if ($customer->phone)
-                        <p class="text-sm text-ink-500 dark:text-ink-400 mt-0.5">{{ __('messages.phone') }}: {{ $customer->phone }}</p>
-                    @endif
-                    @if ($customer->address)
-                        <p class="text-sm text-ink-500 dark:text-ink-400">{{ __('messages.address') }}: {{ $customer->address }}</p>
+    {{-- Balance summary --}}
+    <div class="card relative overflow-hidden p-4 mb-3 page-enter" style="animation-delay: 0.05s;">
+        <div class="pointer-events-none absolute -end-8 -top-10 w-32 h-32 rounded-full bg-brand/[0.08] dark:bg-brand/[0.12]"></div>
+        <div class="relative">
+            <span class="metric-label">{{ __('messages.remaining') }} ({{ __('messages.afn') }})</span>
+            <p class="mt-1 text-3xl font-extrabold tabular-nums tracking-tight {{ $remainingAFN > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-primary-600 dark:text-primary-400' }}" dir="ltr">
+                {{ number_format($remainingAFN) }} <span class="text-sm font-bold text-ink-400 dark:text-ink-500">{{ __('messages.afn') }}</span>
+            </p>
+            <div class="mt-2 flex items-center justify-between gap-2 flex-wrap">
+                <div class="grid grid-cols-3 gap-1.5 text-[11px] tabular-nums">
+                    <div>
+                        <span class="text-ink-400">{{ __('messages.total') }}</span>
+                        <p class="font-bold text-ink-700 dark:text-ink-300">{{ number_format($totalAFN) }}</p>
+                    </div>
+                    <div>
+                        <span class="text-ink-400">{{ __('messages.paid') }}</span>
+                        <p class="font-bold text-primary-600 dark:text-primary-400">{{ number_format($paidAFN) }}</p>
+                    </div>
+                    @if ($remainingUSD > 0 || $totalUSD > 0)
+                        <div>
+                            <span class="text-ink-400">{{ __('messages.usd') }}</span>
+                            <p class="font-bold {{ $remainingUSD > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-primary-600 dark:text-primary-400' }}">{{ number_format($remainingUSD) }}$</p>
+                        </div>
                     @endif
                 </div>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <a href="{{ route('reminders.customer', $customer) }}" onclick="event.preventDefault(); document.getElementById('reminder-form-{{ $customer->id }}').classList.toggle('hidden')" class="btn-sm !text-secondary-600 !border-secondary-200 !bg-secondary-50 dark:!bg-secondary-900/20 dark:!border-secondary-800/30">
-                    <x-icon name="bell" class="w-3.5 h-3.5"/>{{ __('messages.remind') }}
-                </a>
-                <a href="{{ route('customers.edit', $customer) }}" class="btn-sm"><x-icon name="pencil" class="w-3.5 h-3.5"/>{{ __('messages.edit') }}</a>
-                <a href="{{ route('ledger.show', ['customer', $customer->id]) }}" class="btn-sm"><x-icon name="document-text" class="w-3.5 h-3.5"/>{{ __('messages.ledger') }}</a>
-                <form action="{{ route('customers.destroy', $customer) }}" method="POST" onsubmit="return confirm('{{ __('messages.confirm_delete') }}')">
-                    @csrf @method('DELETE')
-                    <button class="btn-danger btn-sm"><x-icon name="trash" class="w-3.5 h-3.5"/>{{ __('messages.delete') }}</button>
-                </form>
+            <div class="mt-3 flex items-center gap-2">
+                <button type="button" onclick="document.getElementById('reminder-panel').classList.toggle('hidden')" class="btn-primary btn-sm">
+                    <x-icon name="bell" class="w-3.5 h-3.5" strokeWidth="2"/>
+                    {{ __('messages.remind') }}
+                </button>
+                @if ($customer->phone)
+                    <a href="tel:{{ preg_replace('/[^0-9+]/', '', $customer->phone) }}" class="btn-ghost btn-sm" dir="ltr">
+                        <x-icon name="phone" class="w-3.5 h-3.5" strokeWidth="2"/>
+                        {{ __('messages.call') }}
+                    </a>
+                @endif
             </div>
         </div>
     </div>
 
-    <!-- Send Reminder Form -->
-    <div id="reminder-form-{{ $customer->id }}" class="card p-4 mb-4 hidden page-enter" style="animation-delay: 0.08s;">
-        <div class="flex items-center gap-2 mb-4">
-            <div class="w-1.5 h-5 rounded-full bg-primary-500"></div>
-            <h3 class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.send_reminder') }}</h3>
+    {{-- Send reminder (collapsed by default) --}}
+    <div id="reminder-panel" class="card overflow-hidden mb-4 hidden page-enter">
+        <div class="px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 bg-ink-50 dark:bg-ink-800/40">
+            <div class="flex items-center gap-2">
+                <x-icon name="bell" class="w-4 h-4 text-brand"/>
+                <h3 class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.send_reminder') }}</h3>
+            </div>
         </div>
-        <form action="{{ route('reminders.customer', $customer) }}" method="POST" onsubmit="return submitCustomerReminder(event, '{{ $customer->id }}', '{{ $customer->phone }}')" class="space-y-3">
+        <form action="{{ route('reminders.customer', $customer) }}" method="POST" onsubmit="return submitCustomerReminder(event, '{{ $customer->id }}', '{{ $customer->phone }}')" class="p-4">
             @csrf
-            <div>
+            <div class="mb-3">
                 <label class="form-label">{{ __('messages.channel') }}</label>
-                <div class="grid grid-cols-2 gap-3">
-                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-colors">
-                        <input type="radio" name="channel" value="sms" checked class="text-secondary-600">
-                        <span class="text-sm text-ink-700 dark:text-ink-300">SMS</span>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-ink-200 dark:border-ink-700 cursor-pointer transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand/10">
+                        <input type="radio" name="channel" value="sms" checked class="hidden">
+                        <x-icon name="device-phone-mobile" class="w-4 h-4 text-ink-500 dark:text-ink-400"/>
+                        <span class="text-sm font-medium text-ink-700 dark:text-ink-300">SMS</span>
                     </label>
-                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-colors">
-                        <input type="radio" name="channel" value="whatsapp" class="text-secondary-600">
-                        <span class="text-sm text-ink-700 dark:text-ink-300">WhatsApp</span>
+                    <label class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-ink-200 dark:border-ink-700 cursor-pointer transition-colors has-[:checked]:border-primary-500 has-[:checked]:bg-primary-500/10">
+                        <input type="radio" name="channel" value="whatsapp" class="hidden">
+                        <x-icon name="chat-bubble-left-right" class="w-4 h-4 text-ink-500 dark:text-ink-400"/>
+                        <span class="text-sm font-medium text-ink-700 dark:text-ink-300">WhatsApp</span>
                     </label>
                 </div>
             </div>
-            <div>
+            <div class="mb-3">
                 <label class="form-label">{{ __('messages.currency_unit') }}</label>
-                <div class="grid grid-cols-2 gap-3">
-                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-colors">
-                        <input type="radio" name="currency" value="AFN" checked class="text-secondary-600">
-                        <span class="text-sm text-ink-700 dark:text-ink-300">{{ __('messages.afn') }}</span>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-ink-200 dark:border-ink-700 cursor-pointer transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand/10">
+                        <input type="radio" name="currency" value="AFN" checked class="hidden">
+                        <span class="text-sm font-bold text-ink-700 dark:text-ink-300">{{ __('messages.afn') }}</span>
                     </label>
-                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-50 dark:has-[:checked]:bg-secondary-900/20 transition-colors">
-                        <input type="radio" name="currency" value="USD" class="text-secondary-600">
-                        <span class="text-sm text-ink-700 dark:text-ink-300">{{ __('messages.usd_with_paren') }}$)</span>
+                    <label class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-ink-200 dark:border-ink-700 cursor-pointer transition-colors has-[:checked]:border-secondary-500 has-[:checked]:bg-secondary-500/10">
+                        <input type="radio" name="currency" value="USD" class="hidden">
+                        <span class="text-sm font-bold text-ink-700 dark:text-ink-300">{{ __('messages.usd') }}</span>
                     </label>
                 </div>
             </div>
-            <div>
-                <label class="form-label">{{ __('messages.amount') }}</label>
-                <input type="number" name="amount" step="0.01" min="0" placeholder="{{ __('messages.optional') }}" class="form-input">
+            <div class="mb-4">
+                <label class="form-label">{{ __('messages.amount') }} ({{ __('messages.optional') }})</label>
+                <input type="number" name="amount" step="0.01" min="0" placeholder="{{ __('messages.optional') }}" dir="ltr" inputmode="decimal" class="form-input text-center font-bold tabular-nums">
                 <p class="text-[10px] text-ink-400 mt-1">{{ __('messages.leave_empty_for_full') }}</p>
             </div>
             <button type="submit" class="btn-primary w-full">
-                <x-icon name="bell" class="w-4 h-4"/>{{ __('messages.send_reminder') }}
+                <x-icon name="check-circle" class="w-4 h-4" strokeWidth="2"/>
+                {{ __('messages.send_reminder') }}
             </button>
         </form>
     </div>
 
-    <!-- Payment Summary -->
-    <div class="grid grid-cols-2 gap-3 mb-4 page-enter" style="animation-delay: 0.1s;">
-        <div class="metric-tile !p-4">
-            <div class="flex items-center gap-2 mb-3">
-                <div class="w-8 h-8 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400">
-                    <x-icon name="currency-dollar" class="w-4 h-4"/>
-                </div>
-                <span class="text-xs font-medium text-ink-500 dark:text-ink-400 uppercase tracking-wider">{{ __('messages.afn') }}</span>
-            </div>
-            <div class="space-y-1.5 text-sm">
-                <div class="flex justify-between">
-                    <span class="text-ink-500 dark:text-ink-400">{{ __('messages.total') }}:</span>
-                    <span class="font-medium text-ink-900 dark:text-ink-100">{{ number_format($totalAFN) }} {{ __('messages.afn') }}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-primary-600 dark:text-primary-400">{{ __('messages.paid') }}:</span>
-                    <span class="font-medium text-primary-600 dark:text-primary-400">{{ number_format($paidAFN) }} {{ __('messages.afn') }}</span>
-                </div>
-                <div class="flex justify-between border-t border-ink-100 dark:border-ink-700/30 pt-1.5">
-                    <span class="font-semibold text-ink-700 dark:text-ink-300">{{ __('messages.remaining') }}:</span>
-                    <span class="font-bold {{ $totalAFN - $paidAFN > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-primary-600 dark:text-primary-400' }}">
-                        {{ number_format(max(0, $totalAFN - $paidAFN)) }} {{ __('messages.afn') }}
-                    </span>
+    {{-- Details --}}
+    <div class="card overflow-hidden mb-4 page-enter" style="animation-delay: 0.1s;">
+        <div class="px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 bg-ink-50 dark:bg-ink-800/40">
+            <div class="flex items-center gap-2">
+                <x-icon name="identification" class="w-4 h-4 text-brand"/>
+                <h3 class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.details') }}</h3>
+                <div class="ms-auto flex items-center gap-1.5">
+                    @if ($customer->phone)
+                        <a href="{{ route('whatsapp.chats.show', ['customer', $customer->id]) }}" class="w-7 h-7 rounded-lg bg-brand text-white flex items-center justify-center hover:brightness-105 transition-all active:scale-95" aria-label="{{ __('messages.wa_open_chat') }}">
+                            <x-icon name="chat-bubble-left-right" class="w-3.5 h-3.5" strokeWidth="1.8"/>
+                        </a>
+                    @endif
+                    <a href="{{ route('customers.edit', $customer) }}" class="w-7 h-7 rounded-lg bg-white dark:bg-white/[0.06] border border-ink-200 dark:border-white/[0.08] flex items-center justify-center text-ink-500 dark:text-ink-400 hover:text-ink-700 dark:hover:text-ink-200 transition-all active:scale-95" aria-label="{{ __('messages.edit') }}">
+                        <x-icon name="pencil-square" class="w-3.5 h-3.5" strokeWidth="1.8"/>
+                    </a>
+                    <form action="{{ route('customers.destroy', $customer) }}" method="POST" onsubmit="return confirm('{{ __('messages.confirm_delete') }}')" class="inline">
+                        @csrf @method('DELETE')
+                        <button class="w-7 h-7 rounded-lg bg-white dark:bg-white/[0.06] border border-ink-200 dark:border-white/[0.08] flex items-center justify-center text-danger-500 hover:text-danger-600 transition-all active:scale-95" aria-label="{{ __('messages.delete') }}">
+                            <x-icon name="trash" class="w-3.5 h-3.5" strokeWidth="1.8"/>
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
-        <div class="metric-tile !p-4">
-            <div class="flex items-center gap-2 mb-3">
-                <div class="w-8 h-8 rounded-lg bg-secondary-100 dark:bg-secondary-900/30 flex items-center justify-center text-secondary-600 dark:text-secondary-400">
-                    <x-icon name="currency-dollar" class="w-4 h-4"/>
+        <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
+            <div class="flex items-center gap-3 px-4 py-3">
+                <x-icon name="phone" class="w-4 h-4 text-ink-400 flex-shrink-0" strokeWidth="1.8"/>
+                <div class="min-w-0 flex-1">
+                    <span class="text-[10px] font-bold text-ink-400 uppercase tracking-wider">{{ __('messages.phone') }}</span>
+                    <p class="text-sm font-semibold text-ink-900 dark:text-ink-100" dir="ltr">{{ $customer->phone ?: '—' }}</p>
                 </div>
-                <span class="text-xs font-medium text-ink-500 dark:text-ink-400 uppercase tracking-wider">{{ __('messages.usd_with_paren') }}$)</span>
+                <a href="{{ route('ledger.show', ['customer', $customer->id]) }}" class="text-xs font-semibold text-brand flex items-center gap-1 flex-shrink-0">
+                    <x-icon name="document-text" class="w-3.5 h-3.5" strokeWidth="1.8"/>
+                    {{ __('messages.ledger') }}
+                </a>
             </div>
-            <div class="space-y-1.5 text-sm">
-                <div class="flex justify-between">
-                    <span class="text-ink-500 dark:text-ink-400">{{ __('messages.total') }}:</span>
-                    <span class="font-medium text-ink-900 dark:text-ink-100">{{ number_format($totalUSD) }}$</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-primary-600 dark:text-primary-400">{{ __('messages.paid') }}:</span>
-                    <span class="font-medium text-primary-600 dark:text-primary-400">{{ number_format($paidUSD) }}$</span>
-                </div>
-                <div class="flex justify-between border-t border-ink-100 dark:border-ink-700/30 pt-1.5">
-                    <span class="font-semibold text-ink-700 dark:text-ink-300">{{ __('messages.remaining') }}:</span>
-                    <span class="font-bold {{ $totalUSD - $paidUSD > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-primary-600 dark:text-primary-400' }}">
-                        {{ number_format(max(0, $totalUSD - $paidUSD)) }}$
-                    </span>
+            <div class="flex items-center gap-3 px-4 py-3">
+                <x-icon name="map-pin" class="w-4 h-4 text-ink-400 flex-shrink-0" strokeWidth="1.8"/>
+                <div class="min-w-0">
+                    <span class="text-[10px] font-bold text-ink-400 uppercase tracking-wider">{{ __('messages.address') }}</span>
+                    <p class="text-sm font-semibold text-ink-900 dark:text-ink-100 break-words">{{ $customer->address ?: '—' }}</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Orders -->
-    <div class="flex items-center gap-2 mb-3 page-enter" style="animation-delay: 0.15s;">
-        <div class="w-1.5 h-5 rounded-full bg-primary-500"></div>
-        <h3 class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.orders') }}</h3>
+    {{-- Orders --}}
+    <div class="flex items-center justify-between mb-3 page-enter" style="animation-delay: 0.15s;">
+        <span class="text-xs font-bold text-ink-500 dark:text-ink-400 uppercase tracking-wider">{{ __('messages.orders') }} ({{ $customer->orders->count() }})</span>
+        <a href="{{ route('orders.create') }}" class="btn-ghost btn-sm">
+            <x-icon name="plus" class="w-3 h-3" strokeWidth="2"/>
+            {{ __('messages.new_order') }}
+        </a>
     </div>
-    <div class="card overflow-hidden page-enter" style="animation-delay: 0.15s;">
+    <div class="card overflow-hidden page-enter" style="animation-delay: 0.18s;">
         <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
             @forelse ($customer->orders as $order)
-                <a href="{{ route('orders.show', $order) }}" class="flex items-center justify-between px-4 py-3.5 transition-all duration-200 hover:bg-ink-50 dark:hover:bg-white/5">
-                    <div class="flex items-center gap-3 min-w-0">
-                        <div class="w-8 h-8 rounded-lg bg-brand text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                            <span class="text-white font-bold text-xs">#{{ $order->id }}</span>
+                @php $tile = $tileStyles[crc32((string) $order->id) % count($tileStyles)]; @endphp
+                <a href="{{ route('orders.show', $order) }}" class="list-row block active:bg-ink-50 dark:active:bg-white/[0.03] transition-colors">
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                        <div class="w-9 h-9 rounded-xl {{ $tile }} flex items-center justify-center flex-shrink-0">
+                            <x-icon name="document-text" class="w-4 h-4" strokeWidth="1.8"/>
                         </div>
                         <div class="min-w-0">
-                            <div class="text-xs text-ink-500 dark:text-ink-400">{{ $order->created_at->format('Y/m/d') }}</div>
+                            <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ __('messages.order') }} #{{ $order->id }}</div>
+                            <div class="text-[11px] text-ink-500 dark:text-ink-400 tabular-nums"><bdi>{{ local_date($order->created_at, 'Y/m/d H:i') }}</bdi></div>
                         </div>
                     </div>
                     <div class="text-end flex-shrink-0 ms-3">
-                        <div class="text-sm font-semibold text-ink-900 dark:text-ink-100">{{ number_format($order->total_amount) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</div>
-                        <span class="inline-flex items-center gap-1 badge mt-1
-                            @if($order->display_status === 'paid' || $order->display_status === 'completed') badge-success
-                            @elseif($order->display_status === 'processing') badge-info
-                            @elseif($order->display_status === 'cancelled') badge-danger
-                            @else badge-warning @endif">
-                            <span class="status-dot
-                                @if($order->display_status === 'paid' || $order->display_status === 'completed') bg-primary-500
-                                @elseif($order->display_status === 'processing') bg-secondary-500
-                                @elseif($order->display_status === 'cancelled') bg-danger-500
-                                @else bg-accent-500 @endif">
-                            </span>
+                        <div class="text-sm font-extrabold tabular-nums text-ink-900 dark:text-ink-100">
+                            <x-money :amount="$order->total_amount" :currency="$order->currency" symbol-class="text-[10px] font-medium text-ink-500"/>
+                        </div>
+                        <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 border
+                            @if($order->display_status === 'paid' || $order->display_status === 'completed') bg-primary-500/10 text-primary-600 dark:text-primary-400 border-primary-500/20
+                            @elseif($order->display_status === 'processing') bg-secondary-500/10 text-secondary-600 dark:text-secondary-400 border-secondary-500/20
+                            @elseif($order->display_status === 'cancelled') bg-danger-50 dark:bg-danger-900/30 text-danger-600 dark:text-danger-400 border-danger-200 dark:border-danger-700/50
+                            @else bg-accent-500/10 text-accent-600 dark:text-accent-400 border-accent-500/20 @endif">
                             @switch($order->display_status)
                                 @case('paid') {{ __('messages.paid') }} @break
                                 @case('completed') {{ __('messages.completed') }} @break
@@ -176,12 +210,9 @@
                     </div>
                 </a>
             @empty
-                <div class="empty-state">
-                    <div class="w-12 h-12 rounded-full bg-ink-100 dark:bg-ink-800 flex items-center justify-center mb-3">
-                        <x-icon name="clipboard-document-list" class="w-6 h-6 text-ink-400"/>
-                    </div>
-                    <p class="text-sm text-ink-500 dark:text-ink-400">{{ __('messages.no_orders') }}</p>
-                </div>
+                <x-empty-state title="{{ __('messages.no_orders') }}">
+                    <x-icon name="clipboard-document-list" class="w-6 h-6 text-ink-400"/>
+                </x-empty-state>
             @endforelse
         </div>
     </div>
@@ -206,12 +237,12 @@
             })
             .then(r => r.json())
             .then(data => {
-                if (data.error) { alert(data.error); return; }
+                if (data.error) { showToast('error', data.error); return; }
                 const p = data.phone.replace(/[^0-9]/g, '');
                 const msg = encodeURIComponent(data.message);
                 openNativeSms(p, msg);
             })
-            .catch(() => { alert('Could not reach the server. Please try again.'); });
+            .catch(() => { showToast('error', {{ __('messages.reminder_failed') }}); });
         } else {
             const ov = document.getElementById('page-skeleton');
             if (ov) ov.hidden = false;
@@ -226,7 +257,14 @@
         window.location.href = smsUrl;
         setTimeout(() => {
             if (window.location.href === before) {
-                prompt('SMS not supported in this browser. Copy the message below to send it manually:', decodeURIComponent(encodedMsg));
+                const msg = decodeURIComponent(encodedMsg);
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(msg)
+                        .then(() => showToast('success', @js(__('messages.sms_copied'))))
+                        .catch(() => showToast('error', @js(__('messages.sms_copy_failed'))));
+                } else {
+                    showToast('error', @js(__('messages.sms_copy_failed')));
+                }
             }
         }, 600);
     }

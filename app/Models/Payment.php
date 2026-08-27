@@ -23,6 +23,6 @@ class Payment extends Model
     public function getCurrencySymbolAttribute()
     {
         $currency = $this->currency ?? $this->order?->currency ?? 'AFN';
-        return $currency === 'USD' ? '$' : 'افغ';
+        return $currency === 'USD' ? '$' : 'افغانی';
     }
 }

@@ -44,12 +44,9 @@
                     </div>
                 </div>
             @empty
-                <div class="empty-state">
-                    <div class="empty-illustration">
-                        <x-icon name="archive-box" class="w-6 h-6 text-ink-400"/>
-                    </div>
-                    <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_products') }}</p>
-                </div>
+                <x-empty-state title="{{ __('messages.no_products') }}">
+                    <x-icon name="archive-box" class="w-6 h-6 text-ink-400"/>
+                </x-empty-state>
             @endforelse
         </div>
     </div>

@@ -46,28 +46,26 @@
 })();
 
 /* ============================================================
-   SLIDING ACTIVE-NAV PILL
-   Positions a single pill under the active bottom-nav item.
-   Uses real screen coordinates so it works in both LTR & RTL,
-   and animates via the CSS transition on .nav-pill.
+   BOTTOM NAV ACTIVE STATE
+   The active item renders its own brand-tinted pill
+   (.nav-item-bg) purely in CSS — no JS positioning needed.
    ============================================================ */
-(function () {
-    function positionNavPill() {
-        const container = document.querySelector('nav .relative.flex');
-        const pill = document.getElementById('nav-pill');
-        const active = document.querySelector('.nav-item-active');
-        if (!container || !pill || !active) return;
 
-        const containerRect = container.getBoundingClientRect();
-        const itemRect = active.getBoundingClientRect();
-        const center = itemRect.left + itemRect.width / 2 - containerRect.left;
-        const x = center - pill.offsetWidth / 2;
-
-        pill.style.transform = 'translateX(' + x + 'px)';
-        pill.style.opacity = '1';
-    }
-
-    document.addEventListener('DOMContentLoaded', positionNavPill);
-    window.addEventListener('resize', positionNavPill);
-    window.addEventListener('orientationchange', positionNavPill);
-})();
+/* ============================================================
+   LANGUAGE SWITCHER — shared by app / auth / onboarding layouts.
+   Route URL comes from <html data-language-url="...">.
+   ============================================================ */
+window.changeLanguage = function (lang) {
+    const url = document.documentElement.dataset.languageUrl;
+    if (!url) { window.location.reload(); return; }
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ language: lang }).toString(),
+    })
+    .then(() => window.location.reload())
+    .catch(() => window.location.reload());
+};

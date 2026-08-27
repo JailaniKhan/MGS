@@ -20,24 +20,12 @@ class ReminderController extends Controller
         ]);
 
         $currency = $validated['currency'] ?? 'AFN';
-        $totalOrders = $customer->orders()->where('currency', $currency)->where('status', '!=', 'cancelled')->sum('total_amount');
+        // Canonical pending amount (same rule as orders/wallet/ledger pages):
+        // only non-cancelled docs, same-currency payments, returns reduce.
+        $pendingAmount = app(\App\Services\Billing\PartyBalanceService::class)
+            ->pendingAmount('customer', $customer->id, $currency);
 
-        $paidPayments = $customer->orders()
-            ->where('currency', $currency)
-            ->get()
-            ->sum(function ($order) {
-                return $order->payments()->where('currency', $order->currency)->sum('amount');
-            });
-
-        $ledgerPayments = \App\Models\PartyPayment::where('person_type', 'customer')
-            ->where('person_id', $customer->id)
-            ->where('currency', $currency)
-            ->where('type', 'payment_received')
-            ->sum('amount');
-
-        $pendingAmount = max(0, $totalOrders - $paidPayments - $ledgerPayments);
-
-        $amount = $validated['amount'] ?? $pendingAmount;
+        $amount = $validated['amount'] ?? (float) $pendingAmount;
 
         if (!$customer->phone) {
             return $request->expectsJson()
@@ -88,24 +76,11 @@ class ReminderController extends Controller
         ]);
 
         $currency = $validated['currency'] ?? 'AFN';
-        $totalPurchases = $supplier->purchases()->where('currency', $currency)->where('status', '!=', 'cancelled')->sum('total_amount');
+        // Canonical pending amount (same rule as orders/wallet/ledger pages).
+        $pendingAmount = app(\App\Services\Billing\PartyBalanceService::class)
+            ->pendingAmount('supplier', $supplier->id, $currency);
 
-        $paidPayments = $supplier->purchases()
-            ->where('currency', $currency)
-            ->get()
-            ->sum(function ($purchase) {
-                return $purchase->purchasePayments()->where('currency', $purchase->currency)->sum('amount');
-            });
-
-        $ledgerPayments = \App\Models\PartyPayment::where('person_type', 'supplier')
-            ->where('person_id', $supplier->id)
-            ->where('currency', $currency)
-            ->where('type', 'payment_made')
-            ->sum('amount');
-
-        $pendingAmount = max(0, $totalPurchases - $paidPayments - $ledgerPayments);
-
-        $amount = $validated['amount'] ?? $pendingAmount;
+        $amount = $validated['amount'] ?? (float) $pendingAmount;
 
         if (!$supplier->phone) {
             return $request->expectsJson()

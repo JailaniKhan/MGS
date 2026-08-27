@@ -4,13 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\Accounting\ChartOfAccountsSeeder;
+use App\Services\Auth\OtpService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function __construct(private OtpService $otps) {}
+
     public function showLogin()
     {
         return view('auth.login');

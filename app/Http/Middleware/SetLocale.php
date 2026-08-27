@@ -10,7 +10,8 @@ class SetLocale
 {
     public function handle(Request $request, Closure $next)
     {
-        $locale = Setting::get('language', 'ps');
+        // A guest's session choice wins; the shop-wide setting is the default.
+        $locale = session('locale') ?? Setting::get('language', 'ps');
         if (in_array($locale, ['en', 'ps', 'fa'])) {
             app()->setLocale($locale);
         }

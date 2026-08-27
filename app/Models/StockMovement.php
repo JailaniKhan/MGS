@@ -15,6 +15,7 @@ class StockMovement extends Model
         'product_id',
         'journal_entry_id',
         'quantity_change',
+        'currency',
         'movement_type',
         'reference_type',
         'reference_id',

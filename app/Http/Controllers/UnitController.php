@@ -31,7 +31,7 @@ class UnitController extends Controller
 
         Unit::create($validated);
 
-        return redirect()->route('units.index')->with('success', __('messages.unit_created'));
+        return redirect()->route('inventory.index')->with('success', __('messages.unit_created'));
     }
 
     public function edit(Unit $unit)
@@ -48,15 +48,15 @@ class UnitController extends Controller
 
         $unit->update($validated);
 
-        return redirect()->route('units.index')->with('success', __('messages.unit_updated'));
+        return redirect()->route('inventory.index')->with('success', __('messages.unit_updated'));
     }
 
     public function destroy(Unit $unit)
     {
         if ($unit->products()->count() > 0) {
-            return redirect()->route('units.index')->with('error', __('messages.unit_has_products'));
+            return redirect()->route('inventory.index')->with('error', __('messages.unit_has_products'));
         }
         $unit->delete();
-        return redirect()->route('units.index')->with('success', __('messages.unit_deleted'));
+        return redirect()->route('inventory.index')->with('success', __('messages.unit_deleted'));
     }
 }

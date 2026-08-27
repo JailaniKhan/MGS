@@ -212,39 +212,10 @@ class DashboardController extends Controller
      */
     protected function topDebtors()
     {
-        $orders = DB::table('orders')
-            ->leftJoinSub(
-                DB::table('payments')->selectRaw('order_id, SUM(amount) as paid')->groupBy('order_id'),
-                'p', 'p.order_id', '=', 'orders.id'
-            )
-            ->leftJoinSub(
-                DB::table('order_returns')->where('status', '!=', 'cancelled')
-                    ->selectRaw('order_id, SUM(total_amount) as returned')->groupBy('order_id'),
-                'r', 'r.order_id', '=', 'orders.id'
-            )
-            ->where('orders.status', '!=', 'cancelled')
-            ->whereNotNull('orders.person_type')
-            ->where('orders.user_id', auth()->id())
-            ->groupBy('orders.person_type', 'orders.person_id', 'orders.currency')
-            ->selectRaw('orders.person_type, orders.person_id, orders.currency, MAX(0, SUM(orders.total_amount) - COALESCE(SUM(p.paid), 0) - COALESCE(SUM(r.returned), 0)) as remaining')
-            ->get();
-
-        $purchases = DB::table('purchases')
-            ->leftJoinSub(
-                DB::table('purchase_payments')->selectRaw('purchase_id, SUM(amount) as paid')->groupBy('purchase_id'),
-                'p', 'p.purchase_id', '=', 'purchases.id'
-            )
-            ->leftJoinSub(
-                DB::table('purchase_returns')->where('status', '!=', 'cancelled')
-                    ->selectRaw('purchase_id, SUM(total_amount) as returned')->groupBy('purchase_id'),
-                'r', 'r.purchase_id', '=', 'purchases.id'
-            )
-            ->where('purchases.status', '!=', 'cancelled')
-            ->whereNotNull('purchases.person_type')
-            ->where('purchases.user_id', auth()->id())
-            ->groupBy('purchases.person_type', 'purchases.person_id', 'purchases.currency')
-            ->selectRaw('purchases.person_type, purchases.person_id, purchases.currency, MAX(0, SUM(purchases.total_amount) - COALESCE(SUM(p.paid), 0) - COALESCE(SUM(r.returned), 0)) as remaining')
-            ->get();
+        // Per-document clamped remaining (the canonical rule), one grouped query
+        // per side — same math as PartyBalanceService, orders and wallet pages.
+        $orders = $this->partyRemainingRows('orders', 'order_id', 'payments', 'order_returns');
+        $purchases = $this->partyRemainingRows('purchases', 'purchase_id', 'purchase_payments', 'purchase_returns');
 
         // Combine: orders add to what they owe us, purchases add to what we owe them.
         $pending = [];
@@ -252,8 +223,7 @@ class DashboardController extends Controller
             $key = $row->person_type.':'.$row->person_id;
             $pending[$key]['type'] = $row->person_type;
             $pending[$key]['id'] = $row->person_id;
-            $pending[$key]['owed'][$row->currency] = (float) $row->remaining;
-            $pending[$key]['due'][$row->currency] = 0;
+            $pending[$key]['owed'][$row->currency] = ($pending[$key]['owed'][$row->currency] ?? 0) + (float) $row->remaining;
         }
         foreach ($purchases as $row) {
             $key = $row->person_type.':'.$row->person_id;
@@ -262,7 +232,25 @@ class DashboardController extends Controller
                 $pending[$key]['id'] = $row->person_id;
                 $pending[$key]['owed'] = ['AFN' => 0, 'USD' => 0];
             }
-            $pending[$key]['due'][$row->currency] = (float) $row->remaining;
+            $pending[$key]['due'][$row->currency] = ($pending[$key]['due'][$row->currency] ?? 0) + (float) $row->remaining;
+        }
+
+        // On-account ledger payments still credit the party after the net.
+        foreach (PartyPayment::get(['person_type', 'person_id', 'currency', 'type', 'amount']) as $p) {
+            $key = $p->person_type.':'.$p->person_id;
+            if (! isset($pending[$key])) {
+                continue;
+            }
+            $amount = (float) $p->amount;
+            // receipt from a customer shrinks what they owe us; an outlay to a
+            // supplier shrinks what we owe them; the reverse direction grows it.
+            if ($p->person_type === 'supplier') {
+                $sign = $p->type === 'payment_made' ? -1 : 1;
+                $pending[$key]['due'][$p->currency] = ($pending[$key]['due'][$p->currency] ?? 0) + $sign * $amount;
+            } else {
+                $sign = $p->type === 'payment_received' ? -1 : 1;
+                $pending[$key]['owed'][$p->currency] = ($pending[$key]['owed'][$p->currency] ?? 0) + $sign * $amount;
+            }
         }
 
         $customerNames = Customer::whereIn('id', collect($pending)->where('type', 'customer')->pluck('id'))->pluck('name', 'id');
@@ -290,6 +278,32 @@ class DashboardController extends Controller
         return $debtors;
     }
 
+    /**
+     * Per-document remaining balance aggregated per party+currency. Clamped
+     * per document (MAX(..., 0) inside the per-doc subquery via groupBy id)
+     * so a fully-paid document never drives the total negative — the same
+     * canonical rule as PartyBalanceService / AddsListBalances.
+     */
+    protected function partyRemainingRows(string $table, string $fk, string $paymentTable, string $returnTable)
+    {
+        return DB::table($table)
+            ->leftJoinSub(
+                DB::table($paymentTable)->selectRaw("{$fk}, currency, SUM(amount) as paid")->groupBy($fk, 'currency'),
+                'p', "p.{$fk}", '=', "{$table}.id"
+            )
+            ->leftJoinSub(
+                DB::table($returnTable)->where('status', '!=', 'cancelled')
+                    ->selectRaw("{$fk}, currency, SUM(total_amount) as returned")->groupBy($fk, 'currency'),
+                'r', "r.{$fk}", '=', "{$table}.id"
+            )
+            ->where("{$table}.status", '!=', 'cancelled')
+            ->whereNotNull("{$table}.person_type")
+            ->where("{$table}.user_id", auth()->id())
+            ->groupBy("{$table}.id", "{$table}.person_type", "{$table}.person_id", "{$table}.currency")
+            ->selectRaw("{$table}.person_type, {$table}.person_id, {$table}.currency, MAX({$table}.total_amount - COALESCE(SUM(CASE WHEN p.currency = {$table}.currency THEN p.paid END), 0) - COALESCE(SUM(CASE WHEN r.currency = {$table}.currency THEN r.returned END), 0), 0) as remaining")
+            ->get();
+    }
+
     public function index()
     {
         $cacheKey = sprintf('dashboard_v3_%s_%s', auth()->id(), now()->format('Ymd'));
@@ -313,7 +327,12 @@ class DashboardController extends Controller
                     ->whereRaw('orders.total_amount > (SELECT COALESCE(SUM(p.amount), 0) FROM payments p WHERE p.order_id = orders.id AND p.currency = orders.currency) + (SELECT COALESCE(SUM(r.total_amount), 0) FROM order_returns r WHERE r.order_id = orders.id AND r.status != ? AND r.currency = orders.currency)', ['cancelled'])
                     ->count(),
                 'processingOrders' => (int) Order::where('status', 'processing')->count(),
-                'lowStockProducts' => (int) Product::where('stock', '<', $lowStockThreshold)->count(),
+                // Low stock is per pool: 2 AFN + 500 USD must still flag the
+                // empty AFN side.
+                'lowStockProducts' => (int) Product::where(function ($q) use ($lowStockThreshold) {
+                    $q->where(fn ($afn) => $afn->where('stock_afn', '>', 0)->where('stock_afn', '<', $lowStockThreshold))
+                        ->orWhere(fn ($usd) => $usd->where('stock_usd', '>', 0)->where('stock_usd', '<', $lowStockThreshold));
+                })->count(),
                 'pendingPayments' => (int) Purchase::where('status', '!=', 'cancelled')
                     ->whereRaw('purchases.total_amount > (SELECT COALESCE(SUM(p.amount), 0) FROM purchase_payments p WHERE p.purchase_id = purchases.id AND p.currency = purchases.currency) + (SELECT COALESCE(SUM(r.total_amount), 0) FROM purchase_returns r WHERE r.purchase_id = purchases.id AND r.status != ? AND r.currency = purchases.currency)', ['cancelled'])
                     ->count(),

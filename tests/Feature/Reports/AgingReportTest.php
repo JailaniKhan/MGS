@@ -60,7 +60,7 @@ class AgingReportTest extends TestCase
 
     private function amount(float|string $value): string
     {
-        return number_format((float) $value, 2).' '.__('messages.afn');
+        return '<bdi>'.number_format((float) $value, 2).'</bdi> '.__('messages.afn');
     }
 
     public function test_guests_are_redirected_to_login(): void
@@ -250,7 +250,7 @@ class AgingReportTest extends TestCase
         $response = $this->get('/reports/aging?currency=USD');
 
         $response->assertOk();
-        $response->assertSee('50.00 $', false);
+        $response->assertSee('<bdi>50.00</bdi> $', false);
         $response->assertDontSee('100.00', false);
     }
 
@@ -347,20 +347,58 @@ class AgingReportTest extends TestCase
         $this->assertDatabaseMissing('payments', ['order_id' => $order->id]);
     }
 
-    public function test_purchase_payment_store_rejects_currency_mismatch(): void
+    public function test_customer_and_supplier_sharing_a_person_id_are_not_merged(): void
     {
+        // Regression: grouping by person_id alone merged a customer order and a
+        // supplier-type order whose person_ids collided, reporting both debts
+        // under whichever party appeared first.
         $user = User::factory()->create();
         $this->actingAs($user);
-        $supplier = $this->makeSupplier('Blocked Purchase Payment');
-        $purchase = $this->makePurchase($supplier, ['total_amount' => '100.00']);
+        $customer = $this->makeCustomer('Split Customer');
+        $supplier = $this->makeSupplier('Split Supplier');
 
-        $response = $this->post(route('purchases.payment.store'), [
-            'purchase_id' => $purchase->id,
-            'amount' => '10.00',
-            'currency' => 'USD',
+        $this->assertSame($customer->id, $supplier->id, 'Test requires matching person ids');
+
+        $this->makeOrder($customer, ['total_amount' => '100.00']);
+        Order::create([
+            'customer_id' => null,
+            'person_type' => 'supplier',
+            'person_id' => $supplier->id,
+            'status' => 'completed',
+            'subtotal' => '0.00',
+            'total_amount' => '200.00',
+            'currency' => 'AFN',
         ]);
 
-        $response->assertSessionHas('error');
-        $this->assertDatabaseMissing('purchase_payments', ['purchase_id' => $purchase->id]);
+        $response = $this->get('/reports/aging');
+
+        $response->assertOk();
+        $response->assertSee('Split Customer');
+        $response->assertSee('Split Supplier');
+        $response->assertSee($this->amount(100), false);
+        $response->assertSee($this->amount(200), false);
+    }
+
+    public function test_debtors_are_sorted_numerically_not_lexicographically(): void
+    {
+        // Regression: sortByDesc on the decimal-string total ranked "900.00"
+        // above "1000.00" because string comparison is lexicographic.
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $nineHundred = $this->makeCustomer('Nine Hundred Debtor');
+        $thousand = $this->makeCustomer('Thousand Debtor');
+        $this->makeOrder($nineHundred, ['total_amount' => '900.00']);
+        $this->makeOrder($thousand, ['total_amount' => '1000.00']);
+
+        $response = $this->get('/reports/aging');
+
+        $response->assertOk();
+        $content = $response->getContent();
+        $this->assertGreaterThan(
+            strpos($content, 'Thousand Debtor'),
+            strpos($content, 'Nine Hundred Debtor'),
+            '1000.00 must sort above 900.00.'
+        );
     }
 }

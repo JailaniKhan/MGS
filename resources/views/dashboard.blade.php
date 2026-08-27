@@ -136,11 +136,11 @@
                         </div>
                         <div class="min-w-0">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $order->party?->name ?? __('messages.unknown') }}</div>
-                            <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $order->created_at->format('d M') }}</div>
+                            <div class="text-[11px] text-ink-500 dark:text-ink-400"><bdi>{{ local_date($order->created_at, 'd M') }}</bdi></div>
                         </div>
                     </div>
                     <div class="text-end flex-shrink-0 ms-3">
-                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100">{{ number_format($order->total_amount) }}</div>
+                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100"><x-money :amount="$order->total_amount" :currency="$order->currency" symbol-class="text-[10px] font-medium text-ink-500"/></div>
                         <span class="inline-flex items-center gap-1 badge
                             @if($order->display_status === 'paid' || $order->display_status === 'completed') badge-success
                             @elseif($order->display_status === 'processing') badge-info
@@ -180,32 +180,29 @@
                     $isDebtor = $overall >= 0;
                 @endphp
                 <a href="{{ route('ledger.show', [$debtor->type, $debtor->id]) }}" class="list-row">
-                    <div class="flex items-center gap-3 min-w-0">
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
                         <div class="w-8 h-8 rounded-lg {{ $isDebtor ? 'bg-danger-100 dark:bg-danger-900/30' : 'bg-accent-100 dark:bg-accent-900/30' }} flex items-center justify-center flex-shrink-0">
                             <x-icon name="user" class="w-4 h-4 {{ $isDebtor ? 'text-danger-600 dark:text-danger-400' : 'text-accent-600 dark:text-accent-400' }}"/>
                         </div>
                         <div class="min-w-0">
-                            <div class="flex items-center gap-1.5">
+                            <div class="flex items-center justify-between gap-2">
                                 <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $debtor->name }}</div>
-                                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-ink-100 dark:bg-ink-800 text-ink-500 dark:text-ink-400 capitalize">{{ $debtor->type }}</span>
+                                <span class="badge {{ $isDebtor ? 'badge-danger' : 'badge-warning' }} flex-shrink-0">{{ __($isDebtor ? 'messages.owes_you' : 'messages.you_owe') }}</span>
                             </div>
-                            <div class="flex items-center gap-2 text-[11px] text-ink-500 dark:text-ink-400">
+                            <div class="flex items-center gap-2 text-[11px] text-ink-500 dark:text-ink-400 mt-0.5">
+                                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-ink-100 dark:bg-ink-800 text-ink-500 dark:text-ink-400 capitalize flex-shrink-0">{{ $debtor->type }}</span>
                                 @if ($debtor->pending_afn != 0)
-                                    <span class="font-semibold {{ $debtor->pending_afn > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-accent-600 dark:text-accent-400' }}">
+                                    <span class="font-semibold tabular-nums {{ $debtor->pending_afn > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-accent-600 dark:text-accent-400' }}">
                                         {{ $debtor->pending_afn > 0 ? '+' : '-' }}{{ number_format(abs($debtor->pending_afn)) }} {{ __('messages.afn') }}
                                     </span>
                                 @endif
                                 @if ($debtor->pending_usd != 0)
-                                    <span class="font-semibold {{ $debtor->pending_usd > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-accent-600 dark:text-accent-400' }}">
+                                    <span class="font-semibold tabular-nums {{ $debtor->pending_usd > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-accent-600 dark:text-accent-400' }}">
                                         {{ $debtor->pending_usd > 0 ? '+' : '-' }}{{ number_format(abs($debtor->pending_usd)) }}$
                                     </span>
                                 @endif
                             </div>
                         </div>
-                    </div>
-                    <div class="flex items-center gap-2 flex-shrink-0 ms-3">
-                        <span class="badge {{ $isDebtor ? 'badge-danger' : 'badge-warning' }}">{{ __($isDebtor ? 'messages.owes_you' : 'messages.you_owe') }}</span>
-                        <x-icon name="chevron-right" class="w-4 h-4 text-ink-400 flex-shrink-0" strokeWidth="2"/>
                     </div>
                 </a>
             @empty
@@ -234,21 +231,23 @@
                         </div>
                         <div class="min-w-0">
                             <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $purchase->party?->name ?? __('messages.unknown') }}</div>
-                            <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $purchase->created_at->format('d M') }}</div>
+                            <div class="text-[11px] text-ink-500 dark:text-ink-400"><bdi>{{ local_date($purchase->created_at, 'd M') }}</bdi></div>
                         </div>
                     </div>
                     <div class="text-end flex-shrink-0 ms-3">
-                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100">{{ number_format($purchase->total_amount) }}</div>
+                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100"><x-money :amount="$purchase->total_amount" :currency="$purchase->currency" symbol-class="text-[10px] font-medium text-ink-500"/></div>
                         <span class="inline-flex items-center gap-1 badge
                             @if($purchase->display_status === 'paid' || $purchase->display_status === 'completed') badge-success
                             @elseif($purchase->display_status === 'processing') badge-info
                             @elseif($purchase->display_status === 'cancelled') badge-danger
+                            @elseif($purchase->display_status === 'partial') badge-info
                             @else badge-warning @endif">
                             @switch($purchase->display_status)
                                 @case('paid') {{ __('messages.paid') }} @break
                                 @case('completed') {{ __('messages.completed') }} @break
                                 @case('processing') {{ __('messages.processing') }} @break
                                 @case('cancelled') {{ __('messages.cancelled') }} @break
+                                @case('partial') {{ __('messages.partially_paid') }} @break
                                 @default {{ __('messages.pending') }}
                             @endswitch
                         </span>
@@ -307,64 +306,21 @@
 @push('scripts')
 @vite('resources/js/charts.js')
 <script>
-    (async function initCharts() {
-        // Wait for window.Chart (module scripts are deferred)
-        let tries = 0;
-        while (!window.Chart && tries < 100) { await new Promise(r => setTimeout(r, 50)); tries++; }
-        if (!window.Chart) return;
-        Chart.defaults.font.family = "'Plus Jakarta Sans', 'Vazirmatn', sans-serif";
-        Chart.defaults.font.size = 10;
-        Chart.defaults.color = '#9ca3af';
+document.addEventListener('DOMContentLoaded', function () {
+    MGSCharts.ready(function (Chart) {
+        const C = MGSCharts.colors;
+        MGSCharts.applyDefaults();
 
-        const commonOptions = {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: '#1f2022',
-                    titleColor: '#fff',
-                    bodyColor: '#e4e4e7',
-                    padding: 10,
-                    cornerRadius: 10,
-                    titleFont: { size: 11, weight: '600' },
-                    bodyFont: { size: 10 },
-                    borderColor: 'rgba(255,255,255,0.08)',
-                    borderWidth: 1,
-                    displayColors: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0,0,0,0.04)',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        font: { size: 9 },
-                        padding: 6,
-                        maxTicksLimit: 4
-                    }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: {
-                        font: { size: 9 },
-                        maxTicksLimit: 7
-                    }
-                }
-            }
-        };
+        const commonOptions = MGSCharts.baseOptions();
 
         const revenueCtx = document.getElementById('weeklyRevenueChart').getContext('2d');
         const revenueGradient = revenueCtx.createLinearGradient(0, 0, 0, 160);
-        revenueGradient.addColorStop(0, 'rgba(16, 174, 100, 0.22)');
-        revenueGradient.addColorStop(1, 'rgba(16, 174, 100, 0)');
+        revenueGradient.addColorStop(0, MGSCharts.alpha(C.brand, 0.22));
+        revenueGradient.addColorStop(1, MGSCharts.alpha(C.brand, 0));
 
         const usdGradient = revenueCtx.createLinearGradient(0, 0, 0, 160);
-        usdGradient.addColorStop(0, 'rgba(18, 131, 233, 0.18)');
-        usdGradient.addColorStop(1, 'rgba(18, 131, 233, 0)');
+        usdGradient.addColorStop(0, MGSCharts.alpha(C.secondary, 0.18));
+        usdGradient.addColorStop(1, MGSCharts.alpha(C.secondary, 0));
 
         new Chart(revenueCtx, {
             type: 'line',
@@ -375,11 +331,11 @@
                         label: '{{ __('messages.revenue') }} ({{ __('messages.afn') }})',
                         data: @json($weeklyRevenue['data_afn']),
                         backgroundColor: revenueGradient,
-                        borderColor: '#10ae64',
+                        borderColor: C.brand,
                         borderWidth: 2,
                         tension: 0.4,
                         fill: true,
-                        pointBackgroundColor: '#10ae64',
+                        pointBackgroundColor: C.brand,
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2,
                         pointRadius: 3,
@@ -389,11 +345,11 @@
                         label: '{{ __('messages.revenue') }} ({{ __('messages.usd') }})',
                         data: @json($weeklyRevenue['data_usd']),
                         backgroundColor: usdGradient,
-                        borderColor: '#1283e9',
+                        borderColor: C.secondary,
                         borderWidth: 2,
                         tension: 0.4,
                         fill: false,
-                        pointBackgroundColor: '#1283e9',
+                        pointBackgroundColor: C.secondary,
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2,
                         pointRadius: 3,
@@ -437,16 +393,16 @@
                     {
                         label: '{{ __('messages.expenses') }} ({{ __('messages.afn') }})',
                         data: @json($weeklyExpenses['data_afn']),
-                        backgroundColor: 'rgba(230, 85, 85, 0.6)',
-                        borderColor: '#e65555',
+                        backgroundColor: MGSCharts.alpha(C.danger, 0.6),
+                        borderColor: C.danger,
                         borderWidth: 0,
                         borderRadius: 3
                     },
                     {
                         label: '{{ __('messages.expenses') }} ({{ __('messages.usd') }})',
                         data: @json($weeklyExpenses['data_usd']),
-                        backgroundColor: 'rgba(18, 131, 233, 0.6)',
-                        borderColor: '#1283e9',
+                        backgroundColor: MGSCharts.alpha(C.secondary, 0.6),
+                        borderColor: C.secondary,
                         borderWidth: 0,
                         borderRadius: 3
                     }
@@ -477,6 +433,7 @@
                 }
             }
         });
-    })();
+    });
+});
 </script>
 @endpush

@@ -22,12 +22,14 @@ class OtpAuthController extends Controller
         cache(["otp_{$validated['phone']}" => $otp], 300);
 
         $message = __('messages.otp_message', ['otp' => $otp]);
+        // Never log the code itself — log files are readable by anyone with
+        // device access, which would defeat the OTP entirely.
         try {
             if (! app(WhatsAppService::class)->send($validated['phone'], $message)) {
-                logger("OTP for {$validated['phone']}: {$otp}");
+                logger("OTP delivery failed for {$validated['phone']}. The user must request a new code.");
             }
         } catch (\Throwable $e) {
-            logger("OTP for {$validated['phone']}: {$otp}");
+            logger("OTP delivery failed for {$validated['phone']}: {$e->getMessage()}");
         }
 
         return response()->json([

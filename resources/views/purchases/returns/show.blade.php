@@ -25,7 +25,7 @@
         </div>
         <div class="space-y-1.5 text-sm">
             <div><span class="text-ink-500 dark:text-ink-400">{{ __('messages.party') }}: </span><span class="font-medium text-ink-800 dark:text-ink-200">{{ $purchaseReturn->purchase->party?->name ?? __('messages.unknown') }}</span></div>
-            <div><span class="text-ink-500 dark:text-ink-400">{{ __('messages.return_date') }}: </span><span class="font-medium">{{ $purchaseReturn->return_date->format('Y/m/d') }}</span></div>
+            <div><span class="text-ink-500 dark:text-ink-400">{{ __('messages.return_date') }}: </span><span class="font-medium"><bdi>{{ local_date($purchaseReturn->return_date, 'Y/m/d') }}</bdi></span></div>
             @if ($purchaseReturn->reason)<div><span class="text-ink-500 dark:text-ink-400">{{ __('messages.reason') }}: </span><span class="font-medium">{{ $purchaseReturn->reason }}</span></div>@endif
             <div><span class="text-ink-500 dark:text-ink-400">{{ __('messages.currency_unit') }}: </span><span class="font-medium">{{ $purchaseReturn->purchase->currency === 'USD' ? __('messages.usd_with_paren') . '$)' : __('messages.afn') . ' (' . __('messages.afn') . ')' }}</span></div>
         </div>
@@ -42,14 +42,14 @@
             <div class="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 last:border-b-0">
                 <div>
                     <div class="text-sm font-medium text-ink-800 dark:text-ink-200">{{ $item->product->name }}</div>
-                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ $item->quantity }}@if($item->product->unit) {{ $item->product->unit->short_name ?? $item->product->unit->name }}@endif x {{ number_format($item->unit_price) }} {{ $purchaseReturn->purchase->currency === 'USD' ? '$' : __('messages.afn') }}</div>
+                    <div class="text-xs text-ink-500 dark:text-ink-400">{{ $item->quantity }}@if($item->product->unit) {{ $item->product->unit->short_name ?? $item->product->unit->name }}@endif x <x-money :amount="$item->unit_price" :currency="$purchaseReturn->purchase->currency" symbol-class="text-[10px] font-medium text-ink-500"/></div>
                 </div>
-                <div class="text-sm font-semibold text-ink-900 dark:text-ink-100">{{ number_format($item->subtotal) }} {{ $purchaseReturn->purchase->currency === 'USD' ? '$' : __('messages.afn') }}</div>
+                <div class="text-sm font-semibold text-ink-900 dark:text-ink-100"><x-money :amount="$item->subtotal" :currency="$purchaseReturn->purchase->currency" symbol-class="text-[10px] font-medium text-ink-500"/></div>
             </div>
         @endforeach
         <div class="flex items-center justify-between px-4 py-3 bg-primary-50 dark:bg-primary-900/10 font-bold">
             <span class="text-sm text-ink-900 dark:text-white">{{ __('messages.total') }}</span>
-            <span class="text-sm text-primary-700 dark:text-primary-300">{{ number_format($purchaseReturn->total_amount) }} {{ $purchaseReturn->purchase->currency === 'USD' ? '$' : __('messages.afn') }}</span>
+            <span class="text-sm text-primary-700 dark:text-primary-300"><x-money :amount="$purchaseReturn->total_amount" :currency="$purchaseReturn->purchase->currency" symbol-class="text-[10px] font-medium text-primary-700 dark:text-primary-300"/></span>
         </div>
     </div>
 

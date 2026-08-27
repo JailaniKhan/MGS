@@ -170,7 +170,7 @@ class DaybookTest extends TestCase
         $response->assertOk();
         $response->assertSee('+30.00', false);
         $response->assertSee('+40.00', false);
-        $response->assertSee('>70.00 ', false);
+        $response->assertSee('+70.00', false);
     }
 
     public function test_currency_filter_keeps_amounts_separate(): void
@@ -285,7 +285,13 @@ class DaybookTest extends TestCase
         // 12 Aug = 1,000.00. The NEWEST (12 Aug) row carries the closing balance, so it must
         // render before the older (11 Aug) row's running balance.
         $response->assertSee('950.00');
-        $response->assertSeeInOrder(['12 Aug', '1,000.00', '11 Aug', '1,150.00']);
+        // Day labels are locale-rendered now, so order the ledger by the running-balance
+        // badges themselves: 12 Aug (closing 1,000.00) must appear before 11 Aug (1,150.00).
+        $content = $response->getContent();
+        $this->assertTrue(
+            strrpos($content, '1,000.00') < strrpos($content, '1,150.00'),
+            'Newest day (12 Aug, closing 1,000.00) must render before 11 Aug (1,150.00).'
+        );
     }
 
     public function test_sales_rows_are_reference_only_and_do_not_inflate_totals(): void
@@ -328,7 +334,7 @@ class DaybookTest extends TestCase
         // Sale total shown as a muted reference amount...
         $response->assertSee('1,500.00');
         // ...but income totals 200.00, NOT 1,700.00 (the sale must not inflate cash).
-        $response->assertSee('>200.00 ', false);
+        $response->assertSee('+200.00', false);
         $response->assertDontSee('1,700.00');
     }
 }

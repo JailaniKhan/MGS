@@ -12,13 +12,25 @@ class ExpenseController extends Controller
     public function index()
     {
         $expenses = Expense::latest('expense_date')->paginate(self::PER_PAGE)->withQueryString();
-        return view('expenses.index', compact('expenses'));
+
+        $monthExpenses = Expense::where('expense_date', '>=', now()->startOfMonth())
+            ->get(['amount', 'currency']);
+        $monthCount = $monthExpenses->count();
+        $monthTotalAFN = $monthExpenses->where('currency', 'AFN')->sum('amount');
+        $monthTotalUSD = $monthExpenses->where('currency', 'USD')->sum('amount');
+
+        return view('expenses.index', compact('expenses', 'monthCount', 'monthTotalAFN', 'monthTotalUSD'));
     }
 
     public function create()
     {
         $categories = Category::orderBy('name')->pluck('name');
-        return view('expenses.create', compact('categories'));
+        $categoryOptions = $this->categoryOptions($categories);
+
+        $effective = old('category');
+        $pickerSelected = $effective && ! $categories->contains($effective) ? '__other__' : $effective;
+
+        return view('expenses.create', compact('categories', 'categoryOptions', 'pickerSelected'));
     }
 
     public function store(Request $request)
@@ -45,7 +57,12 @@ class ExpenseController extends Controller
     public function edit(Expense $expense)
     {
         $categories = Category::orderBy('name')->pluck('name');
-        return view('expenses.edit', compact('expense', 'categories'));
+        $categoryOptions = $this->categoryOptions($categories);
+
+        $effective = old('category', $expense->category);
+        $pickerSelected = $effective && ! $categories->contains($effective) ? '__other__' : $effective;
+
+        return view('expenses.edit', compact('expense', 'categories', 'categoryOptions', 'pickerSelected'));
     }
 
     public function update(Request $request, Expense $expense)
@@ -68,5 +85,14 @@ class ExpenseController extends Controller
     {
         $expense->delete();
         return redirect()->route('expenses.index')->with('success', __('messages.expense_deleted'));
+    }
+
+    private function categoryOptions($categories): array
+    {
+        return $categories
+            ->map(fn (string $name) => ['value' => $name, 'label' => $name])
+            ->push(['value' => '__other__', 'label' => __('messages.other')])
+            ->values()
+            ->all();
     }
 }

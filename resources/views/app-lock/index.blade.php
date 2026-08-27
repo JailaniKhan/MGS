@@ -24,9 +24,14 @@
         </div>
 
         @if($pinEnabled === '1')
-            <form action="{{ route('app-lock.remove-pin') }}" method="POST">
+            <form action="{{ route('app-lock.remove-pin') }}" method="POST" class="space-y-3">
                 @csrf
                 @method('DELETE')
+                <div>
+                    <label class="form-label">{{ __('messages.enter_pin') }}</label>
+                    <input type="password" name="pin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric"
+                           class="form-input text-center text-2xl tracking-[0.5em]" placeholder="••••" required>
+                </div>
                 <button type="submit" class="btn-danger w-full">{{ __('messages.remove_pin') }}</button>
             </form>
         @else

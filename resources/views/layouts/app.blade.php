@@ -1,13 +1,20 @@
-﻿@php
+@php
 use App\Models\Setting;
 @endphp
 <!DOCTYPE html>
-<html lang="{{ app()->getLocale() }}" dir="{{ in_array(app()->getLocale(), ['ps', 'fa']) ? 'rtl' : 'ltr' }}">
+<html lang="{{ app()->getLocale() }}" dir="{{ in_array(app()->getLocale(), ['ps', 'fa']) ? 'rtl' : 'ltr' }}" data-language-url="{{ route('language.update') }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, minimum-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>MGS - {{ __('messages.dashboard') }}</title>
+    <script>
+        try {
+            const t = localStorage.getItem('mgs-theme');
+            const d = t === 'dark' || ((!t || t === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (d) document.documentElement.classList.add('dark');
+        } catch (e) {}
+    </script>
     @fonts
     @if(in_array(app()->getLocale(), ['ps', 'fa']))
         @vite(['resources/css/app-rtl.css', 'resources/js/app.js', 'resources/js/ui.js'])
@@ -18,7 +25,7 @@ use App\Models\Setting;
     <link rel="apple-touch-icon" href="/favicon.svg">
 </head>
 <body class="bg-ink-50 dark:bg-[#0b0c0e] text-ink-700 dark:text-ink-200 font-sans antialiased">
-    <div class="min-h-screen flex flex-col pb-[72px]">
+    <div class="min-h-screen flex flex-col pb-24">
 
         <!-- HEADER -->
         <header class="bg-white/90 dark:bg-[#18191a]/90 backdrop-blur-xl border-b border-ink-100 dark:border-white/[0.05] sticky top-0 z-40">
@@ -78,6 +85,10 @@ use App\Models\Setting;
                 <a href="{{ route('staff.index') }}" class="sidebar-link {{ request()->routeIs('staff.*') ? 'sidebar-link-active' : '' }}">
                     <x-icon name="users" class="w-5 h-5"/>
                     <span>{{ __('messages.staff_book') }}</span>
+                </a>
+                <a href="{{ route('people.index') }}" class="sidebar-link {{ request()->routeIs('people.*') ? 'sidebar-link-active' : '' }}">
+                    <x-icon name="user-group" class="w-5 h-5"/>
+                    <span>{{ __('messages.people') }}</span>
                 </a>
                 <a href="{{ route('passbook.index') }}" class="sidebar-link {{ request()->routeIs('passbook.*') ? 'sidebar-link-active' : '' }}">
                     <x-icon name="currency-dollar" class="w-5 h-5"/>
@@ -148,21 +159,6 @@ use App\Models\Setting;
             </nav>
         </aside>
 
-        <script>
-            function changeLanguage(lang) {
-                fetch('{{ route('language.update') }}', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({ language: lang }),
-                })
-                .then(() => window.location.reload())
-                .catch(() => window.location.reload());
-            }
-        </script>
-
         <!-- FLASH MESSAGES -->
         @if (session('success'))
             <div class="toast" role="alert">
@@ -202,74 +198,84 @@ use App\Models\Setting;
     </div>
 
     <!-- BOTTOM NAVIGATION -->
-    <nav class="fixed bottom-0 left-0 right-0 z-50 px-2 pb-1 pt-0">
-        <div class="bg-white/90 dark:bg-[#18191a]/90 backdrop-blur-2xl border border-ink-100 dark:border-white/[0.05] rounded-[1.25rem] shadow-nav dark:shadow-nav-dark">
-            <div class="relative flex items-center justify-around py-1">
-            <span id="nav-pill" class="nav-pill"></span>
+    <nav class="bottom-nav">
+        <div class="bottom-nav-shell">
+            <div class="relative flex items-stretch justify-around px-1 py-2">
                 <!-- Dashboard -->
                 <a href="{{ route('dashboard') }}"
-                   class="nav-item {{ request()->routeIs('dashboard') ? 'nav-item-active' : '' }} group"
+                   class="nav-item {{ request()->routeIs('dashboard') ? 'nav-item-active' : '' }}"
                    aria-label="{{ __('messages.dashboard') }}">
-                    <x-icon name="squares-2x2" class="w-5 h-5"/>
-                    <span>{{ __('messages.dashboard') }}</span>
+                    <span class="nav-item-bg"></span>
+                    <x-icon name="squares-2x2" class="nav-item-icon" strokeWidth="1.8"/>
+                    <span class="nav-item-label">{{ __('messages.dashboard') }}</span>
                 </a>
 
                 <!-- Orders -->
                 <a href="{{ route('orders.index') }}"
-                   class="nav-item {{ request()->routeIs('orders.*') ? 'nav-item-active' : '' }} group"
+                   class="nav-item {{ request()->routeIs('orders.*') ? 'nav-item-active' : '' }}"
                    aria-label="{{ __('messages.orders') }}">
-                    <x-icon name="clipboard-document-list" class="w-5 h-5"/>
-                    <span>{{ __('messages.orders') }}</span>
+                    <span class="nav-item-bg"></span>
+                    <x-icon name="clipboard-document-list" class="nav-item-icon" strokeWidth="1.8"/>
+                    <span class="nav-item-label">{{ __('messages.orders') }}</span>
                 </a>
 
                 <!-- Center FAB: expandable quick-actions menu -->
                 <button type="button" id="fab-btn"
-                        class="nav-item group -mt-2 relative"
+                        class="fab-anchor"
                         aria-label="{{ __('messages.quick_actions') }}" aria-expanded="false" aria-haspopup="true">
-                    <div class="w-10 h-10 rounded-full brand-grad text-white flex items-center justify-center shadow-fab">
-                        <x-icon name="plus" class="w-5 h-5 text-white fab-toggle transition-transform duration-300" strokeWidth="2"/>
-                    </div>
-                    <span class="text-primary-600 dark:text-primary-400 font-bold">{{ __('messages.quick_actions') }}</span>
+                    <span class="fab-circle">
+                        <x-icon name="plus" class="w-6 h-6 text-white fab-toggle" strokeWidth="2.2"/>
+                    </span>
                 </button>
-
-                <!-- FAB popup menu -->
-                <div class="fab-menu" id="fab-menu" role="menu" aria-label="{{ __('messages.quick_actions') }}">
-                    <a href="{{ route('orders.create') }}" class="fab-menu-item" role="menuitem">
-                        <x-icon name="plus" class="w-5 h-5"/>
-                        <span>{{ __('messages.new_order') }}</span>
-                    </a>
-                    <a href="{{ route('expenses.create') }}" class="fab-menu-item" role="menuitem">
-                        <x-icon name="currency-dollar" class="w-5 h-5"/>
-                        <span>{{ __('messages.new_expense') }}</span>
-                    </a>
-                    <a href="{{ route('purchases.create') }}" class="fab-menu-item" role="menuitem">
-                        <x-icon name="shopping-cart" class="w-5 h-5"/>
-                        <span>{{ __('messages.new_purchase') }}</span>
-                    </a>
-                    <a href="{{ route('cashbook.index') }}" class="fab-menu-item" role="menuitem">
-                        <x-icon name="banknotes" class="w-5 h-5"/>
-                        <span>{{ __('messages.cashbook') }}</span>
-                    </a>
-                </div>
-                <div class="fab-backdrop" id="fab-backdrop"></div>
 
                 <!-- Inventory -->
                 <a href="{{ route('inventory.index') }}"
-                   class="nav-item {{ request()->routeIs('inventory.*') ? 'nav-item-active' : '' }} group"
+                   class="nav-item {{ request()->routeIs('inventory.*') ? 'nav-item-active' : '' }}"
                    aria-label="{{ __('messages.inventory') }}">
-                    <x-icon name="archive-box" class="w-5 h-5"/>
-                    <span>{{ __('messages.inventory') }}</span>
+                    <span class="nav-item-bg"></span>
+                    <x-icon name="archive-box" class="nav-item-icon" strokeWidth="1.8"/>
+                    <span class="nav-item-label">{{ __('messages.inventory') }}</span>
                 </a>
 
                 <!-- More -->
                 <a href="{{ route('settings.index') }}"
-                   class="nav-item {{ request()->routeIs('settings.*') || request()->routeIs('ledger.*') || request()->routeIs('people.*') ? 'nav-item-active' : '' }} group"
+                   class="nav-item {{ request()->routeIs('settings.*') || request()->routeIs('ledger.*') || request()->routeIs('people.*') ? 'nav-item-active' : '' }}"
                    aria-label="{{ __('messages.more') }}">
-                    <x-icon name="cog-6-tooth" class="w-5 h-5"/>
-                    <span>{{ __('messages.more') }}</span>
+                    <span class="nav-item-bg"></span>
+                    <x-icon name="cog-6-tooth" class="nav-item-icon" strokeWidth="1.8"/>
+                    <span class="nav-item-label">{{ __('messages.more') }}</span>
                 </a>
             </div>
         </div>
+
+        <!-- FAB popup menu -->
+        <div class="fab-menu" id="fab-menu" role="menu" aria-label="{{ __('messages.quick_actions') }}">
+            <div class="fab-menu-card">
+                <div class="fab-menu-head">
+                    <span class="fab-menu-dot"></span>
+                    {{ __('messages.quick_actions') }}
+                </div>
+                <div class="fab-menu-grid">
+                    <a href="{{ route('orders.create') }}" class="fab-menu-item" role="menuitem" style="--i:0">
+                        <span class="fab-tile bg-brand/10 dark:bg-brand/20 text-brand"><x-icon name="clipboard-document-list" strokeWidth="1.8"/></span>
+                        <span>{{ __('messages.new_order') }}</span>
+                    </a>
+                    <a href="{{ route('expenses.create') }}" class="fab-menu-item" role="menuitem" style="--i:1">
+                        <span class="fab-tile bg-accent-500/10 dark:bg-accent-500/15 text-accent-600 dark:text-accent-400"><x-icon name="currency-dollar" strokeWidth="1.8"/></span>
+                        <span>{{ __('messages.new_expense') }}</span>
+                    </a>
+                    <a href="{{ route('purchases.create') }}" class="fab-menu-item" role="menuitem" style="--i:2">
+                        <span class="fab-tile bg-secondary-500/10 dark:bg-secondary-500/15 text-secondary-600 dark:text-secondary-400"><x-icon name="shopping-cart" strokeWidth="1.8"/></span>
+                        <span>{{ __('messages.new_purchase') }}</span>
+                    </a>
+                    <a href="{{ route('cashbook.index') }}" class="fab-menu-item" role="menuitem" style="--i:3">
+                        <span class="fab-tile bg-brand/10 dark:bg-brand/20 text-brand"><x-icon name="banknotes" strokeWidth="1.8"/></span>
+                        <span>{{ __('messages.cashbook') }}</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="fab-backdrop" id="fab-backdrop"></div>
     </nav>
 
     <!-- Navigation skeleton overlay (instant feedback on link/submit) -->

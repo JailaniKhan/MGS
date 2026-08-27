@@ -79,7 +79,7 @@
                         <x-radio-pill name="price_currency" value="AFN" :label="__('messages.afn')" :checked="old('price_currency', 'AFN') === 'AFN'" pill/>
                         <x-radio-pill name="price_currency" value="USD" :label="'$'" :checked="old('price_currency') === 'USD'" pill/>
                     </div>
-                    <div class="relative">
+                    <div class="relative" dir="ltr">
                         <input type="number" name="price" value="{{ old('price') }}" step="0.01" min="0" dir="ltr" inputmode="decimal" placeholder="0" class="form-input pe-12 text-center font-bold tabular-nums">
                         <span data-price-badge="AFN" class="pointer-events-none absolute top-1/2 -translate-y-1/2 end-3 text-[9px] font-extrabold px-1 py-0.5 rounded bg-brand/10 text-brand {{ old('price_currency', 'AFN') === 'USD' ? 'hidden' : '' }}">{{ __('messages.afn') }}</span>
                         <span data-price-badge="USD" class="pointer-events-none absolute top-1/2 -translate-y-1/2 end-3 text-[9px] font-extrabold px-1 py-0.5 rounded bg-secondary-500/10 text-secondary-600 dark:text-secondary-400 {{ old('price_currency', 'AFN') === 'USD' ? '' : 'hidden' }}">{{ __('messages.usd') }}</span>
@@ -93,7 +93,7 @@
                     <label class="form-label">{{ __('messages.stock') }}</label>
                     <input type="hidden" name="stock_afn" value="{{ old('stock_afn', 0) }}" data-stock-pool="AFN">
                     <input type="hidden" name="stock_usd" value="{{ old('stock_usd', 0) }}" data-stock-pool="USD">
-                    <div class="relative">
+                    <div class="relative" dir="ltr">
                         <input type="number" data-stock-active data-currency="{{ old('price_currency', 'AFN') }}" value="{{ old('price_currency') === 'USD' ? old('stock_usd', 0) : old('stock_afn', 0) }}" min="0" required dir="ltr" inputmode="numeric" class="form-input pe-12 text-center font-bold tabular-nums">
                         <span data-stock-badge="AFN" class="pointer-events-none absolute top-1/2 -translate-y-1/2 end-3 text-[9px] font-extrabold px-1 py-0.5 rounded bg-brand/10 text-brand {{ old('price_currency') === 'USD' ? 'hidden' : '' }}">{{ __('messages.afn') }}</span>
                         <span data-stock-badge="USD" class="pointer-events-none absolute top-1/2 -translate-y-1/2 end-3 text-[9px] font-extrabold px-1 py-0.5 rounded bg-secondary-500/10 text-secondary-600 dark:text-secondary-400 {{ old('price_currency') === 'USD' ? '' : 'hidden' }}">{{ __('messages.usd') }}</span>

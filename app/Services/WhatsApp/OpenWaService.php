@@ -88,9 +88,20 @@ class OpenWaService
      */
     public function send(string $phone, string $message): bool
     {
+        return $this->sendText($phone, $message)['ok'];
+    }
+
+    /**
+     * Send a text message, surfacing the gateway's provider message id so
+     * callers can log it (reminders.provider_message_id).
+     *
+     * @return array{ok: bool, id: ?string}
+     */
+    public function sendText(string $phone, string $message): array
+    {
         if (!$this->isConfigured()) {
             Log::info('OpenWA skipped (not configured)', compact('phone', 'message'));
-            return false;
+            return ['ok' => false, 'id' => null];
         }
 
         $chatId = $this->toChatId($phone);
@@ -106,11 +117,11 @@ class OpenWaService
                 'error' => $e->getMessage(),
             ]);
 
-            return false;
+            return ['ok' => false, 'id' => null];
         }
 
         if ($response->successful()) {
-            return true;
+            return ['ok' => true, 'id' => data_get($response->json(), 'id')];
         }
 
         Log::error('OpenWA send failed', [
@@ -119,7 +130,7 @@ class OpenWaService
             'response' => $response->body(),
         ]);
 
-        return false;
+        return ['ok' => false, 'id' => null];
     }
 
     /**
@@ -136,6 +147,111 @@ class OpenWaService
         }
 
         return $results;
+    }
+
+    /**
+     * Send a voice note (PTT) from a local audio file.
+     *
+     * The audio travels base64-encoded inside the JSON body: the gateway
+     * decodes it to a temp file for Baileys. OGG/Opus and WebM/Opus render
+     * as push-to-talk bubbles; other formats are sent as plain audio.
+     *
+     * @return array{ok: bool, id: ?string}
+     */
+    public function sendVoice(string $phone, string $filePath, bool $ptt = true): array
+    {
+        if (!$this->isConfigured()) {
+            Log::info('OpenWA voice skipped (not configured)', compact('phone', 'filePath'));
+            return ['ok' => false, 'id' => null];
+        }
+
+        if (!is_file($filePath)) {
+            Log::error('OpenWA voice file missing', compact('filePath'));
+            return ['ok' => false, 'id' => null];
+        }
+
+        $chatId = $this->toChatId($phone);
+        $mime = self::audioMimeType($filePath);
+        // Parameters ("; codecs=opus") stay out of the data URL header —
+        // they travel in the explicit mimetype field instead.
+        $baseMime = trim(explode(';', $mime, 2)[0]);
+
+        try {
+            $response = $this->client()->post(
+                "/api/sessions/{$this->session()}/messages/send-voice",
+                [
+                    'chatId' => $chatId,
+                    'audio' => 'data:' . $baseMime . ';base64,' . base64_encode((string) file_get_contents($filePath)),
+                    'ptt' => $ptt,
+                    'mimetype' => $mime,
+                ]
+            );
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::error('OpenWA unreachable (voice)', [
+                'chatId' => $chatId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['ok' => false, 'id' => null];
+        }
+
+        if ($response->successful()) {
+            return ['ok' => true, 'id' => data_get($response->json(), 'id')];
+        }
+
+        Log::error('OpenWA voice send failed', [
+            'chatId' => $chatId,
+            'status' => $response->status(),
+            'response' => $response->body(),
+        ]);
+
+        return ['ok' => false, 'id' => null];
+    }
+
+    /**
+     * Best-effort MIME type for an audio file. Extension mapping wins over
+     * content sniffing because finfo reports "video/webm" for WebM audio,
+     * which WhatsApp refuses to play.
+     */
+    public static function audioMimeType(string $path): string
+    {
+        static $byExtension = [
+            'webm' => 'audio/webm; codecs=opus',
+            'ogg' => 'audio/ogg; codecs=opus',
+            'oga' => 'audio/ogg; codecs=opus',
+            'opus' => 'audio/ogg; codecs=opus',
+            'm4a' => 'audio/mp4',
+            'mp4' => 'audio/mp4',
+            'aac' => 'audio/aac',
+            'mp3' => 'audio/mpeg',
+            'wav' => 'audio/wav',
+            'wave' => 'audio/wav',
+            'amr' => 'audio/amr',
+        ];
+
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if ($ext !== '' && isset($byExtension[$ext])) {
+            return $byExtension[$ext];
+        }
+
+        $detected = false;
+        if (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo) {
+                $detected = (string) finfo_file($finfo, $path);
+                finfo_close($finfo);
+            }
+        }
+
+        // Sniffed container types are normalised to their audio flavour.
+        if ($detected === 'video/webm') {
+            return 'audio/webm; codecs=opus';
+        }
+        if ($detected === 'video/ogg' || $detected === 'application/ogg') {
+            return 'audio/ogg; codecs=opus';
+        }
+
+        return ($detected && str_starts_with($detected, 'audio/')) ? $detected : 'audio/ogg; codecs=opus';
     }
 
     /**

@@ -109,7 +109,7 @@
 })();
 
 /* ============================================================
-   LINK PREFETCHER — warms server + browser cache on hover/touch
+   LINK PREFETCHER — warms the browser cache on hover/touch
    so repeat navigation feels instant. GET links only; safe/no-op on failure.
    ============================================================ */
 (function () {
@@ -117,15 +117,16 @@
     const prefetch = (url) => {
         if (prefetched.has(url)) return;
         prefetched.add(url);
-        // <link rel="prefetch"> — low priority, browser-managed
+        // <link rel="prefetch"> — low priority, browser-managed. No manual
+        // fetch warm-up: nothing on the server consumed the X-Prefetch
+        // header, so those speculative GETs ran full controller renders
+        // (DB queries included) for results the browser often discarded.
+        if (navigator.connection && (navigator.connection.saveData || /2g/.test(navigator.connection.effectiveType || ''))) return;
         const link = document.createElement('link');
         link.rel = 'prefetch';
         link.href = url;
         link.as = 'document';
         document.head.appendChild(link);
-        // Speculative warm of server-rendered HTML via cache-friendly fetch
-        if (navigator.connection && (navigator.connection.saveData || /2g/.test(navigator.connection.effectiveType || ''))) return;
-        fetch(url, { credentials: 'same-origin', headers: { 'X-Prefetch': '1' } }).catch(() => {});
     };
 
     const attach = (a) => {
@@ -162,7 +163,10 @@
         if (icon) icon.classList.toggle('open', open);
         menu.classList.toggle('open', open);
         backdrop.classList.toggle('open', open);
+        menu.inert = !open;
     }
+
+    if (!menu.classList.contains('open')) menu.inert = true;
 
     btn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -310,9 +314,22 @@
     }, true);
 })();
 
-/* ---- Generic bottom-sheet / modal open & close ---- */
+/* ---- Generic bottom-sheet / modal open & close ----
+   inert is kept in sync with .open so hidden dialogs are never
+   keyboard-focusable (covers custom modals like people/index too). */
 (function () {
     function closeEl(el) { if (el) el.classList.remove('open'); }
+    function syncInert(el) { el.inert = !el.classList.contains('open'); }
+
+    const backdrops = document.querySelectorAll('.sheet-backdrop, .modal-backdrop');
+    const mo = new MutationObserver((muts) => {
+        muts.forEach((m) => { if (m.type === 'attributes') syncInert(m.target); });
+    });
+    backdrops.forEach((el) => {
+        syncInert(el);
+        mo.observe(el, { attributes: true, attributeFilter: ['class'] });
+    });
+
     document.addEventListener('click', (e) => {
         const opener = e.target.closest('[data-open-sheet], [data-open-modal]');
         if (opener) {
@@ -433,7 +450,10 @@
         drawer.classList.toggle('open', open);
         backdrop.classList.toggle('open', open);
         drawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+        drawer.inert = !open;
     }
+
+    if (!drawer.classList.contains('open')) drawer.inert = true;
 
     toggle.addEventListener('click', () => setOpen(!drawer.classList.contains('open')));
     if (closeBtn) closeBtn.addEventListener('click', () => setOpen(false));

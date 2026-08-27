@@ -1,0 +1,50 @@
+@php
+    $isVoice = !empty($reminder->media_path);
+    $status = $reminder->status;
+    $bubbleTone = match ($status) {
+        'sent' => 'bg-[#d9fdd3] dark:bg-primary-900/50 text-ink-900 dark:text-ink-100',
+        'failed' => 'bg-danger-100 dark:bg-danger-900/50 text-danger-800 dark:text-danger-200',
+        default => 'bg-white dark:bg-[#1e2127] text-ink-900 dark:text-ink-100',
+    };
+@endphp
+@if ($loop->first || !($messages[$loop->index - 1]->created_at->isSameDay($reminder->created_at)))
+    <div class="flex justify-center py-1">
+        <span class="text-[10px] font-bold text-ink-500 dark:text-ink-400 bg-white/75 dark:bg-ink-800/90 px-2.5 py-1 rounded-full shadow-sm">
+            {{ $dateLabel($reminder->created_at) }}
+        </span>
+    </div>
+@endif
+<div class="flex justify-end page-enter">
+    <div class="max-w-[82%] rounded-2xl rounded-ee-lg px-3 py-2 shadow-sm break-words {{ $bubbleTone }}">
+        @if ($isVoice)
+            <div class="flex items-center gap-2 py-0.5">
+                <button type="button" class="wa-play w-9 h-9 rounded-full bg-brand text-white grid place-items-center active:scale-95 transition-transform flex-shrink-0"
+                        data-src="{{ route('whatsapp.chats.media', $reminder) }}"
+                        aria-label="{{ __('messages.wa_voice_note') }}">
+                    <svg class="wa-play-icon w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5.14v13.72c0 .96 1.05 1.55 1.87 1.05l10.29-6.86a1.25 1.25 0 000-2.1L9.87 4.09C9.05 3.59 8 4.18 8 5.14z"/></svg>
+                </button>
+                <div class="flex items-end gap-[3px] h-6" aria-hidden="true">
+                    @foreach ([10, 18, 12, 22, 15, 20, 11] as $h)
+                        <span class="wa-eq w-[3px] rounded-full bg-black/25 dark:bg-white/25" style="height: {{ $h }}px; animation-delay: {{ ($loop->index * 120) }}ms"></span>
+                    @endforeach
+                </div>
+                <span class="text-[10px] opacity-70 tabular-nums wa-duration" dir="ltr">--:--</span>
+            </div>
+        @else
+            <div class="leading-snug whitespace-pre-line">{{ $reminder->message }}</div>
+        @endif
+
+        @if ($status === 'failed' && $reminder->error_message)
+            <div class="text-[10px] mt-1.5 opacity-80">{{ $reminder->error_message }}</div>
+        @endif
+
+        <div class="flex items-center justify-end gap-1 mt-1">
+            <span class="text-[10px] opacity-70 tabular-nums" dir="ltr">
+                {{ ($reminder->sent_at ?? $reminder->created_at)->format('H:i') }}
+            </span>
+            <x-icon name="{{ $status === 'sent' ? 'check' : ($status === 'failed' ? 'x-mark' : 'clock') }}"
+                    class="w-3.5 h-3.5 {{ $status === 'sent' ? 'text-primary-600 dark:text-primary-300' : ($status === 'failed' ? 'text-danger-500' : 'text-accent-600') }}"
+                    strokeWidth="{{ $status === 'failed' ? 2.5 : 2 }}"/>
+        </div>
+    </div>
+</div>

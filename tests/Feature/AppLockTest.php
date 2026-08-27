@@ -101,7 +101,7 @@ class AppLockTest extends TestCase
         $this->enablePin();
 
         $this->post(route('app-lock.verify-pin'), ['pin' => '9999'])
-            ->assertOk()
+            ->assertStatus(401)
             ->assertJson(['success' => false]);
 
         $this->assertNull(session('pin_verified'));
@@ -143,13 +143,24 @@ class AppLockTest extends TestCase
         $this->assertNull(Setting::get('pin_lock_enabled'));
     }
 
-    public function test_remove_pin_disables_lock_and_clears_hash(): void
+    public function test_remove_pin_requires_the_current_pin(): void
     {
         $user = User::factory()->create();
         $this->actingAs($user)->withSession(['pin_verified' => true]);
         $this->enablePin();
 
-        $this->delete(route('app-lock.remove-pin'))->assertRedirect(route('app-lock.index'));
+        // Removing the lock without knowing the PIN must be refused.
+        $this->get(route('app-lock.index'));
+        $this->delete(route('app-lock.remove-pin'), ['pin' => '9999'])
+            ->assertRedirect(route('app-lock.index'))
+            ->assertSessionHas('error');
+
+        $this->assertSame('1', Setting::get('pin_lock_enabled'));
+        $this->assertNotNull(Setting::get('pin_lock_hash'));
+
+        $this->delete(route('app-lock.remove-pin'), ['pin' => '1234'])
+            ->assertRedirect(route('app-lock.index'))
+            ->assertSessionHas('success');
 
         $this->assertSame('0', Setting::get('pin_lock_enabled'));
         $this->assertNull(Setting::get('pin_lock_hash'));
@@ -191,7 +202,7 @@ class AppLockTest extends TestCase
         $this->enablePin();
 
         for ($i = 0; $i < 5; $i++) {
-            $this->post(route('app-lock.verify-pin'), ['pin' => '0000'])->assertOk();
+            $this->post(route('app-lock.verify-pin'), ['pin' => '0000'])->assertStatus(401);
         }
 
         $this->post(route('app-lock.verify-pin'), ['pin' => '0000'])->assertStatus(429);

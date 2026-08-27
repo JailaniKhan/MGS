@@ -1,40 +1,58 @@
 ﻿@extends('layouts.app')
 
 @section('content')
-    <div class="mb-4 page-enter">
-        <a href="{{ route('orders.index') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <x-icon name="arrow-left" class="w-3.5 h-3.5"/>
-            {{ __('messages.back') }}
-        </a>
-        <h2 class="text-lg font-bold text-ink-900 dark:text-white mt-2">{{ __('messages.new_order') }}</h2>
+    {{-- Header --}}
+    <div class="flex items-center justify-between mb-4 page-enter">
+        <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-[0.875rem] bg-brand/10 dark:bg-brand/20 flex items-center justify-center flex-shrink-0">
+                <x-icon name="clipboard-document-list" class="w-4 h-4 text-brand" strokeWidth="1.8"/>
+            </div>
+            <div class="min-w-0">
+                <h2 class="text-lg font-bold text-ink-900 dark:text-white leading-tight">{{ __('messages.new_order') }}</h2>
+                <p class="text-[11px] text-ink-500 dark:text-ink-400 truncate">{{ __('messages.customer') }} &middot; {{ __('messages.products') }}</p>
+            </div>
+        </div>
+        <x-back-button href="{{ route('orders.index') }}"/>
     </div>
 
-    <div class="card p-4 page-enter" style="animation-delay: 0.1s;">
-        <form action="{{ route('orders.store') }}" method="POST">
-            @csrf
-            <div class="mb-4">
-                <label class="form-label">{{ __('messages.customer') }}</label>
-                <x-searchable-select name="person" required placeholder="{{ __('messages.select_customer') }}" :selected="old('person')" :options="$personOptions" />
-                @error('person') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
-            </div>
+    <form action="{{ route('orders.store') }}" method="POST">
+        @csrf
 
-            <div class="mb-4">
-                <label class="form-label">{{ __('messages.currency_unit') }}</label>
-                <div class="grid grid-cols-2 gap-3">
-                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary-500/30 transition-colors">
-                        <input type="radio" name="currency" value="AFN" {{ old('currency', 'AFN') === 'AFN' ? 'checked' : '' }} class="text-primary-600">
-                        <span class="text-sm font-medium">{{ __('messages.afn') }}</span>
-                    </label>
-                    <label class="flex items-center justify-center gap-2 px-4 py-3 border border-ink-200 dark:border-ink-700 rounded-xl cursor-pointer has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50 dark:has-[:checked]:bg-primary-900/20 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary-500/30 transition-colors">
-                        <input type="radio" name="currency" value="USD" {{ old('currency') === 'USD' ? 'checked' : '' }} class="text-primary-600">
-                        <span class="text-sm font-medium">USD ($)</span>
-                    </label>
+        {{-- Section: customer & currency --}}
+        <div class="card overflow-hidden mb-4 page-enter" style="animation-delay: 0.1s;">
+            <div class="px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 bg-ink-50 dark:bg-ink-800/40">
+                <div class="flex items-center gap-2">
+                    <x-icon name="user" class="w-4 h-4 text-brand"/>
+                    <h3 class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.customer') }}</h3>
                 </div>
-                @error('currency') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
             </div>
+            <div class="p-4">
+                <div class="mb-4">
+                    <label class="form-label">{{ __('messages.customer') }}</label>
+                    <x-searchable-select name="person" required placeholder="{{ __('messages.select_customer') }}" :selected="old('person')" :options="$personOptions" />
+                    @error('person') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                </div>
 
-            <div class="mb-4">
-                <label class="form-label">{{ __('messages.products') }}</label>
+                <div>
+                    <label class="form-label">{{ __('messages.currency_unit') }}</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <x-radio-pill name="currency" value="AFN" :label="__('messages.afn')" :checked="old('currency', 'AFN') === 'AFN'" pill/>
+                        <x-radio-pill name="currency" value="USD" :label="'$'" :checked="old('currency') === 'USD'" pill/>
+                    </div>
+                    @error('currency') <p class="text-danger-500 text-[11px] mt-1">{{ $message }}</p> @enderror
+                </div>
+            </div>
+        </div>
+
+        {{-- Section: products --}}
+        <div class="card overflow-hidden mb-4 page-enter" style="animation-delay: 0.2s;">
+            <div class="px-4 py-3 border-b border-ink-100 dark:border-ink-700/30 bg-ink-50 dark:bg-ink-800/40">
+                <div class="flex items-center gap-2">
+                    <x-icon name="cube" class="w-4 h-4 text-brand"/>
+                    <h3 class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.products') }}</h3>
+                </div>
+            </div>
+            <div class="p-4">
                 <div id="products-container" class="space-y-2.5">
                     <div class="product-row rounded-xl border border-ink-100 dark:border-white/[0.06] bg-ink-50 dark:bg-white/[0.03] p-3">
                         <div class="flex items-center gap-2">
@@ -63,150 +81,37 @@
                 </div>
                 <datalist id="lot-suggestions"></datalist>
                 <p class="text-[10px] text-ink-400 mt-1" id="lot-hint"></p>
-                <button type="button" id="add-product" class="inline-flex items-center gap-1.5 text-primary-600 dark:text-primary-400 text-sm font-bold mt-3 active:scale-95 transition-transform"><x-icon name="plus" class="w-4 h-4" strokeWidth="2.2"/>{{ __('messages.another_product') }}</button>
+                <button type="button" id="add-product" class="inline-flex items-center gap-1.5 text-brand text-sm font-bold mt-3 active:scale-95 transition-transform"><x-icon name="plus" class="w-4 h-4" strokeWidth="2.2"/>{{ __('messages.another_product') }}</button>
             </div>
+        </div>
 
-            <div class="bg-primary-50 dark:bg-primary-900/10 rounded-xl p-3.5 mb-4 space-y-1.5">
-                <div class="flex justify-between text-sm">
-                    <span class="text-ink-600 dark:text-ink-400">{{ __('messages.subtotal') }}:</span>
-                    <span id="subtotal-amount" class="font-semibold text-ink-900 dark:text-ink-100">0 {{ __('messages.afn') }}</span>
-                </div>
-                <div class="flex justify-between text-sm border-t border-primary-200 dark:border-primary-800/30 pt-1.5 mt-1.5">
-                    <span class="font-bold text-ink-900 dark:text-ink-100">{{ __('messages.total_amount') }}:</span>
-                    <span id="total-amount" class="font-extrabold text-primary-700 dark:text-primary-400">0 {{ __('messages.afn') }}</span>
-                </div>
+        {{-- Totals --}}
+        <div class="bg-brand/5 dark:bg-brand/10 border border-brand/15 dark:border-brand/20 rounded-2xl p-4 mb-4 space-y-2 page-enter" style="animation-delay: 0.25s;">
+            <div class="flex justify-between text-sm">
+                <span class="text-ink-600 dark:text-ink-400">{{ __('messages.subtotal') }}:</span>
+                <span id="subtotal-amount" class="font-semibold tabular-nums text-ink-900 dark:text-ink-100">0 {{ __('messages.afn') }}</span>
             </div>
+            <div class="flex justify-between text-sm border-t border-brand/15 dark:border-brand/20 pt-2 mt-1">
+                <span class="font-bold text-ink-900 dark:text-ink-100">{{ __('messages.total_amount') }}:</span>
+                <span id="total-amount" class="font-extrabold tabular-nums text-brand">0 {{ __('messages.afn') }}</span>
+            </div>
+        </div>
 
-            <button type="submit" class="w-full btn-primary">{{ __('messages.create_order') }}</button>
-        </form>
-    </div>
+        <button type="submit" class="btn-primary w-full page-enter" style="animation-delay: 0.3s;">
+            <x-icon name="check-circle" class="w-4 h-4" strokeWidth="2"/>
+            {{ __('messages.create_order') }}
+        </button>
+    </form>
 @endsection
 
 @push('scripts')
+@vite('resources/js/line-items.js')
 <script>
-    let productIndex = 1;
-    const productLots = @json($productLots);
-
-    function getCurrencySymbol() {
-        return document.querySelector('input[name="currency"]:checked')?.value === 'USD' ? '$' : '{{ __('messages.afn') }}';
-    }
-
-    function applyProductDefaults(row) {
-        const select = row.querySelector('.product-select');
-        const priceInput = row.querySelector('.product-price');
-        const lotInput = row.querySelector('.product-lot');
-        const hint = document.getElementById('lot-hint');
-
-        if (select.value && select.selectedIndex >= 0) {
-            const price = parseFloat(select.options[select.selectedIndex].dataset.price);
-            if (! priceInput.value) {
-                priceInput.value = isNaN(price) ? '' : price;
-            }
-
-            const productLot = select.options[select.selectedIndex].dataset.lot;
-            if (productLot && ! lotInput.value) {
-                lotInput.value = productLot;
-            }
-
-            const lots = productLots[select.value] || [];
-            if (productLot && ! lots.includes(productLot)) {
-                lots.unshift(productLot);
-            }
-            const datalist = document.getElementById('lot-suggestions');
-            datalist.innerHTML = lots.map(l => `<option value="${l}">`).join('');
-            if (lots.length) {
-                hint.textContent = '{{ __('messages.available_lots') }}: ' + lots.join(', ');
-            } else {
-                hint.textContent = '';
-            }
-        } else {
-            lotInput.value = '';
-            hint.textContent = '';
-        }
-    }
-
-    function updateTotal() {
-        let subtotal = 0;
-        const symbol = getCurrencySymbol();
-        document.querySelectorAll('.product-row').forEach(row => {
-            const select = row.querySelector('.product-select');
-            const qty = row.querySelector('.product-qty');
-            const priceInput = row.querySelector('.product-price');
-            if (select.value && qty.value) {
-                const price = parseFloat(priceInput.value) || parseFloat(select.options[select.selectedIndex]?.dataset.price) || 0;
-                subtotal += price * parseInt(qty.value);
-            }
-        });
-
-        document.getElementById('subtotal-amount').textContent = subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + symbol;
-        document.getElementById('total-amount').textContent = subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + symbol;
-    }
-
-    document.querySelectorAll('input[name="currency"]').forEach(radio => {
-        radio.addEventListener('change', updateTotal);
-    });
-
-    document.getElementById('add-product').addEventListener('click', function() {
-        const container = document.getElementById('products-container');
-        const firstRow = container.querySelector('.product-row');
-        const newRow = firstRow.cloneNode(true);
-
-        newRow.querySelector('.product-select').name = `products[${productIndex}][product_id]`;
-        newRow.querySelector('.product-select').value = '';
-        newRow.querySelector('.product-price').name = `products[${productIndex}][unit_price]`;
-        newRow.querySelector('.product-price').value = '';
-        newRow.querySelector('.product-qty').name = `products[${productIndex}][quantity]`;
-        newRow.querySelector('.product-qty').value = 1;
-        newRow.querySelector('.product-lot').name = `products[${productIndex}][lot_number]`;
-        newRow.querySelector('.product-lot').value = '';
-
-        newRow.classList.add('flex-wrap');
-
-        const searchable = newRow.querySelector('[data-searchable]');
-        if (searchable) {
-            delete searchable.dataset.searchableInitialized;
-            initSearchableSelect(searchable);
-        }
-
-        newRow.querySelector('.product-select').addEventListener('change', function() {
-            applyProductDefaults(this.closest('.product-row'));
-            updateTotal();
-        });
-        newRow.querySelector('.product-price').addEventListener('input', updateTotal);
-        newRow.querySelector('.product-qty').addEventListener('input', updateTotal);
-        newRow.querySelector('.remove-product').addEventListener('click', function() {
-            if (container.querySelectorAll('.product-row').length > 1) {
-                newRow.remove();
-                updateTotal();
-            }
-        });
-
-        container.appendChild(newRow);
-        productIndex++;
-    });
-
-    document.querySelectorAll('.product-select').forEach(select => {
-        select.addEventListener('change', function() {
-            applyProductDefaults(this.closest('.product-row'));
-            updateTotal();
-        });
-    });
-    document.querySelectorAll('.product-price').forEach(input => {
-        input.addEventListener('input', updateTotal);
-    });
-    document.querySelectorAll('.product-qty').forEach(input => {
-        input.addEventListener('input', updateTotal);
-    });
-    document.querySelectorAll('.remove-product').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const container = document.getElementById('products-container');
-            if (container.querySelectorAll('.product-row').length > 1) {
-                this.closest('.product-row').remove();
-                updateTotal();
-            }
-        });
-    });
-
-    updateTotal();
+    window.addEventListener('DOMContentLoaded', () => MGSLineItems.init({
+        priceAutofill: true,
+        productLots: @json($productLots),
+        availableLotsLabel: @json(__('messages.available_lots')),
+        afnLabel: @json(__('messages.afn')),
+    }));
 </script>
 @endpush

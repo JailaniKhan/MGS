@@ -25,6 +25,7 @@ class AIMessageGenerator
     private function generateWithClaude(string $apiKey, string $name, string $amount, string $currency, string $dueDate): string
     {
         $currencySymbol = $currency === 'USD' ? '$' : '؋';
+        $language = $this->promptLanguage();
         $response = Http::withHeaders([
             'x-api-key' => $apiKey,
             'anthropic-version' => '2023-06-01',
@@ -35,7 +36,7 @@ class AIMessageGenerator
             'messages' => [
                 [
                     'role' => 'user',
-                    'content' => "Write a friendly payment reminder message in Hinglish (Hindi+English mix) for a customer named {$name} who has a pending payment of {$currencySymbol}{$amount}. The message should be polite, professional, and encourage them to clear the dues. Keep it under 150 characters. Just return the message text, no quotes.",
+                    'content' => "Write a friendly payment reminder message in {$language} for a customer named {$name} who has a pending payment of {$currencySymbol}{$amount}. The message should be polite, professional, and encourage them to clear the dues. Keep it under 150 characters. Just return the message text, no quotes.",
                 ],
             ],
         ]);
@@ -48,11 +49,27 @@ class AIMessageGenerator
         throw new \RuntimeException('Claude API error: ' . $response->body());
     }
 
+    /**
+     * The reminder is written in the shop owner's active language.
+     */
+    private function promptLanguage(): string
+    {
+        return match (app()->getLocale()) {
+            'fa' => 'Persian (Dari)',
+            'ps' => 'Pashto',
+            default => 'English',
+        };
+    }
+
     private function generateTemplate(string $name, string $amount, string $currency, string $dueDate): string
     {
         $currencySymbol = $currency === 'USD' ? '$' : '؋';
-        $duePart = $dueDate ? " by {$dueDate}" : '';
+        $duePart = $dueDate !== '' ? __('messages.reminder_due_part', ['date' => $dueDate]) : '';
 
-        return "Dear {$name}, this is a friendly reminder that you have a pending payment of {$currencySymbol}{$amount}{$duePart}. Please clear your dues at your earliest convenience. Thank you for your business!";
+        return __('messages.reminder_message_template', [
+            'name' => $name,
+            'amount' => $currencySymbol.$amount,
+            'due_part' => $duePart,
+        ]);
     }
 }

@@ -18,11 +18,11 @@
                     </div>
                     <div class="min-w-0">
                         <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ __('messages.purchase') }} #{{ $purchaseReturn->purchase_id }} - {{ $purchaseReturn->purchase->party?->name ?? __('messages.unknown') }}</div>
-                        <div class="text-[11px] text-ink-500 dark:text-ink-400">{{ $purchaseReturn->return_date->format('d M Y') }}</div>
+                        <div class="text-[11px] text-ink-500 dark:text-ink-400"><bdi>{{ local_date($purchaseReturn->return_date, 'd M Y') }}</bdi></div>
                     </div>
                 </div>
                 <div class="text-end flex-shrink-0 ms-3">
-                    <div class="text-sm font-bold text-ink-900 dark:text-ink-100">{{ number_format($purchaseReturn->total_amount) }} {{ $purchaseReturn->purchase->currency === 'USD' ? '$' : __('messages.afn') }}</div>
+                    <div class="text-sm font-bold text-ink-900 dark:text-ink-100"><x-money :amount="$purchaseReturn->total_amount" :currency="$purchaseReturn->purchase->currency" symbol-class="text-[10px] font-medium text-ink-500"/></div>
                     <span class="inline-flex items-center gap-1 badge mt-0.5
                         @if($purchaseReturn->status === 'completed') badge-success
                         @elseif($purchaseReturn->status === 'processing') badge-info
@@ -38,12 +38,9 @@
                 </div>
             </a>
         @empty
-            <div class="empty-state">
-                <div class="empty-illustration">
-                    <x-icon name="arrow-uturn-left" class="w-6 h-6 text-ink-400"/>
-                </div>
-                <p class="text-sm font-medium text-ink-500 dark:text-ink-400">{{ __('messages.no_purchase_returns') }}</p>
-            </div>
+            <x-empty-state title="{{ __('messages.no_purchase_returns') }}">
+                <x-icon name="arrow-uturn-left" class="w-6 h-6 text-ink-400"/>
+            </x-empty-state>
         @endforelse
     </div>
     @if ($purchaseReturns->hasPages())

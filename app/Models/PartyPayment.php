@@ -26,20 +26,17 @@ class PartyPayment extends Model
     protected static function booted(): void
     {
         // Party payments have no user_id of their own; scope them through the
-        // customer/supplier they reference, mirroring BelongsToUser.
+        // customer/supplier they reference, mirroring BelongsToUser. The user
+        // filter runs as subqueries (Customer/Supplier carry their own user
+        // scope), so no IDs are loaded into PHP per query.
         static::addGlobalScope('user', function (Builder $builder) {
             if (! Auth::check()) {
                 return;
             }
 
-            $userId = Auth::id();
-
-            $builder->where(function (Builder $q) use ($userId) {
-                $customerIds = Customer::where('user_id', $userId)->pluck('id');
-                $supplierIds = Supplier::where('user_id', $userId)->pluck('id');
-
-                $q->where(fn ($qq) => $qq->where('person_type', 'customer')->whereIn('person_id', $customerIds))
-                    ->orWhere(fn ($qq) => $qq->where('person_type', 'supplier')->whereIn('person_id', $supplierIds));
+            $builder->where(function (Builder $q) {
+                $q->where(fn (Builder $qq) => $qq->where('person_type', 'customer')->whereIn('person_id', Customer::select('id')))
+                    ->orWhere(fn (Builder $qq) => $qq->where('person_type', 'supplier')->whereIn('person_id', Supplier::select('id')));
             });
         });
     }

@@ -49,6 +49,8 @@ class WhatsAppChatController extends Controller
                     'name' => $name,
                     'phone' => $contact?->phone ?? null,
                     'last_message' => $latest->message,
+                    // Voice sends store empty text — preview a mic label instead.
+                    'is_voice' => (bool) $latest->media_path,
                     'last_status' => $latest->status,
                     'last_time' => $time,
                     // WhatsApp-style row: initials avatar, stable color per
@@ -65,16 +67,44 @@ class WhatsAppChatController extends Controller
 
         $chats = $this->paginateCollection($chats);
 
-        return view('whatsapp.index', compact('chats'));
+        // Contacts for the "new chat" picker: everyone reachable on
+        // WhatsApp, whether or not they have prior history.
+        $contacts = \App\Models\Customer::query()
+            ->whereNotNull('phone')->where('phone', '!=', '')
+            ->orderBy('name')
+            ->get(['id', 'name', 'phone'])
+            ->map(fn ($c) => ['type' => 'customer', 'id' => $c->id, 'name' => $c->name, 'phone' => $c->phone])
+            ->merge(
+                \App\Models\Supplier::query()
+                    ->whereNotNull('phone')->where('phone', '!=', '')
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'phone'])
+                    ->map(fn ($s) => ['type' => 'supplier', 'id' => $s->id, 'name' => $s->name, 'phone' => $s->phone])
+            )
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        return view('whatsapp.index', compact('chats', 'contacts'));
     }
 
     /**
      * Conversation: every WhatsApp reminder sent to one contact, oldest
-     * first, rendered as outgoing WhatsApp-style bubbles.
+     * first, rendered as outgoing WhatsApp-style bubbles. Contacts with no
+     * history render an empty conversation — that's the entry point for
+     * starting a brand-new chat from the picker.
      */
     public function show(string $type, int $id)
     {
         if (!in_array($type, self::CHAT_TYPES, true)) {
+            abort(404);
+        }
+
+        $contactClass = $type === 'customer' ? \App\Models\Customer::class : \App\Models\Supplier::class;
+        $contact = $contactClass::find($id);
+
+        // A chat must always have a live contact behind it (deleted
+        // contacts' history stays visible in the list but can't be opened).
+        if (!$contact) {
             abort(404);
         }
 
@@ -84,12 +114,6 @@ class WhatsAppChatController extends Controller
             ->where('remindable_id', $id)
             ->orderBy('created_at')
             ->get();
-
-        if ($messages->isEmpty()) {
-            abort(404);
-        }
-
-        $contact = $messages->first()->remindable;
 
         return view('whatsapp.show', compact('messages', 'type', 'id', 'contact'));
     }

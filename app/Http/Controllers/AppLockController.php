@@ -30,6 +30,17 @@ class AppLockController extends Controller
 
     public function removePin(Request $request)
     {
+        $validated = $request->validate([
+            'pin' => 'required|string',
+        ]);
+
+        // Removing the lock is as sensitive as unlocking — prove knowledge
+        // of the PIN first, or anyone with an unlocked session could strip it.
+        $hash = Setting::get('pin_lock_hash');
+        if (! $hash || ! Hash::check($validated['pin'], $hash)) {
+            return back()->with('error', __('messages.invalid_pin'));
+        }
+
         Setting::set('pin_lock_enabled', '0');
         Setting::set('pin_lock_hash', null);
 
@@ -63,7 +74,10 @@ class AppLockController extends Controller
             return response()->json(['success' => true]);
         }
 
-        return response()->json(['success' => false, 'message' => __('messages.invalid_pin')]);
+        return response()->json([
+            'success' => false,
+            'message' => __('messages.invalid_pin'),
+        ], 401);
     }
 
     public function lockScreen()

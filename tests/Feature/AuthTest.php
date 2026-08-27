@@ -35,12 +35,27 @@ class AuthTest extends TestCase
         $this->get(route('login.phone'))->assertOk()->assertSee(__('messages.phone_login'));
     }
 
-    public function test_guests_can_switch_language(): void
+    public function test_guests_can_switch_language_without_touching_shop_settings(): void
     {
-        $response = $this->post(route('language.update'), ['language' => 'ps']);
+        $response = $this->post(route('language.update'), ['language' => 'en']);
 
         $response->assertRedirect();
-        $this->assertDatabaseHas('settings', ['key' => 'language', 'value' => 'ps']);
+
+        // A guest's choice lives in their session only — the shop-wide
+        // setting must stay untouched (it is global state every user reads).
+        $this->assertSame('en', session('locale'));
+        $this->assertDatabaseMissing('settings', ['key' => 'language']);
+    }
+
+    public function test_authenticated_users_persist_their_language_choice(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $response = $this->post(route('language.update'), ['language' => 'fa']);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('settings', ['key' => 'language', 'value' => 'fa']);
     }
 
     public function test_login_succeeds_and_redirects_to_dashboard(): void
