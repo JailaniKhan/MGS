@@ -8,7 +8,6 @@ use App\Models\OrderReturn;
 use App\Models\PartyPayment;
 use App\Models\Payment;
 use App\Models\Purchase;
-use App\Models\PurchasePayment;
 use App\Models\PurchaseReturn;
 use App\Models\Supplier;
 use App\Models\User;
@@ -346,5 +345,142 @@ class LedgerAllocationTest extends TestCase
 
         $totals = app(PartyBalanceService::class)->outstandingByPartyType();
         $this->assertSame('100.00', $totals['customer']['AFN']);
+    }
+
+    private function postCashbookFor(string $personType, int $personId, string $direction, string $amount, string $currency = 'AFN'): void
+    {
+        $this->post(route('cashbook.store'), [
+            'type' => $direction,
+            'amount' => $amount,
+            'currency' => $currency,
+            'entry_date' => now()->toDateString(),
+            'person' => $personType.':'.$personId,
+            'notes' => '',
+        ]);
+    }
+
+    public function test_cashbook_entry_settles_the_party_balance(): void
+    {
+        $this->acting();
+        $customer = $this->makeCustomer('Cashbook Settle');
+        $this->makeOrder($customer, '100.00');
+
+        // Cash In tagged to the customer — real cash they handed over.
+        $this->postCashbookFor('customer', $customer->id, 'in', '40.00');
+
+        $summary = app(PartyBalanceService::class)->partySummary('customer', $customer->id);
+        $this->assertSame('40.00', $summary['paid_afn']);
+        $this->assertSame('60.00', $summary['remaining_afn']);
+        $this->assertSame('0.00', $summary['credit_afn']);
+
+        // The customer page and the ledger page both reflect it.
+        $this->get(route('customers.show', $customer))
+            ->assertOk()
+            ->assertViewHas('paidAFN', 40.0)
+            ->assertViewHas('remainingAFN', 60.0);
+
+        $this->get(route('ledger.show', ['customer', $customer->id]))
+            ->assertOk()
+            ->assertSee(__('messages.cash_income'));
+    }
+
+    public function test_cashbook_entry_overpayment_surfaces_as_credit(): void
+    {
+        $this->acting();
+        $customer = $this->makeCustomer('Cashbook Credit');
+        $this->makeOrder($customer, '100.00');
+
+        $this->postCashbookFor('customer', $customer->id, 'in', '150.00');
+
+        $summary = app(PartyBalanceService::class)->partySummary('customer', $customer->id);
+        $this->assertSame('0.00', $summary['remaining_afn']);
+        $this->assertSame('50.00', $summary['credit_afn']);
+    }
+
+    public function test_cashbook_out_reduces_supplier_payable(): void
+    {
+        $this->acting();
+        $supplier = $this->makeSupplier('Cashbook Supplier');
+        $this->makePurchase($supplier, '200.00');
+
+        // Cash Out tagged to the supplier — money we paid them.
+        $this->postCashbookFor('supplier', $supplier->id, 'out', '80.00');
+
+        $summary = app(PartyBalanceService::class)->partySummary('supplier', $supplier->id);
+        $this->assertSame('80.00', $summary['paid_afn']);
+        $this->assertSame('120.00', $summary['remaining_afn']);
+
+        $this->get(route('ledger.show', ['supplier', $supplier->id]))
+            ->assertOk()
+            ->assertSee(__('messages.cash_expense'));
+    }
+
+    public function test_cashbook_entry_keeps_currencies_separate(): void
+    {
+        $this->acting();
+        $customer = $this->makeCustomer('Currency Guard Cashbook');
+        $this->makeOrder($customer, '100.00');
+
+        // A USD cashbook entry must not settle the AFN balance.
+        $this->postCashbookFor('customer', $customer->id, 'in', '40.00', 'USD');
+
+        $summary = app(PartyBalanceService::class)->partySummary('customer', $customer->id);
+        $this->assertSame('0.00', $summary['paid_afn']);
+        $this->assertSame('100.00', $summary['remaining_afn']);
+        $this->assertSame('40.00', $summary['credit_usd']);
+    }
+
+    public function test_cashbook_entry_without_person_reference_does_not_settle_any_balance(): void
+    {
+        $this->acting();
+        $customer = $this->makeCustomer('Unlinked Cashbook');
+        $this->makeOrder($customer, '100.00');
+
+        // Shop-level entry (no person) — must not touch the customer balance.
+        $this->post(route('cashbook.store'), [
+            'type' => 'in',
+            'amount' => '500.00',
+            'currency' => 'AFN',
+            'entry_date' => now()->toDateString(),
+            'person' => '',
+            'notes' => '',
+        ]);
+
+        $summary = app(PartyBalanceService::class)->partySummary('customer', $customer->id);
+        $this->assertSame('0.00', $summary['paid_afn']);
+        $this->assertSame('100.00', $summary['remaining_afn']);
+    }
+
+    public function test_cashbook_settlement_flows_into_ledger_index_tiles_and_dashboard_debtors(): void
+    {
+        $this->acting();
+        $customer = $this->makeCustomer('Tile Flow');
+        $this->makeOrder($customer, '100.00');
+
+        $this->postCashbookFor('customer', $customer->id, 'in', '30.00');
+
+        // Ledger index tiles: 100 order − 30 cashbook settlement = 70 outstanding.
+        $totals = app(PartyBalanceService::class)->outstandingByPartyType();
+        $this->assertSame('70.00', $totals['customer']['AFN']);
+
+        // Dashboard debtors show the same net.
+        $dashboard = $this->get(route('dashboard'))->assertOk();
+        $debtor = collect($dashboard->viewData('topDebtors'))->firstWhere('id', $customer->id);
+        $this->assertNotNull($debtor);
+        $this->assertEquals(70.0, $debtor->pending_afn);
+    }
+
+    public function test_customer_show_page_reflects_cashbook_settlement(): void
+    {
+        $this->acting();
+        $customer = $this->makeCustomer('Show Page Settle');
+        $this->makeOrder($customer, '100.00');
+
+        $this->postCashbookFor('customer', $customer->id, 'in', '25.00');
+
+        $this->get(route('customers.show', $customer))
+            ->assertOk()
+            ->assertViewHas('paidAFN', 25.0)
+            ->assertViewHas('remainingAFN', 75.0);
     }
 }

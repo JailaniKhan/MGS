@@ -276,4 +276,38 @@ class OrdersIndexTest extends TestCase
 
         $this->assertSame('cancelled', Order::find($order->id)->status);
     }
+
+    public function test_summary_tiles_span_all_time_not_just_the_current_month(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $customer = $this->makeCustomer('All Time Tile Customer');
+
+        // An order from well before the current month: invisible to a
+        // month-scoped tile, counted by an all-time one.
+        $early = $this->makeOrder($customer, [
+            'total_amount' => '300.00',
+            'currency' => 'AFN',
+            'created_at' => now()->subMonths(3)->startOfMonth()->addDay(),
+        ]);
+        $this->assertNotNull($early);
+
+        // A purchase on the same early date for the purchases tile.
+        $supplier = $this->makeSupplier('All Time Tile Supplier');
+        $this->makePurchase($supplier, [
+            'total_amount' => '100.00',
+            'currency' => 'AFN',
+            'created_at' => now()->subMonths(3)->startOfMonth()->addDay(),
+        ]);
+
+        $response = $this->get(route('orders.index'))->assertOk();
+
+        // The tile label reads All time, not This month.
+        $response->assertSee(__('messages.all_time'));
+        $response->assertDontSee(__('messages.this_month'));
+        // The early order's value (300 AFN) and purchase (100 AFN) are in
+        // the tiles. `>` guards against matching numbers elsewhere on the page.
+        $response->assertSee('>300', false);
+        $response->assertSee('>100', false);
+    }
 }

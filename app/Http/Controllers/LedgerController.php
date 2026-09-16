@@ -3,15 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
-use App\Models\Supplier;
+use App\Models\JournalEntry;
 use App\Models\Order;
 use App\Models\OrderReturn;
-use App\Models\Purchase;
-use App\Models\PurchaseReturn;
-use App\Models\Payment;
-use App\Models\PurchasePayment;
 use App\Models\PartyPayment;
+use App\Models\Payment;
+use App\Models\Purchase;
+use App\Models\PurchasePayment;
+use App\Models\PurchaseReturn;
 use App\Models\Setting;
+use App\Models\Supplier;
 use App\Services\Billing\PartyBalanceService;
 use App\Services\Billing\PaymentAllocationService;
 use Illuminate\Http\Request;
@@ -177,6 +178,34 @@ class LedgerController extends Controller
             ];
         }
 
+        // Person-tagged cashbook entries settle the party's balance (same
+        // math as PartyBalanceService), so they must appear in the history
+        // with the same direction: cashbook-in from a customer is money we
+        // received, cashbook-out to a supplier is money we paid. The reverse
+        // directions flip.
+        $cashbookEntries = JournalEntry::with('ledgerEntries')
+            ->whereIn('source', ['cashbook_in', 'cashbook_out'])
+            ->where('reference_type', $type)
+            ->where('reference_id', $id)
+            ->orderBy('created_at')
+            ->get();
+
+        foreach ($cashbookEntries as $journal) {
+            $cashLine = $journal->ledgerEntries->first();
+            $isIn = $journal->source === 'cashbook_in';
+            $notes = $journal->ledgerEntries->pluck('notes')->filter()->first();
+
+            $entries[] = (object) [
+                'type' => $isIn ? 'payment_received' : 'payment_made',
+                'kind' => 'payment',
+                'amount' => (string) ($cashLine->amount ?? '0.00'),
+                'currency' => $journal->currency,
+                'label' => __('messages.cashbook_section').': '.($isIn ? __('messages.cash_income') : __('messages.cash_expense')),
+                'notes' => $notes,
+                'created_at' => $journal->created_at,
+            ];
+        }
+
         usort($entries, fn ($a, $b) => $b->created_at <=> $a->created_at);
 
         return $entries;
@@ -209,8 +238,9 @@ class LedgerController extends Controller
         $this->allocator->allocate($type, $person->id, (string) $validated['amount'], $validated['currency'], $validated['notes'] ?? null);
 
         $personLabel = $type === 'customer' ? __('messages.customer') : __('messages.supplier');
+
         return redirect()->route('ledger.show', [$type, $person->id])
-            ->with('success', __('messages.payment_created_for') . ' ' . $personLabel . '!');
+            ->with('success', __('messages.payment_created_for').' '.$personLabel.'!');
     }
 
     public function downloadPdf($type, $id)
@@ -275,8 +305,8 @@ class LedgerController extends Controller
         foreach ($orders as $order) {
             $transactions[] = [
                 'date' => $order->created_at,
-                'description' => __('messages.order') . ' #' . $order->id,
-                'ref' => 'ORD-' . $order->id,
+                'description' => __('messages.order').' #'.$order->id,
+                'ref' => 'ORD-'.$order->id,
                 'amount' => (float) $order->total_amount,
                 'currency' => $order->currency,
                 'is_positive' => true,
@@ -285,8 +315,8 @@ class LedgerController extends Controller
             foreach ($order->payments as $payment) {
                 $transactions[] = [
                     'date' => $payment->created_at,
-                    'description' => __('messages.paid_short') . ' — ' . __('messages.order') . ' #' . $order->id,
-                    'ref' => 'PAY-' . $payment->id,
+                    'description' => __('messages.paid_short').' — '.__('messages.order').' #'.$order->id,
+                    'ref' => 'PAY-'.$payment->id,
                     'amount' => (float) $payment->amount,
                     'currency' => $payment->currency,
                     'is_positive' => false,
@@ -297,8 +327,8 @@ class LedgerController extends Controller
         foreach ($purchases as $purchase) {
             $transactions[] = [
                 'date' => $purchase->created_at,
-                'description' => __('messages.purchase') . ' #' . $purchase->id,
-                'ref' => 'PUR-' . $purchase->id,
+                'description' => __('messages.purchase').' #'.$purchase->id,
+                'ref' => 'PUR-'.$purchase->id,
                 'amount' => (float) $purchase->total_amount,
                 'currency' => $purchase->currency,
                 'is_positive' => true,
@@ -307,8 +337,8 @@ class LedgerController extends Controller
             foreach ($purchase->purchasePayments as $purchasePayment) {
                 $transactions[] = [
                     'date' => $purchasePayment->created_at,
-                    'description' => __('messages.paid_short') . ' — ' . __('messages.purchase') . ' #' . $purchase->id,
-                    'ref' => 'PPAY-' . $purchasePayment->id,
+                    'description' => __('messages.paid_short').' — '.__('messages.purchase').' #'.$purchase->id,
+                    'ref' => 'PPAY-'.$purchasePayment->id,
                     'amount' => (float) $purchasePayment->amount,
                     'currency' => $purchasePayment->currency,
                     'is_positive' => false,
@@ -320,8 +350,8 @@ class LedgerController extends Controller
         foreach ($orderReturns as $return) {
             $transactions[] = [
                 'date' => $return->created_at,
-                'description' => __('messages.returned') . ' — ' . __('messages.order') . ' #' . $return->order_id,
-                'ref' => 'RET-' . $return->id,
+                'description' => __('messages.returned').' — '.__('messages.order').' #'.$return->order_id,
+                'ref' => 'RET-'.$return->id,
                 'amount' => (float) $return->total_amount,
                 'currency' => $return->currency,
                 'is_positive' => false,
@@ -330,8 +360,8 @@ class LedgerController extends Controller
         foreach ($purchaseReturns as $return) {
             $transactions[] = [
                 'date' => $return->created_at,
-                'description' => __('messages.returned') . ' — ' . __('messages.purchase') . ' #' . $return->purchase_id,
-                'ref' => 'PRET-' . $return->id,
+                'description' => __('messages.returned').' — '.__('messages.purchase').' #'.$return->purchase_id,
+                'ref' => 'PRET-'.$return->id,
                 'amount' => (float) $return->total_amount,
                 'currency' => $return->currency,
                 'is_positive' => false,
@@ -343,12 +373,39 @@ class LedgerController extends Controller
             $transactions[] = [
                 'date' => $entry->created_at,
                 'description' => $description,
-                'ref' => 'LE-' . $entry->id,
+                'ref' => 'LE-'.$entry->id,
                 'amount' => (float) $entry->amount,
                 'currency' => $entry->currency,
                 // A receipt from a customer (payment_made from a supplier) credits
                 // their balance; the opposite direction adds to it.
                 'is_positive' => $entry->type !== $personSide,
+            ];
+        }
+
+        // Person-tagged cashbook entries settle the balance the same way;
+        // the PDF must show them or its running balance would disagree with
+        // the screen and with partySummary.
+        $cashbookJournals = JournalEntry::with('ledgerEntries')
+            ->whereIn('source', ['cashbook_in', 'cashbook_out'])
+            ->where('reference_type', $personType)
+            ->where('reference_id', $id)
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        foreach ($cashbookJournals as $journal) {
+            $cashLine = $journal->ledgerEntries->first();
+            $isIn = $journal->source === 'cashbook_in';
+            $notes = $journal->ledgerEntries->pluck('notes')->filter()->first();
+
+            $transactions[] = [
+                'date' => $journal->created_at,
+                'description' => __('messages.cashbook_section').': '.($isIn ? __('messages.cash_income') : __('messages.cash_expense')).($notes ? ' — '.$notes : ''),
+                'ref' => 'CB-'.$journal->id,
+                'amount' => (float) ($cashLine->amount ?? 0),
+                'currency' => $journal->currency,
+                // Same direction rule as the ledger entries above: a receipt
+                // (cashbook-in) credits the balance, an outlay debits it.
+                'is_positive' => ! $isIn,
             ];
         }
 

@@ -25,6 +25,19 @@
             <div class="text-xs text-ink-600 dark:text-ink-400 mb-3 bg-ink-50 dark:bg-ink-800/50 rounded-lg p-3">{{ $expense->notes }}</div>
         @endif
 
+        @if ($expense->purchase)
+            <div class="mb-3 rounded-xl bg-accent-50 dark:bg-accent-900/20 border border-accent-100 dark:border-accent-900/40 px-3 py-2.5">
+                <div class="text-[11px] font-bold text-accent-700 dark:text-accent-300">{{ __('messages.attach_to_purchase') }}</div>
+                <a href="{{ route('purchases.show', $expense->purchase) }}" class="text-sm font-semibold text-ink-700 dark:text-ink-200 mt-0.5 flex items-center gap-1.5 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                    <x-icon name="truck" class="w-3.5 h-3.5"/>
+                    #{{ $expense->purchase->id }}
+                    @if ($expense->purchase->purchaseItems->pluck('lot_number')->filter()->unique()->isNotEmpty())
+                        &middot; {{ __('messages.lot') }} {{ $expense->purchase->purchaseItems->pluck('lot_number')->filter()->unique()->implode(', ') }}
+                    @endif
+                </a>
+            </div>
+        @endif
+
         <div class="text-xs text-ink-500 dark:text-ink-400 mb-3">{{ __('messages.currency_unit') }}: <span class="font-medium text-ink-700 dark:text-ink-300">{{ $expense->currency === 'USD' ? __('messages.usd_with_paren') . '$)' : __('messages.afn') . ' (' . __('messages.afn') . ')' }}</span></div>
 
         <div class="flex gap-2">

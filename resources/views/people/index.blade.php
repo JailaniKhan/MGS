@@ -80,7 +80,7 @@
             <div>
                 @forelse ($suppliers as $supplier)
                     <div class="swipe-row">
-                        <div class="swipe-content">
+                        <a href="{{ route('suppliers.show', $supplier) }}" class="swipe-content">
                             <div class="w-9 h-9 rounded-[0.875rem] bg-accent-50 dark:bg-accent-900/30 flex items-center justify-center flex-shrink-0 border border-accent-100 dark:border-accent-800/40">
                                 <span class="text-secondary-600 dark:text-secondary-300 font-bold text-sm">{{ substr($supplier->name, 0, 1) }}</span>
                             </div>
@@ -91,7 +91,7 @@
                                     @if ($supplier->purchases_count)<span class="badge-info text-[10px] px-1.5 py-0.5">{{ $supplier->purchases_count }} {{ __('messages.purchases') }}</span>@endif
                                 </div>
                             </div>
-                        </div>
+                        </a>
                         <div class="swipe-actions">
                             <a href="{{ route('reminders.supplier', $supplier) }}" onclick="event.preventDefault(); sendReminder('{{ $supplier->id }}', '{{ $supplier->name }}', 'supplier')" class="act-edit" title="{{ __('messages.send_reminder') }}">
                                 <x-icon name="bell" class="w-4 h-4"/>

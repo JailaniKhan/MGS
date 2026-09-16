@@ -158,6 +158,23 @@ class BalanceSheetTest extends TestCase
         $response->assertViewHas('totalLiabilitiesEquity', '1200.00');
     }
 
+    public function test_opening_stock_product_counts_in_inventory_value_and_keeps_balance(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // Never purchased: pool price values the inventory, and because the
+        // same basis feeds retained earnings' COGS netting, the sheet balances.
+        $this->makeProduct($user, ['name' => 'Opening Stock Sheet Product', 'price' => '100.00', 'stock_afn' => 5, 'stock_usd' => 0]);
+
+        $response = $this->get('/reports/balance-sheet');
+
+        $response->assertOk();
+        $response->assertViewHas('inventoryValue', '500.00');
+        // The identity holds: assets = liabilities + equity.
+        $response->assertDontSee('≠');
+    }
+
     public function test_foreign_currency_payment_does_not_offset_receivable(): void
     {
         $user = User::factory()->create();

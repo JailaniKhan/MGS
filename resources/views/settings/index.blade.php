@@ -37,7 +37,7 @@
                     </div>
                     <div class="min-w-0">
                         <p class="text-xs font-semibold text-ink-800 dark:text-ink-200 truncate">{{ __('messages.whatsapp_gateway') }}</p>
-                        <p class="text-[10px] text-ink-400 dark:text-ink-500 truncate">OpenWA</p>
+                        <p class="text-[10px] text-ink-400 dark:text-ink-500 truncate">WhatsApp</p>
                     </div>
                 </div>
                 <x-icon name="chevron-right" class="w-4 h-4 text-ink-300 dark:text-ink-600 flex-shrink-0 rtl:-scale-x-100" strokeWidth="2"/>

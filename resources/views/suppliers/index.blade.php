@@ -12,7 +12,7 @@
     <div class="card overflow-hidden page-enter" style="animation-delay: 0.1s;">
         @forelse ($suppliers as $supplier)
             <div class="swipe-row">
-                <div class="swipe-content">
+                <a href="{{ route('suppliers.show', $supplier) }}" class="swipe-content">
                     <div class="w-9 h-9 rounded-[0.875rem] bg-accent-50 dark:bg-accent-900/30 flex items-center justify-center flex-shrink-0 border border-accent-100 dark:border-accent-800/40">
                         <span class="text-secondary-600 dark:text-secondary-300 font-bold text-sm">{{ substr($supplier->name, 0, 1) }}</span>
                     </div>
@@ -23,7 +23,7 @@
                             @if ($supplier->purchases_count) <span class="ml-1">{{ $supplier->purchases_count }} {{ __('messages.purchases') }}</span>@endif
                         </div>
                     </div>
-                </div>
+                </a>
                 <div class="swipe-actions">
                     @if ($supplier->phone)
                         <a href="{{ route('whatsapp.chats.show', ['supplier', $supplier->id]) }}" class="act-edit !bg-brand" aria-label="{{ __('messages.wa_open_chat') }}">

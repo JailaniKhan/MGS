@@ -3,13 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AddsListBalances;
+use App\Models\CashbookEntry;
 use App\Models\Customer;
+use App\Models\JournalEntry;
 use App\Models\Order;
 use App\Models\PartyPayment;
 use App\Models\Payment;
 use App\Models\Purchase;
 use App\Models\PurchasePayment;
 use App\Models\Supplier;
+use App\Services\Accounting\CashFlowService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -17,33 +20,21 @@ class PaymentController extends Controller
 {
     use AddsListBalances;
 
-    public function index()
+    public function index(CashFlowService $cashFlow)
     {
-        // Money received from sales (customer payments) via the structured Payment table.
-        $incomingAFN = Payment::where('currency', 'AFN')->sum('amount');
-        $incomingUSD = Payment::where('currency', 'USD')->sum('amount');
+        // Wallet hero: the canonical cash-flow union (payments, ledger
+        // payments, BOTH cashbook generations, expenses, salaries) — the
+        // same figure every other cash surface shows.
+        $totals = $cashFlow->totals();
 
-        // Money paid out for purchases (supplier payments) via the structured PurchasePayment table.
-        $outgoingAFN = PurchasePayment::where('currency', 'AFN')->sum('amount');
-        $outgoingUSD = PurchasePayment::where('currency', 'USD')->sum('amount');
-
-        // Direct party payments recorded via the ledger (not linked to a document) must also be
-        // counted, otherwise the totals ignore payments that are listed in "Recent transactions"
-        // (a payment_received is inflow, a payment_made is outflow). These are disjoint from the
-        // document-linked Payment / PurchasePayment rows in normal use, so no double counting.
-        $ledgerInAFN = PartyPayment::where('type', 'payment_received')->where('currency', 'AFN')->sum('amount');
-        $ledgerInUSD = PartyPayment::where('type', 'payment_received')->where('currency', 'USD')->sum('amount');
-        $ledgerOutAFN = PartyPayment::where('type', 'payment_made')->where('currency', 'AFN')->sum('amount');
-        $ledgerOutUSD = PartyPayment::where('type', 'payment_made')->where('currency', 'USD')->sum('amount');
-
-        $incomingAFN += $ledgerInAFN;
-        $incomingUSD += $ledgerInUSD;
-        $outgoingAFN += $ledgerOutAFN;
-        $outgoingUSD += $ledgerOutUSD;
+        $incomingAFN = $totals['AFN']['in'];
+        $incomingUSD = $totals['USD']['in'];
+        $outgoingAFN = $totals['AFN']['out'];
+        $outgoingUSD = $totals['USD']['out'];
 
         // Wallet balance
-        $balanceAFN = $incomingAFN - $outgoingAFN;
-        $balanceUSD = $incomingUSD - $outgoingUSD;
+        $balanceAFN = $totals['AFN']['balance'];
+        $balanceUSD = $totals['USD']['balance'];
 
         // Recent transactions (combine incoming and outgoing). Cap each source so
         // the wallet page does not load the entire payment history into memory.
@@ -124,9 +115,58 @@ class PaymentController extends Controller
             ];
         });
 
+        // Cashbook entries — BOTH generations, so every amount that moves the
+        // hero has a matching line in the feed. The journal rows link to the
+        // cashbook page; the party name comes from the journal's morphTo
+        // reference (already resolved names cover the shared people).
+        $cashbookJournals = JournalEntry::with(['reference', 'ledgerEntries'])
+            ->whereIn('source', ['cashbook_in', 'cashbook_out'])
+            ->latest('transaction_date')
+            ->limit($feedLimit)
+            ->get();
+
+        $cashbookTransactions = $cashbookJournals->map(function ($journal) {
+            $cashLine = $journal->ledgerEntries->first();
+            $isIn = $journal->source === 'cashbook_in';
+            $notes = collect($journal->ledgerEntries)->pluck('notes')->filter()->first();
+            $description = trim(implode(' - ', array_filter([
+                $journal->description,
+                $journal->reference?->name,
+                $notes,
+            ])));
+
+            return [
+                'type' => $isIn ? 'incoming' : 'outgoing',
+                'amount' => $cashLine?->amount ?? 0,
+                'currency' => $journal->currency,
+                'description' => $description !== '' ? $description : ($isIn ? __('messages.cash_income') : __('messages.cash_expense')),
+                'notes' => $notes,
+                'date' => $journal->transaction_date,
+                'link' => route('cashbook.index'),
+            ];
+        });
+
+        $legacyCashbook = CashbookEntry::query()
+            ->latest()
+            ->limit($feedLimit)
+            ->get()
+            ->map(function ($entry) {
+                return [
+                    'type' => $entry->type === 'in' ? 'incoming' : 'outgoing',
+                    'amount' => $entry->amount,
+                    'currency' => $entry->currency,
+                    'description' => $entry->type === 'in' ? __('messages.cash_income') : __('messages.cash_expense'),
+                    'notes' => $entry->notes,
+                    'date' => $entry->entry_date,
+                    'link' => route('cashbook.index'),
+                ];
+            });
+
         $allTransactions = collect($incomingTransactions)
             ->concat($outgoingTransactions)
             ->concat($ledgerTransactions)
+            ->concat($cashbookTransactions)
+            ->concat($legacyCashbook)
             ->sortByDesc('date')
             ->values();
 
@@ -343,7 +383,7 @@ class PaymentController extends Controller
 
     public function customerPaymentsPage()
     {
-        return $this->index();
+        return $this->index(app(CashFlowService::class));
     }
 
     public function customerIndex()

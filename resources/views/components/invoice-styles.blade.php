@@ -129,6 +129,15 @@
         border-bottom: none;
         padding: 12px;
     }
+    .totals-table .pending-row {
+        background: #f0fdf4;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0a6d44;
+    }
+    .totals-table .pending-row td {
+        border-bottom: 1px solid #bbf7d0;
+    }
     .footer {
         margin-top: 30px;
         padding-top: 15px;

@@ -116,6 +116,24 @@ class StockReportTest extends TestCase
         $response->assertDontSee('550.00');
     }
 
+    public function test_opening_stock_product_values_inventory_at_its_pool_price(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // Never purchased — the product's own pool price values the stock,
+        // the same basis the backfill command would create.
+        $this->makeProduct($user, ['name' => 'Opening Stock Valued Product', 'price' => '100.00', 'stock_afn' => 5, 'stock_usd' => 0]);
+
+        $response = $this->get('/reports/stock');
+
+        $response->assertOk();
+        $response->assertSee('Opening Stock Valued Product');
+        // Avg purchase price falls back to the pool price; stock value 5 x 100.
+        $response->assertSee('100.00');
+        $response->assertSee('500.00');
+    }
+
     public function test_currency_filter_keeps_average_prices_separate(): void
     {
         $user = User::factory()->create();

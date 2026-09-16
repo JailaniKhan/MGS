@@ -18,27 +18,27 @@
         </a>
     </div>
 
-    {{-- Month summary --}}
+    {{-- All-time summary --}}
     <div class="card relative overflow-hidden p-4 mb-3 page-enter" style="animation-delay: 0.05s;">
         <div class="pointer-events-none absolute -end-8 -top-10 w-32 h-32 rounded-full bg-brand/[0.08] dark:bg-brand/[0.12]"></div>
         <div class="relative">
             <div class="flex items-center gap-1.5">
-                <x-icon name="calendar" class="w-3.5 h-3.5 text-ink-400 dark:text-ink-500" strokeWidth="1.8"/>
-                <span class="metric-label">{{ __('messages.this_month') }}</span>
+                <x-icon name="clock" class="w-3.5 h-3.5 text-ink-400 dark:text-ink-500" strokeWidth="1.8"/>
+                <span class="metric-label">{{ __('messages.all_time') }}</span>
             </div>
             <div class="mt-2 grid grid-cols-2 gap-3">
                 <div>
                     <p class="text-[10px] font-bold text-ink-400 dark:text-ink-500 mb-0.5">{{ __('messages.orders') }}</p>
                     <p class="text-lg font-extrabold tracking-tight text-ink-900 dark:text-white">
-                        <span class="whitespace-nowrap"><bdi class="tabular-nums">{{ number_format($orderMonthAFN) }}</bdi> <span class="text-[10px] font-bold text-ink-400 dark:text-ink-500">{{ __('messages.afn') }}</span></span>
-                        @if ($orderMonthUSD > 0) <span class="text-ink-300 dark:text-ink-600">&middot;</span> <bdi class="tabular-nums whitespace-nowrap">{{ number_format($orderMonthUSD) }}$</bdi> @endif
+                        <span class="whitespace-nowrap"><bdi class="tabular-nums">{{ number_format($orderAllAFN) }}</bdi> <span class="text-[10px] font-bold text-ink-400 dark:text-ink-500">{{ __('messages.afn') }}</span></span>
+                        @if ($orderAllUSD > 0) <span class="text-ink-300 dark:text-ink-600">&middot;</span> <bdi class="tabular-nums whitespace-nowrap">{{ number_format($orderAllUSD) }}$</bdi> @endif
                     </p>
                 </div>
                 <div>
                     <p class="text-[10px] font-bold text-ink-400 dark:text-ink-500 mb-0.5">{{ __('messages.purchases') }}</p>
                     <p class="text-lg font-extrabold tracking-tight text-ink-900 dark:text-white">
-                        <span class="whitespace-nowrap"><bdi class="tabular-nums">{{ number_format($purchaseMonthAFN) }}</bdi> <span class="text-[10px] font-bold text-ink-400 dark:text-ink-500">{{ __('messages.afn') }}</span></span>
-                        @if ($purchaseMonthUSD > 0) <span class="text-ink-300 dark:text-ink-600">&middot;</span> <bdi class="tabular-nums whitespace-nowrap">{{ number_format($purchaseMonthUSD) }}$</bdi> @endif
+                        <span class="whitespace-nowrap"><bdi class="tabular-nums">{{ number_format($purchaseAllAFN) }}</bdi> <span class="text-[10px] font-bold text-ink-400 dark:text-ink-500">{{ __('messages.afn') }}</span></span>
+                        @if ($purchaseAllUSD > 0) <span class="text-ink-300 dark:text-ink-600">&middot;</span> <bdi class="tabular-nums whitespace-nowrap">{{ number_format($purchaseAllUSD) }}$</bdi> @endif
                     </p>
                 </div>
             </div>

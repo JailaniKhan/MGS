@@ -12,6 +12,7 @@ use App\Models\Setting;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Services\Billing\BillService;
+use App\Services\Billing\PartyBalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -66,22 +67,19 @@ class OrderController extends Controller
         $this->attachOrderListBalances($orders->getCollection());
         $this->attachPurchaseListBalances($purchases->getCollection());
 
-        // Month summary tiles (single pass per side, split by currency).
-        $monthStart = now()->startOfMonth();
-        $orderMonth = Order::where('status', '!=', 'cancelled')
-            ->where('created_at', '>=', $monthStart)->get(['total_amount', 'currency']);
-        $orderMonthAFN = $orderMonth->where('currency', 'AFN')->sum('total_amount');
-        $orderMonthUSD = $orderMonth->where('currency', 'USD')->sum('total_amount');
+        // All-time summary tiles (single pass per side, split by currency).
+        $orderAll = Order::where('status', '!=', 'cancelled')->get(['total_amount', 'currency']);
+        $orderAllAFN = $orderAll->where('currency', 'AFN')->sum('total_amount');
+        $orderAllUSD = $orderAll->where('currency', 'USD')->sum('total_amount');
 
-        $purchaseMonth = Purchase::where('status', '!=', 'cancelled')
-            ->where('created_at', '>=', $monthStart)->get(['total_amount', 'currency']);
-        $purchaseMonthAFN = $purchaseMonth->where('currency', 'AFN')->sum('total_amount');
-        $purchaseMonthUSD = $purchaseMonth->where('currency', 'USD')->sum('total_amount');
+        $purchaseAll = Purchase::where('status', '!=', 'cancelled')->get(['total_amount', 'currency']);
+        $purchaseAllAFN = $purchaseAll->where('currency', 'AFN')->sum('total_amount');
+        $purchaseAllUSD = $purchaseAll->where('currency', 'USD')->sum('total_amount');
 
         return view('orders.index', compact(
             'orders', 'purchases', 'search',
-            'orderMonthAFN', 'orderMonthUSD',
-            'purchaseMonthAFN', 'purchaseMonthUSD'
+            'orderAllAFN', 'orderAllUSD',
+            'purchaseAllAFN', 'purchaseAllUSD'
         ));
     }
 
@@ -247,7 +245,13 @@ class OrderController extends Controller
         $invoicePrefix = Setting::get('invoice_prefix', 'INV-');
         $invoiceNumber = $invoicePrefix.$order->id;
 
-        return view('orders.print', compact('order', 'company', 'invoiceNumber'));
+        // Party-wide pending in the order's currency (mirrors the ledger).
+        $totalPending = $order->person_type && $order->person_id
+            ? (float) app(PartyBalanceService::class)
+                ->pendingAmount($order->person_type, $order->person_id, $order->currency)
+            : (float) $order->remaining_amount;
+
+        return view('orders.print', compact('order', 'company', 'invoiceNumber', 'totalPending'));
     }
 
     public function sendWhatsApp(Order $order, BillService $bills)

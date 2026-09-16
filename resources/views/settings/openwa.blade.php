@@ -10,7 +10,6 @@
             </div>
             <div class="min-w-0">
                 <h2 class="page-title leading-tight truncate">{{ __('messages.whatsapp_gateway') }}</h2>
-                <p class="text-[11px] text-ink-500 dark:text-ink-400 truncate" dir="ltr">{{ config('services.openwa.base_url') }}</p>
             </div>
         </div>
         <div class="flex items-center gap-2">

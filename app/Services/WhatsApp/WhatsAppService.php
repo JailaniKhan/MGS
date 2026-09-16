@@ -24,12 +24,13 @@ class WhatsAppService
 
         if (empty($token) || empty($phoneNumberId)) {
             Log::info('WhatsApp skipped (not configured)', compact('phone', 'message'));
+
             return false;
         }
 
         $phone = ltrim($phone, '+');
-        if (!str_starts_with($phone, '93')) {
-            $phone = '93' . ltrim($phone, '0');
+        if (! str_starts_with($phone, '93')) {
+            $phone = '93'.ltrim($phone, '0');
         }
 
         $response = Http::withToken($token)
@@ -64,6 +65,22 @@ class WhatsAppService
         }
 
         Log::info('WhatsApp skipped (not configured)', compact('phone', 'message'));
+
+        return ['ok' => false, 'id' => null];
+    }
+
+    /**
+     * Send an image with optional caption through the OpenWA gateway.
+     *
+     * @return array{ok: bool, id: ?string}
+     */
+    public function sendImage(string $phone, string $filePath, ?string $caption = null): array
+    {
+        if ($this->openWa && $this->openWa->isConfigured()) {
+            return $this->openWa->sendImage($phone, $filePath, $caption);
+        }
+
+        Log::info('WhatsApp image skipped (not configured)', compact('phone', 'filePath'));
 
         return ['ok' => false, 'id' => null];
     }

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Customer;
 use App\Models\Reminder;
+use App\Models\Supplier;
 
 /**
  * WhatsApp-style view of the reminders that were actually delivered (or
@@ -32,7 +34,7 @@ class WhatsAppChatController extends Controller
 
         // Group by the polymorphic contact (customer/supplier). The phone is
         // not stored on the reminder row, so the contact is the grouping key.
-        $groups = $reminders->groupBy(fn (Reminder $r) => $r->remindable_type . ':' . $r->remindable_id);
+        $groups = $reminders->groupBy(fn (Reminder $r) => $r->remindable_type.':'.$r->remindable_id);
 
         $chats = $groups
             ->map(function ($items, string $key) {
@@ -50,7 +52,8 @@ class WhatsAppChatController extends Controller
                     'phone' => $contact?->phone ?? null,
                     'last_message' => $latest->message,
                     // Voice sends store empty text — preview a mic label instead.
-                    'is_voice' => (bool) $latest->media_path,
+                    'is_voice' => (bool) $latest->media_path && str_starts_with((string) $latest->media_type, 'audio/'),
+                    'is_image' => (bool) $latest->media_path && str_starts_with((string) $latest->media_type, 'image/'),
                     'last_status' => $latest->status,
                     'last_time' => $time,
                     // WhatsApp-style row: initials avatar, stable color per
@@ -69,13 +72,13 @@ class WhatsAppChatController extends Controller
 
         // Contacts for the "new chat" picker: everyone reachable on
         // WhatsApp, whether or not they have prior history.
-        $contacts = \App\Models\Customer::query()
+        $contacts = Customer::query()
             ->whereNotNull('phone')->where('phone', '!=', '')
             ->orderBy('name')
             ->get(['id', 'name', 'phone'])
             ->map(fn ($c) => ['type' => 'customer', 'id' => $c->id, 'name' => $c->name, 'phone' => $c->phone])
             ->merge(
-                \App\Models\Supplier::query()
+                Supplier::query()
                     ->whereNotNull('phone')->where('phone', '!=', '')
                     ->orderBy('name')
                     ->get(['id', 'name', 'phone'])
@@ -95,16 +98,16 @@ class WhatsAppChatController extends Controller
      */
     public function show(string $type, int $id)
     {
-        if (!in_array($type, self::CHAT_TYPES, true)) {
+        if (! in_array($type, self::CHAT_TYPES, true)) {
             abort(404);
         }
 
-        $contactClass = $type === 'customer' ? \App\Models\Customer::class : \App\Models\Supplier::class;
+        $contactClass = $type === 'customer' ? Customer::class : Supplier::class;
         $contact = $contactClass::find($id);
 
         // A chat must always have a live contact behind it (deleted
         // contacts' history stays visible in the list but can't be opened).
-        if (!$contact) {
+        if (! $contact) {
             abort(404);
         }
 

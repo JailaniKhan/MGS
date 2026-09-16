@@ -2,6 +2,7 @@
 
 namespace App\Services\WhatsApp;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -52,11 +53,11 @@ class OpenWaService
             $phone = substr($phone, 1);
         }
 
-        if (!preg_match('/^\d{6,15}$/', $phone)) {
-            return $phone . '@c.us';
+        if (! preg_match('/^\d{6,15}$/', $phone)) {
+            return $phone.'@c.us';
         }
 
-        return '93' . $phone . '@c.us';
+        return '93'.$phone.'@c.us';
     }
 
     /**
@@ -80,7 +81,7 @@ class OpenWaService
 
     public function isConfigured(): bool
     {
-        return !empty($this->apiKey());
+        return ! empty($this->apiKey());
     }
 
     /**
@@ -99,8 +100,9 @@ class OpenWaService
      */
     public function sendText(string $phone, string $message): array
     {
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             Log::info('OpenWA skipped (not configured)', compact('phone', 'message'));
+
             return ['ok' => false, 'id' => null];
         }
 
@@ -111,7 +113,7 @@ class OpenWaService
                 "/api/sessions/{$this->session()}/messages/send-text",
                 ['chatId' => $chatId, 'text' => $message]
             );
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException $e) {
             Log::error('OpenWA unreachable', [
                 'chatId' => $chatId,
                 'error' => $e->getMessage(),
@@ -136,7 +138,7 @@ class OpenWaService
     /**
      * Send the same message to multiple recipients.
      *
-     * @param array<int, string> $phones
+     * @param  array<int, string>  $phones
      */
     public function sendBulk(array $phones, string $message): array
     {
@@ -160,13 +162,15 @@ class OpenWaService
      */
     public function sendVoice(string $phone, string $filePath, bool $ptt = true): array
     {
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             Log::info('OpenWA voice skipped (not configured)', compact('phone', 'filePath'));
+
             return ['ok' => false, 'id' => null];
         }
 
-        if (!is_file($filePath)) {
+        if (! is_file($filePath)) {
             Log::error('OpenWA voice file missing', compact('filePath'));
+
             return ['ok' => false, 'id' => null];
         }
 
@@ -181,12 +185,12 @@ class OpenWaService
                 "/api/sessions/{$this->session()}/messages/send-voice",
                 [
                     'chatId' => $chatId,
-                    'audio' => 'data:' . $baseMime . ';base64,' . base64_encode((string) file_get_contents($filePath)),
+                    'audio' => 'data:'.$baseMime.';base64,'.base64_encode((string) file_get_contents($filePath)),
                     'ptt' => $ptt,
                     'mimetype' => $mime,
                 ]
             );
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException $e) {
             Log::error('OpenWA unreachable (voice)', [
                 'chatId' => $chatId,
                 'error' => $e->getMessage(),
@@ -200,6 +204,63 @@ class OpenWaService
         }
 
         Log::error('OpenWA voice send failed', [
+            'chatId' => $chatId,
+            'status' => $response->status(),
+            'response' => $response->body(),
+        ]);
+
+        return ['ok' => false, 'id' => null];
+    }
+
+    /**
+     * Send an image from a local file, with an optional caption.
+     *
+     * The gateway accepts a data URL (base64) in the `image` field — the
+     * same JSON-safe path voice notes use, for the same NativePHP WebView
+     * reason.
+     *
+     * @return array{ok: bool, id: ?string}
+     */
+    public function sendImage(string $phone, string $filePath, ?string $caption = null): array
+    {
+        if (! $this->isConfigured()) {
+            Log::info('OpenWA image skipped (not configured)', compact('phone', 'filePath'));
+
+            return ['ok' => false, 'id' => null];
+        }
+
+        if (! is_file($filePath)) {
+            Log::error('OpenWA image file missing', compact('filePath'));
+
+            return ['ok' => false, 'id' => null];
+        }
+
+        $chatId = $this->toChatId($phone);
+        $mime = image_type_to_mime_type(exif_imagetype($filePath) ?: false) ?: 'image/jpeg';
+
+        try {
+            $response = $this->client()->post(
+                "/api/sessions/{$this->session()}/messages/send-image",
+                [
+                    'chatId' => $chatId,
+                    'image' => 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($filePath)),
+                    'caption' => (string) $caption,
+                ]
+            );
+        } catch (ConnectionException $e) {
+            Log::error('OpenWA unreachable (image)', [
+                'chatId' => $chatId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['ok' => false, 'id' => null];
+        }
+
+        if ($response->successful()) {
+            return ['ok' => true, 'id' => data_get($response->json(), 'id')];
+        }
+
+        Log::error('OpenWA image send failed', [
             'chatId' => $chatId,
             'status' => $response->status(),
             'response' => $response->body(),
@@ -258,17 +319,17 @@ class OpenWaService
      * Get the session status. Useful to know if the QR has been scanned.
      *
      * @return array|null Array of session info, or null if not configured /
-     *         gateway unreachable / request failed.
+     *                    gateway unreachable / request failed.
      */
     public function sessionStatus(): ?array
     {
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             return null;
         }
 
         try {
             $response = $this->client()->get("/api/sessions/{$this->session()}");
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException $e) {
             Log::warning('OpenWA unreachable (sessionStatus)', ['error' => $e->getMessage()]);
 
             return null;
@@ -282,19 +343,19 @@ class OpenWaService
      */
     public function qrCode(): ?string
     {
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             return null;
         }
 
         try {
             $response = $this->client()->get("/api/sessions/{$this->session()}/qr");
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException $e) {
             Log::warning('OpenWA unreachable (qrCode)', ['error' => $e->getMessage()]);
 
             return null;
         }
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             return null;
         }
 
@@ -308,11 +369,11 @@ class OpenWaService
      * (alternative to scanning the QR code).
      *
      * @return array{pairingCode: string, expiresAt: int}|null The code plus
-     *         its expiry timestamp (ms epoch), or null on failure.
+     *                                                         its expiry timestamp (ms epoch), or null on failure.
      */
     public function requestPairingCode(string $phone): ?array
     {
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             return null;
         }
 
@@ -321,8 +382,8 @@ class OpenWaService
         if (str_starts_with($phone, '0')) {
             $phone = substr($phone, 1);
         }
-        if (!str_starts_with($phone, '93')) {
-            $phone = '93' . $phone;
+        if (! str_starts_with($phone, '93')) {
+            $phone = '93'.$phone;
         }
 
         try {
@@ -330,13 +391,13 @@ class OpenWaService
                 "/api/sessions/{$this->session()}/pairing-code",
                 ['phoneNumber' => $phone]
             );
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException $e) {
             Log::warning('OpenWA unreachable (pairing code)', ['error' => $e->getMessage()]);
 
             return null;
         }
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             Log::error('OpenWA pairing code request failed', [
                 'status' => $response->status(),
                 'response' => $response->body(),
@@ -362,19 +423,19 @@ class OpenWaService
      */
     public function pairingStatus(): ?array
     {
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             return null;
         }
 
         try {
             $response = $this->client()->get("/api/sessions/{$this->session()}/pairing-code");
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException $e) {
             Log::warning('OpenWA unreachable (pairing status)', ['error' => $e->getMessage()]);
 
             return null;
         }
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             return null;
         }
 
@@ -391,7 +452,7 @@ class OpenWaService
      */
     public function registerWebhook(string $url, array $events = ['message.received'], ?string $secret = null): bool
     {
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             return false;
         }
 
@@ -409,7 +470,7 @@ class OpenWaService
                 "/api/sessions/{$this->session()}/webhooks",
                 $payload
             );
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException $e) {
             Log::warning('OpenWA unreachable (register webhook)', ['error' => $e->getMessage()]);
 
             return false;

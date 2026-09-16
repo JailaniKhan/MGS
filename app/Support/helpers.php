@@ -2,6 +2,21 @@
 
 use Carbon\CarbonInterface;
 
+if (! function_exists('money_format')) {
+    /**
+     * Smart money formatting: 2 decimals when the amount has cents
+     * (20.7 -> "20.70"), 0 when whole (414 -> "414"). Matches the
+     * x-money component's auto-decimal rule for non-Blade surfaces.
+     */
+    function money_format($amount): string
+    {
+        $num = (float) $amount;
+        $decimals = (((int) round(abs($num) * 100)) % 100 === 0) ? 0 : 2;
+
+        return number_format($num, $decimals);
+    }
+}
+
 if (! function_exists('local_date')) {
     /**
      * Format a date in the active locale (fa/ps month names) with a safe

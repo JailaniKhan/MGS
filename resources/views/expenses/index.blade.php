@@ -26,43 +26,43 @@
         </a>
     </div>
 
-    {{-- Month summary --}}
+    {{-- All-time summary --}}
     <div class="card relative overflow-hidden p-4 mb-3 page-enter" style="animation-delay: 0.05s;">
         <div class="pointer-events-none absolute -end-8 -top-10 w-32 h-32 rounded-full bg-accent-500/[0.08] dark:bg-accent-400/[0.08]"></div>
         <div class="relative">
             <div class="flex items-center gap-1.5">
                 <x-icon name="calendar" class="w-3.5 h-3.5 text-ink-400 dark:text-ink-500" strokeWidth="1.8"/>
-                <span class="metric-label">{{ __('messages.this_month') }}</span>
+                <span class="metric-label">{{ __('messages.all_time') }}</span>
             </div>
             <p class="mt-1 text-3xl font-extrabold tabular-nums tracking-tight text-ink-900 dark:text-white" dir="ltr">
-                {{ number_format($monthTotalAFN) }} <span class="text-sm font-bold text-ink-400 dark:text-ink-500">{{ __('messages.afn') }}</span>
-                @if ($monthTotalUSD > 0)
+                {{ number_format($totalAFN) }} <span class="text-sm font-bold text-ink-400 dark:text-ink-500">{{ __('messages.afn') }}</span>
+                @if ($totalUSD > 0)
                     <span class="text-base font-bold text-ink-300 dark:text-ink-600 mx-1">&middot;</span>
-                    {{ number_format($monthTotalUSD) }} <span class="text-sm font-bold text-ink-400 dark:text-ink-500">$</span>
+                    {{ number_format($totalUSD) }} <span class="text-sm font-bold text-ink-400 dark:text-ink-500">$</span>
                 @endif
             </p>
             <p class="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-ink-500 dark:text-ink-400">
                 <x-icon name="tag" class="w-3.5 h-3.5 text-ink-400" strokeWidth="1.8"/>
-                {{ $monthCount }} {{ __('messages.expense') }}
+                {{ $totalCount }} {{ __('messages.expense') }}
             </p>
         </div>
     </div>
 
-    {{-- Month stat tiles --}}
+    {{-- All-time stat tiles --}}
     <div class="grid grid-cols-2 gap-2 mb-4 page-enter" style="animation-delay: 0.1s;">
         <div class="card !p-3">
             <div class="w-6 h-6 rounded-lg bg-accent-500/10 dark:bg-accent-500/15 flex items-center justify-center mb-2">
                 <x-icon name="banknotes" class="w-3.5 h-3.5 text-accent-600 dark:text-accent-400" strokeWidth="1.8"/>
             </div>
             <span class="metric-label !text-[9px]">{{ __('messages.afn') }}</span>
-            <p class="mt-0.5 text-lg font-extrabold tabular-nums text-ink-800 dark:text-ink-100">{{ number_format($monthTotalAFN) }}</p>
+            <p class="mt-0.5 text-lg font-extrabold tabular-nums text-ink-800 dark:text-ink-100">{{ number_format($totalAFN) }}</p>
         </div>
         <div class="card !p-3">
             <div class="w-6 h-6 rounded-lg bg-primary-500/10 dark:bg-primary-500/15 flex items-center justify-center mb-2">
                 <x-icon name="currency-dollar" class="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" strokeWidth="1.8"/>
             </div>
             <span class="metric-label !text-[9px]">{{ __('messages.usd') }}</span>
-            <p class="mt-0.5 text-lg font-extrabold tabular-nums text-ink-800 dark:text-ink-100">{{ number_format($monthTotalUSD) }}</p>
+            <p class="mt-0.5 text-lg font-extrabold tabular-nums text-ink-800 dark:text-ink-100">{{ number_format($totalUSD) }}</p>
         </div>
     </div>
 
@@ -90,6 +90,7 @@
                         <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $expense->category }}</div>
                         <div class="text-[11px] text-ink-500 dark:text-ink-400 truncate">
                             <bdi>{{ local_date($expense->expense_date, 'd M Y') }}</bdi>
+                            @if($expense->purchase) &middot; <span class="font-semibold text-accent-600 dark:text-accent-400">#{{ $expense->purchase->id }}</span> @endif
                             @if($expense->notes) &middot; {{ Str::limit($expense->notes, 25) }} @endif
                         </div>
                     </div>

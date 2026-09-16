@@ -76,8 +76,8 @@
                 <tr>
                     <td>{{ $item->product->name }}@if($item->lot_number) <br><span style="font-size:11px;color:#0c8c53;">{{ __('messages.lot_number') }}: {{ $item->lot_number }}</span>@endif</td>
                     <td class="qty">{{ $item->quantity }} {{ $item->product->unit->short_name ?? $item->product->unit->name ?? '' }}</td>
-                    <td class="price">{{ number_format($item->unit_price) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</td>
-                    <td class="subtotal">{{ number_format($item->subtotal) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</td>
+                    <td class="price">{{ money_format($item->unit_price) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</td>
+                    <td class="subtotal">{{ money_format($item->subtotal) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</td>
                 </tr>
                 @endforeach
             </tbody>
@@ -85,10 +85,26 @@
 
         <div class="totals">
             <table class="totals-table">
+                @if ($order->status !== 'cancelled')
+                    <tr>
+                        <td>{{ __('messages.paid') }}</td>
+                        <td>{{ money_format($order->paid_amount) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</td>
+                    </tr>
+                    <tr>
+                        <td>{{ __('messages.current_pending') }}</td>
+                        <td>{{ money_format($order->remaining_amount) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</td>
+                    </tr>
+                @endif
                 <tr class="total-row">
                     <td>{{ __('messages.total_amount') }}</td>
-                    <td>{{ number_format($order->total_amount) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</td>
+                    <td>{{ money_format($order->total_amount) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</td>
                 </tr>
+                @if ($order->status !== 'cancelled' && $order->party)
+                    <tr class="pending-row">
+                        <td>{{ __('messages.total_pending') }} ({{ $order->party->name }})</td>
+                        <td>{{ money_format($totalPending) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</td>
+                    </tr>
+                @endif
             </table>
         </div>
 

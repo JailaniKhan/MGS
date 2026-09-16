@@ -119,10 +119,6 @@ use App\Models\Setting;
                     <x-icon name="chart-bar" class="w-5 h-5"/>
                     <span>{{ __('messages.balance_sheet') }}</span>
                 </a>
-                <a href="{{ route('reports.aging') }}" class="sidebar-link {{ request()->routeIs('reports.aging') ? 'sidebar-link-active' : '' }}">
-                    <x-icon name="clock" class="w-5 h-5"/>
-                    <span>{{ __('messages.aging_report') }}</span>
-                </a>
                 <div class="sidebar-divider"></div>
                 <a href="{{ route('ledger.index') }}" class="sidebar-link {{ request()->routeIs('ledger.*') ? 'sidebar-link-active' : '' }}">
                     <x-icon name="document-text" class="w-5 h-5"/>

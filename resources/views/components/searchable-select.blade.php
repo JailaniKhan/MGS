@@ -33,6 +33,9 @@
                 @if (array_key_exists('price_currency', $option) && $option['price_currency']) data-price-currency="{{ $option['price_currency'] }}" @endif
                 @if (array_key_exists('stock', $option) && $option['stock'] !== null && $option['stock'] !== '') data-stock="{{ $option['stock'] }}" @endif
                 @if (array_key_exists('lot', $option) && $option['lot'] !== null && $option['lot'] !== '') data-lot="{{ $option['lot'] }}" @endif
+                @if (array_key_exists('purchase_id', $option) && $option['purchase_id']) data-purchase-id="{{ $option['purchase_id'] }}" @endif
+                @if (array_key_exists('lots', $option) && $option['lots'] !== null && $option['lots'] !== '') data-lots="{{ $option['lots'] }}" @endif
+                @if (array_key_exists('products', $option) && $option['products'] !== null && $option['products'] !== '') data-products="{{ $option['products'] }}" @endif
             >{{ $option['label'] ?? '' }}</option>
         @endforeach
     </select>
@@ -49,7 +52,6 @@
         if (!raw) return [];
         try { return JSON.parse(raw); } catch (e) { return []; }
     }
-
     function mgsValue(root) {
         var select = root.querySelector('[data-searchable-select]');
         return select ? select.value : '';

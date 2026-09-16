@@ -55,9 +55,24 @@ class CustomerShowTest extends TestCase
             'status' => 'processing',
         ]);
 
+        Order::create([
+            'customer_id' => $customer->id,
+            'person_type' => 'customer',
+            'person_id' => $customer->id,
+            'currency' => 'USD',
+            'total_amount' => 30,
+            'status' => 'processing',
+        ]);
+
         $res = $this->get("/customers/{$customer->id}");
         $res->assertOk();
         $res->assertSee('Nadia');
+        // Both currencies headline the balance card, AFN and USD alike.
+        $res->assertSee(__('messages.remaining'));
+        $res->assertSee(__('messages.afn'));
+        $res->assertSee(__('messages.usd'));
+        $res->assertSee('500');
+        $res->assertSee('30');
     }
 
     public function test_other_users_customer_is_not_visible(): void

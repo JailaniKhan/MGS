@@ -56,11 +56,12 @@ class SettingsController extends Controller
             'language' => 'required|string|in:en,ps,fa',
         ]);
 
-        // Guests (login/register screens) may only change their own session —
-        // never the shop-wide setting. Authenticated users persist it.
-        if (! Auth::check()) {
-            session(['locale' => $validated['language']]);
-        } else {
+        // The session is the live source the middleware reads first, so it
+        // must always be synced. A guest's choice lives in their session
+        // only; authenticated users also persist it to the shop setting.
+        session(['locale' => $validated['language']]);
+
+        if (Auth::check()) {
             Setting::set('language', $validated['language']);
         }
 
@@ -236,7 +237,7 @@ class SettingsController extends Controller
         if (! $manager->isRunning()) {
             return response()->json([
                 'success' => false,
-                'error' => __('messages.openwa_unreachable_test') ?? 'OpenWA gateway is not running. Start it first.',
+                'error' => __('messages.openwa_unreachable_test') ?? 'WhatsApp gateway is not running. Start it first.',
             ], 503);
         }
 
@@ -246,7 +247,7 @@ class SettingsController extends Controller
         if ($status === null) {
             return response()->json([
                 'success' => false,
-                'error' => __('messages.openwa_unreachable_test') ?? 'OpenWA gateway is not reachable. Start it first.',
+                'error' => __('messages.openwa_unreachable_test') ?? 'WhatsApp gateway is not reachable. Start it first.',
             ], 503);
         }
 

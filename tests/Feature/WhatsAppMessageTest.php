@@ -61,7 +61,7 @@ class WhatsAppMessageTest extends TestCase
 
         $res->assertOk()->assertJson(['ok' => true, 'status' => 'sent']);
 
-        Http::assertSent(function ($request) use ($customer) {
+        Http::assertSent(function ($request) {
             return str_contains($request->url(), '/messages/send-text')
                 && $request['chatId'] === '93700000001@c.us'
                 && $request['text'] === 'Salam, your order is ready.';
@@ -89,7 +89,7 @@ class WhatsAppMessageTest extends TestCase
             '*127.0.0.1:2785*' => Http::response(['status' => 'sent', 'id' => 'VOICE1'], 200),
         ]);
 
-        $payload = 'data:audio/webm;base64,' . base64_encode(str_repeat('WEBMAUDIO', 8));
+        $payload = 'data:audio/webm;base64,'.base64_encode(str_repeat('WEBMAUDIO', 8));
 
         $res = $this->postJson(route('suppliers.message', $supplier), [
             'type' => 'voice',
@@ -99,7 +99,7 @@ class WhatsAppMessageTest extends TestCase
 
         $res->assertOk()->assertJson(['ok' => true, 'status' => 'sent']);
 
-        Http::assertSent(function ($request) use ($supplier) {
+        Http::assertSent(function ($request) {
             return str_contains($request->url(), '/messages/send-voice')
                 && $request['chatId'] === '93701112223@c.us'
                 && str_starts_with((string) $request['audio'], 'data:audio/webm;base64,');
@@ -131,6 +131,67 @@ class WhatsAppMessageTest extends TestCase
 
         $res->assertOk()->assertJson(['ok' => false, 'status' => 'failed']);
         $this->assertDatabaseHas('reminders', ['status' => 'failed', 'channel' => 'whatsapp']);
+    }
+
+    public function test_sends_image_with_caption_stores_media_and_logs_reminder(): void
+    {
+        $user = $this->actingUser();
+        $customer = $this->customer();
+
+        Http::fake([
+            '*127.0.0.1:2785*' => Http::response(['status' => 'sent', 'id' => 'IMG1'], 200),
+        ]);
+
+        // 1x1 transparent PNG
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', true);
+        $payload = 'data:image/png;base64,'.base64_encode($png);
+
+        $res = $this->postJson(route('customers.message', $customer), [
+            'type' => 'image',
+            'image' => $payload,
+            'message' => 'Invoice photo',
+        ]);
+
+        $res->assertOk()->assertJson(['ok' => true, 'status' => 'sent', 'media_type' => 'image/png']);
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), '/messages/send-image')
+                && $request['chatId'] === '93700000001@c.us'
+                && $request['caption'] === 'Invoice photo'
+                && str_starts_with((string) $request['image'], 'data:image/png;base64,');
+        });
+
+        $reminder = Reminder::where('remindable_type', 'customer')->where('remindable_id', $customer->id)->first();
+        $this->assertNotNull($reminder);
+        $this->assertSame('sent', $reminder->status);
+        $this->assertSame('image/png', $reminder->media_type);
+        $this->assertSame('Invoice photo', $reminder->message);
+        $this->assertStringStartsWith('whatsapp-outbox/', $reminder->media_path);
+        $this->assertStringEndsWith('.png', $reminder->media_path);
+
+        Storage::disk('local')->assertExists($reminder->media_path);
+        Storage::disk('local')->delete($reminder->media_path);
+    }
+
+    public function test_rejects_oversized_image_payload(): void
+    {
+        // The harness copies the ~22 MB body several times before the app
+        // sees it, so this one test needs headroom above the default limit.
+        if (ini_get('memory_limit') !== '-1') {
+            ini_set('memory_limit', '512M');
+        }
+
+        $this->actingUser();
+        $customer = $this->customer();
+
+        // Just over the 16 MB decoded limit (16,777,217 bytes -> 22,369,623 base64 chars).
+        $res = $this->postJson(route('customers.message', $customer), [
+            'type' => 'image',
+            'image' => 'data:image/png;base64,'.str_repeat('A', 22_369_623),
+            'message' => 'Too big',
+        ]);
+
+        $res->assertStatus(422)->assertJson(['ok' => false]);
     }
 
     public function test_rejects_invalid_type_and_missing_message(): void

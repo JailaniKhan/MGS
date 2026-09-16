@@ -65,9 +65,18 @@ class SpendBreakdownController extends Controller
         // average purchase price per product per currency, no conversion).
         $profit = $unitProfit->forPeriod($dateFrom->copy()->startOfDay(), $dateTo);
 
+        // Linked (landed-cost) expenses in the window: their money is spent
+        // here, but they are priced into the cost basis rather than counted
+        // as operating spend — surfaced as an info line so the two views
+        // of the same money stay reconcilable.
+        $linkedCount = Expense::whereNotNull('purchase_id')
+            ->where('expense_date', '>=', $dateFrom->toDateString())
+            ->where('expense_date', '<', $toExclusive)
+            ->count();
+
         return view('spend-breakdown.index', compact(
             'byCategory', 'totalAFN', 'totalUSD',
-            'dailyTrend', 'period', 'dateFrom', 'dateTo', 'profit'
+            'dailyTrend', 'period', 'dateFrom', 'dateTo', 'profit', 'linkedCount'
         ))->with([
             'dateFromInput' => $anchor->toDateString(),
         ]);

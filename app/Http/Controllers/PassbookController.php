@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CashbookEntry;
 use App\Models\Expense;
 use App\Models\JournalEntry;
+use App\Models\PartyPayment;
 use App\Models\Payment;
 use App\Models\PurchasePayment;
 use Illuminate\Http\Request;
@@ -12,8 +14,8 @@ use Illuminate\Support\Carbon;
 class PassbookController extends Controller
 {
     private const FILTER_SOURCES = [
-        'cash_in' => ['cashbook', 'payments'],
-        'cash_out' => ['cashbook', 'purchasePayments', 'salary'],
+        'cash_in' => ['cashbook', 'payments', 'partyPayments'],
+        'cash_out' => ['cashbook', 'purchasePayments', 'partyPayments', 'salary'],
         'expense' => ['expenses'],
     ];
 
@@ -26,16 +28,17 @@ class PassbookController extends Controller
         $from = $dateFrom ? Carbon::parse($dateFrom)->startOfDay() : null;
         $to = $dateTo ? Carbon::parse($dateTo)->endOfDay() : null;
 
-        // Date-only columns (transaction_date / expense_date) may hold either
-        // 'Y-m-d' or a full timestamp; an exclusive upper bound keeps both
-        // forms inside the requested range on SQLite.
+        // Date-only columns (transaction_date / entry_date / expense_date) may
+        // hold either 'Y-m-d' or a full timestamp; an exclusive upper bound
+        // keeps both forms inside the requested range on SQLite.
         $toExclusive = $to ? $to->copy()->addDay()->toDateString() : null;
 
-        // The feed is cash-only: cashbook entries, customer/supplier payments,
-        // salary payments and expenses. Invoice (credit) documents are not
-        // part of this flow.
+        // The feed is cash-only: cashbook entries (both generations),
+        // customer/supplier payments, on-account party payments, salary
+        // payments and expenses. Invoice (credit) documents are not part of
+        // this flow.
         $sources = $filter === 'all'
-            ? ['cashbook', 'payments', 'purchasePayments', 'expenses', 'salary']
+            ? ['cashbook', 'payments', 'purchasePayments', 'partyPayments', 'expenses', 'salary']
             : (self::FILTER_SOURCES[$filter] ?? []);
 
         $query = collect();
@@ -79,6 +82,56 @@ class PassbookController extends Controller
                     'icon' => $isIn ? 'cash_in' : 'cash_out',
                 ]);
             }
+
+            // Legacy cashbook rows (pre-Fix C2) live in cashbook_entries, not
+            // the journal — the two generations are disjoint, so both must be
+            // listed or pre-migration entries vanish from the passbook.
+            $legacyQuery = CashbookEntry::query()
+                ->when($from, fn ($q) => $q->where('entry_date', '>=', $from->toDateString()))
+                ->when($to, fn ($q) => $q->where('entry_date', '<', $toExclusive));
+
+            if ($filter === 'cash_in') {
+                $legacyQuery->where('type', 'in');
+            } elseif ($filter === 'cash_out') {
+                $legacyQuery->where('type', 'out');
+            }
+
+            foreach ($legacyQuery->get() as $entry) {
+                $query->push([
+                    'date' => $entry->entry_date,
+                    'type' => $entry->type === 'in' ? 'cash_in' : 'cash_out',
+                    'description' => ($entry->type === 'in' ? __('messages.cash_income') : __('messages.cash_expense'))
+                        .($entry->notes ? ' - '.$entry->notes : ''),
+                    'amount' => $entry->amount,
+                    'currency' => $entry->currency,
+                    'reference' => 'CBL-'.$entry->id,
+                    'icon' => $entry->type === 'in' ? 'cash_in' : 'cash_out',
+                ]);
+            }
+        }
+
+        // On-account party payments (money received / paid outside any
+        // document) — real cash movement, so the passbook must show them.
+        if (in_array('partyPayments', $sources, true)) {
+            PartyPayment::with('person')
+                ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('created_at', '<=', $to))
+                ->get()
+                ->each(function (PartyPayment $partyPayment) use (&$query) {
+                    $isIn = $partyPayment->type === 'payment_received';
+
+                    $query->push([
+                        'date' => $partyPayment->created_at,
+                        'type' => $isIn ? 'cash_in' : 'cash_out',
+                        'description' => ($isIn ? __('messages.payment_from') : __('messages.payment_to'))
+                            .($partyPayment->person?->name ?? __('messages.unknown'))
+                            .($partyPayment->notes ? ' - '.$partyPayment->notes : ''),
+                        'amount' => $partyPayment->amount,
+                        'currency' => $partyPayment->currency,
+                        'reference' => 'PP-'.$partyPayment->id,
+                        'icon' => $isIn ? 'cash_in' : 'cash_out',
+                    ]);
+                });
         }
 
         // Customer Payments (Cash In)

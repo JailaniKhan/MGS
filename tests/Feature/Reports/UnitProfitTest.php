@@ -186,6 +186,26 @@ class UnitProfitTest extends TestCase
         $response->assertDontSee('+40.00$', false);
     }
 
+    public function test_opening_stock_product_is_costed_at_its_pool_price(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // Never purchased in USD: the product's own USD pool price is the
+        // cost basis — the per-sale line carries a real profit figure.
+        $product = $this->makeProduct('Opening Stock Unit Widget');
+        $product->update(['price' => '0.00', 'price_usd' => '5.00', 'stock_afn' => 0, 'stock_usd' => 100]);
+
+        $this->addOrderItem($this->makeOrder('USD'), $product, 1, '9.00');
+
+        $response = $this->get('/spend-breakdown?period=month&date_from='.now()->toDateString());
+
+        $response->assertOk();
+        $response->assertSee('Opening Stock Unit Widget');
+        $response->assertSee('+4.00$', false);
+        $response->assertDontSee(__('messages.no_cost_data'));
+    }
+
     public function test_other_users_sales_do_not_leak_into_the_report(): void
     {
         $userA = User::factory()->create();

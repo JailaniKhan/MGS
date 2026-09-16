@@ -34,6 +34,16 @@ class WhatsAppMessageController extends Controller
         'audio/amr' => 'amr',
     ];
 
+    /** Images accepted for photo messages, mapped to file extensions. */
+    private const IMAGE_EXTENSIONS = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+    ];
+
+    private const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
+
     public function storeCustomer(Request $request, Customer $customer, WhatsAppService $whatsapp): JsonResponse
     {
         return $this->handle($request, $customer, 'customer', $whatsapp);
@@ -63,12 +73,16 @@ class WhatsAppMessageController extends Controller
     private function handle(Request $request, $contact, string $type, WhatsAppService $whatsapp): JsonResponse
     {
         $data = $request->validate([
-            'type' => 'required|in:text,voice',
+            'type' => 'required|in:text,voice,image',
+            // Required for text; for images it doubles as the caption and
+            // stays optional; voice sends never carry one.
             'message' => 'required_if:type,text|nullable|string|max:4096',
             // Data-URL/base64 audio: the NativePHP WebView interceptor
             // corrupts multipart bodies, so the compose UI posts JSON.
             'audio' => 'required_if:type,voice|nullable|string',
             'duration' => 'nullable|integer|min:0|max:3600',
+            // Data-URL/base64 image (same WebView constraint as audio).
+            'image' => 'required_if:type,image|nullable|string',
         ]);
 
         if (empty($contact->phone)) {
@@ -78,14 +92,33 @@ class WhatsAppMessageController extends Controller
             ], 422);
         }
 
-        $isVoice = $data['type'] === 'voice';
+        // Trim the data-URL payloads so size checks run on raw bytes only.
+        foreach (['audio' => 'wa_audio_too_large', 'image' => 'wa_image_too_large'] as $field => $tooLargeKey) {
+            if (! is_string($data[$field] ?? null) || $data[$field] === '') {
+                continue;
+            }
+            $payloadBytes = (int) floor((strlen($data[$field]) - (int) strpos($data[$field], ',')) * 3 / 4);
+            $limit = $field === 'image' ? self::MAX_IMAGE_BYTES : 6 * 1024 * 1024;
+            if ($payloadBytes > $limit) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => __('messages.'.$tooLargeKey),
+                ], 422);
+            }
+        }
 
-        if ($isVoice) {
+        $kind = $data['type'];
+
+        if ($kind === 'voice') {
             [$filePath] = $this->storeAudio((string) $data['audio']);
             // Derive from the stored file itself — browsers report loose
             // mimics ("audio/webm" with no codecs hint).
             $mediaType = OpenWaService::audioMimeType($filePath);
             $result = $whatsapp->sendVoice($contact->phone, $filePath);
+        } elseif ($kind === 'image') {
+            [$filePath] = $this->storeImage((string) $data['image']);
+            $mediaType = mime_content_type($filePath) ?: 'image/jpeg';
+            $result = $whatsapp->sendImage($contact->phone, $filePath, trim((string) ($data['message'] ?? '')));
         } else {
             $filePath = null;
             $mediaType = null;
@@ -99,8 +132,9 @@ class WhatsAppMessageController extends Controller
             'amount' => null,
             'currency' => 'AFN',
             'channel' => 'whatsapp',
-            'message' => $isVoice ? '' : trim((string) $data['message']),
-            'media_path' => $isVoice ? 'whatsapp-outbox/' . basename($filePath) : null,
+            // Images keep their caption as the searchable message body.
+            'message' => $kind === 'voice' ? '' : trim((string) ($data['message'] ?? '')),
+            'media_path' => $filePath ? 'whatsapp-outbox/'.basename($filePath) : null,
             'media_type' => $mediaType,
             'status' => $result['ok'] ? 'sent' : 'failed',
             'provider_message_id' => $result['id'],
@@ -135,7 +169,29 @@ class WhatsAppMessageController extends Controller
 
         // Keep the DB value platform-neutral ("whatsapp-outbox/x.webm") and
         // derive the absolute path through the storage disk.
-        $relative = 'whatsapp-outbox/' . Str::uuid() . '.' . self::AUDIO_EXTENSIONS[$mime];
+        $relative = 'whatsapp-outbox/'.Str::uuid().'.'.self::AUDIO_EXTENSIONS[$mime];
+        Storage::disk('local')->put($relative, $binary);
+
+        return [Storage::disk('local')->path($relative), $mime];
+    }
+
+    /**
+     * Persist an uploaded photo under storage/app/whatsapp-outbox.
+     *
+     * @return array{0: string, 1: string} absolute path + MIME type
+     */
+    private function storeImage(string $payload): array
+    {
+        [$mime, $binary] = $this->decodeDataUrl($payload);
+
+        // Normalize loose browser mimics onto the accepted set.
+        $mime = [
+            'image/jpg' => 'image/jpeg',
+        ][$mime] ?? $mime;
+
+        abort_unless($binary !== '' && isset(self::IMAGE_EXTENSIONS[$mime]), 422, __('messages.wa_image_invalid'));
+
+        $relative = 'whatsapp-outbox/'.Str::uuid().'.'.self::IMAGE_EXTENSIONS[$mime];
         Storage::disk('local')->put($relative, $binary);
 
         return [Storage::disk('local')->path($relative), $mime];

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CashbookEntry;
 use App\Models\Customer;
 use App\Models\Expense;
+use App\Models\JournalEntry;
 use App\Models\Order;
 use App\Models\PartyPayment;
 use App\Models\Payment;
@@ -14,6 +16,7 @@ use App\Models\Reminder;
 use App\Models\SalaryPayment;
 use App\Models\Setting;
 use App\Models\Supplier;
+use App\Services\Accounting\CashFlowService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -32,54 +35,14 @@ class DashboardController extends Controller
     }
 
     /**
-     * Cash in/out per currency across every flow the app records:
-     * order payments, purchase payments, ledger (party) payments,
-     * cashbook journal entries, standalone expenses and salaries.
-     *
-     * Cashbook entries carry two equal ledger lines (cash + income/expense);
-     * the cash side is the debit for cashbook_in and the credit for
-     * cashbook_out, so sum one side only to avoid doubling.
+     * Cash in/out per currency across every flow the app records — the
+     * canonical union from CashFlowService (payments, ledger payments,
+     * both cashbook generations, expenses, salaries), so the dashboard
+     * tiles can never disagree with the wallet hero or the reports.
      */
     protected function cashFlowTotals(): array
     {
-        $totals = [];
-
-        foreach (['AFN', 'USD'] as $currency) {
-            $totals[$currency] = [
-                'in' => (float) Payment::where('currency', $currency)
-                    ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'))
-                    ->sum('amount')
-                    + (float) PartyPayment::where('currency', $currency)->where('type', 'payment_received')->sum('amount')
-                    + (float) $this->cashbookSum('cashbook_in', 'debit', $currency),
-                'out' => (float) PurchasePayment::where('currency', $currency)
-                    ->whereHas('purchase', fn ($q) => $q->where('status', '!=', 'cancelled'))
-                    ->sum('amount')
-                    + (float) PartyPayment::where('currency', $currency)->where('type', 'payment_made')->sum('amount')
-                    + (float) $this->cashbookSum('cashbook_out', 'credit', $currency)
-                    + (float) Expense::where('currency', $currency)->sum('amount')
-                    + (float) $this->salarySum($currency),
-            ];
-        }
-
-        return $totals;
-    }
-
-    protected function cashbookSum(string $source, string $direction, string $currency): float
-    {
-        return (float) DB::table('journal_entries')
-            ->join('ledger_entries', 'ledger_entries.journal_entry_id', '=', 'journal_entries.id')
-            ->where('journal_entries.user_id', auth()->id())
-            ->where('journal_entries.source', $source)
-            ->where('journal_entries.currency', $currency)
-            ->where('ledger_entries.direction', $direction)
-            ->sum('ledger_entries.amount');
-    }
-
-    protected function salarySum(string $currency): float
-    {
-        return (float) SalaryPayment::where('currency', $currency)
-            ->whereHas('employee', fn ($q) => $q->where('user_id', auth()->id()))
-            ->sum('amount');
+        return app(CashFlowService::class)->totals();
     }
 
     /**
@@ -129,6 +92,11 @@ class DashboardController extends Controller
                 ->groupBy(DB::raw('DATE(journal_entries.transaction_date)'), 'journal_entries.currency')
                 ->selectRaw('DATE(journal_entries.transaction_date) as d, journal_entries.currency, SUM(ledger_entries.amount) as total')
                 ->get(), 'd');
+            $bucket(CashbookEntry::selectRaw('DATE(entry_date) as d, currency, SUM(amount) as total')
+                ->where('type', 'in')
+                ->where('entry_date', '>=', $start->toDateString())
+                ->where('entry_date', '<', $end->copy()->addDay()->toDateString())
+                ->groupBy('d', 'currency')->get(), 'd');
         } else {
             $bucket(PurchasePayment::selectRaw('DATE(created_at) as d, currency, SUM(amount) as total')
                 ->whereHas('purchase', fn ($q) => $q->where('status', '!=', 'cancelled'))
@@ -148,6 +116,11 @@ class DashboardController extends Controller
                 ->groupBy(DB::raw('DATE(journal_entries.transaction_date)'), 'journal_entries.currency')
                 ->selectRaw('DATE(journal_entries.transaction_date) as d, journal_entries.currency, SUM(ledger_entries.amount) as total')
                 ->get(), 'd');
+            $bucket(CashbookEntry::selectRaw('DATE(entry_date) as d, currency, SUM(amount) as total')
+                ->where('type', 'out')
+                ->where('entry_date', '>=', $start->toDateString())
+                ->where('entry_date', '<', $end->copy()->addDay()->toDateString())
+                ->groupBy('d', 'currency')->get(), 'd');
             $bucket(Expense::selectRaw('DATE(expense_date) as d, currency, SUM(amount) as total')
                 ->where('expense_date', '>=', $start)->where('expense_date', '<=', $end)
                 ->groupBy('d', 'currency')->get(), 'd');
@@ -250,6 +223,44 @@ class DashboardController extends Controller
             } else {
                 $sign = $p->type === 'payment_received' ? -1 : 1;
                 $pending[$key]['owed'][$p->currency] = ($pending[$key]['owed'][$p->currency] ?? 0) + $sign * $amount;
+            }
+        }
+
+        // Person-tagged cashbook entries settle the party's balance the same
+        // way (same direction rule as PartyBalanceService) — the dashboard's
+        // debtor list must agree with the ledger and cashbook pages.
+        $cashbookRows = JournalEntry::query()
+            ->whereIn('source', ['cashbook_in', 'cashbook_out'])
+            ->whereNotNull('reference_type')
+            ->whereIn('reference_type', ['customer', 'supplier'])
+            ->joinSub(
+                DB::table('ledger_entries')
+                    ->selectRaw('journal_entry_id, MAX(amount) as amount')
+                    ->groupBy('journal_entry_id'),
+                'ledger_amounts',
+                'ledger_amounts.journal_entry_id',
+                '=',
+                'journal_entries.id'
+            )
+            ->groupBy('journal_entries.reference_type', 'journal_entries.reference_id', 'journal_entries.currency', 'journal_entries.source')
+            ->selectRaw('journal_entries.reference_type, journal_entries.reference_id, journal_entries.currency, journal_entries.source, SUM(ledger_amounts.amount) as total')
+            ->get();
+
+        foreach ($cashbookRows as $row) {
+            $key = $row->reference_type.':'.$row->reference_id;
+            if (! isset($pending[$key])) {
+                continue;
+            }
+
+            $amount = (float) $row->total;
+            $settles = ($row->reference_type === 'customer' && $row->source === 'cashbook_in')
+                || ($row->reference_type === 'supplier' && $row->source === 'cashbook_out');
+            $sign = $settles ? -1 : 1;
+
+            if ($row->reference_type === 'supplier') {
+                $pending[$key]['due'][$row->currency] = ($pending[$key]['due'][$row->currency] ?? 0) + $sign * $amount;
+            } else {
+                $pending[$key]['owed'][$row->currency] = ($pending[$key]['owed'][$row->currency] ?? 0) + $sign * $amount;
             }
         }
 

@@ -35,26 +35,41 @@
     <div class="card relative overflow-hidden p-4 mb-3 page-enter" style="animation-delay: 0.05s;">
         <div class="pointer-events-none absolute -end-8 -top-10 w-32 h-32 rounded-full bg-brand/[0.08] dark:bg-brand/[0.12]"></div>
         <div class="relative">
-            <span class="metric-label">{{ __('messages.remaining') }} ({{ __('messages.afn') }})</span>
-            <p class="mt-1 text-3xl font-extrabold tabular-nums tracking-tight {{ $remainingAFN > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-primary-600 dark:text-primary-400' }}" dir="ltr">
-                {{ number_format($remainingAFN) }} <span class="text-sm font-bold text-ink-400 dark:text-ink-500">{{ __('messages.afn') }}</span>
-            </p>
-            <div class="mt-2 flex items-center justify-between gap-2 flex-wrap">
-                <div class="grid grid-cols-3 gap-1.5 text-[11px] tabular-nums">
-                    <div>
-                        <span class="text-ink-400">{{ __('messages.total') }}</span>
-                        <p class="font-bold text-ink-700 dark:text-ink-300">{{ number_format($totalAFN) }}</p>
-                    </div>
-                    <div>
-                        <span class="text-ink-400">{{ __('messages.paid') }}</span>
-                        <p class="font-bold text-primary-600 dark:text-primary-400">{{ number_format($paidAFN) }}</p>
-                    </div>
-                    @if ($remainingUSD > 0 || $totalUSD > 0)
+            <span class="metric-label">{{ __('messages.remaining') }}</span>
+            <div class="mt-1 flex items-end gap-4 flex-wrap">
+                <p class="text-3xl font-extrabold tabular-nums tracking-tight {{ $remainingAFN > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-primary-600 dark:text-primary-400' }}" dir="ltr">
+                    {{ number_format($remainingAFN) }} <span class="text-sm font-bold text-ink-400 dark:text-ink-500">{{ __('messages.afn') }}</span>
+                </p>
+                <p class="text-3xl font-extrabold tabular-nums tracking-tight {{ $remainingUSD > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-primary-600 dark:text-primary-400' }}" dir="ltr">
+                    {{ number_format($remainingUSD) }}<span class="text-sm font-bold text-ink-400 dark:text-ink-500">$</span>
+                </p>
+            </div>
+            <div class="mt-2 grid grid-cols-2 gap-2 text-[11px] tabular-nums">
+                <div>
+                    <span class="text-[9px] font-bold text-ink-400 uppercase tracking-wider">{{ __('messages.afn') }}</span>
+                    <div class="mt-1 flex items-center gap-4">
                         <div>
-                            <span class="text-ink-400">{{ __('messages.usd') }}</span>
-                            <p class="font-bold {{ $remainingUSD > 0 ? 'text-danger-600 dark:text-danger-400' : 'text-primary-600 dark:text-primary-400' }}">{{ number_format($remainingUSD) }}$</p>
+                            <span class="text-ink-400">{{ __('messages.total') }}</span>
+                            <p class="font-bold text-ink-700 dark:text-ink-300">{{ number_format($totalAFN) }}</p>
                         </div>
-                    @endif
+                        <div>
+                            <span class="text-ink-400">{{ __('messages.paid') }}</span>
+                            <p class="font-bold text-primary-600 dark:text-primary-400">{{ number_format($paidAFN) }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-[9px] font-bold text-ink-400 uppercase tracking-wider">{{ __('messages.usd') }}</span>
+                    <div class="mt-1 flex items-center gap-4">
+                        <div>
+                            <span class="text-ink-400">{{ __('messages.total') }}</span>
+                            <p class="font-bold text-ink-700 dark:text-ink-300">{{ number_format($totalUSD) }}$</p>
+                        </div>
+                        <div>
+                            <span class="text-ink-400">{{ __('messages.paid') }}</span>
+                            <p class="font-bold text-primary-600 dark:text-primary-400">{{ number_format($paidUSD) }}$</p>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="mt-3 flex items-center gap-2">

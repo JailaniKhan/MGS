@@ -38,9 +38,10 @@
                     ['icon' => 'cube', 'label' => __('messages.products'), 'value' => $counts['products']],
                     ['icon' => 'shopping-cart', 'label' => __('messages.orders'), 'value' => $counts['orders']],
                     ['icon' => 'shopping-bag', 'label' => __('messages.purchases'), 'value' => $counts['purchases']],
-                    ['icon' => 'banknotes', 'label' => __('messages.payments_dash'), 'value' => $counts['payments']],
+                    ['icon' => 'banknotes', 'label' => __('messages.payments'), 'value' => $counts['payments']],
                     ['icon' => 'credit-card', 'label' => __('messages.expenses'), 'value' => $counts['expenses']],
                     ['icon' => 'users', 'label' => __('messages.staff'), 'value' => $counts['staff']],
+                    ['icon' => 'wallet', 'label' => __('messages.cashbook'), 'value' => $counts['cashbook']],
                 ] as $tile)
                     <div class="card !p-3 flex items-center gap-2.5">
                         <div class="w-8 h-8 rounded-lg bg-brand/10 dark:bg-brand/20 flex items-center justify-center flex-shrink-0">

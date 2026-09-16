@@ -48,6 +48,14 @@
     </div>
 
     {{-- Expense by category --}}
+    @if($linkedCount > 0)
+        <div class="card mb-3 px-3.5 py-2.5 page-enter">
+            <div class="flex items-center gap-2 text-[11px] font-semibold text-accent-600 dark:text-accent-400">
+                <x-icon name="truck" class="w-3.5 h-3.5 flex-shrink-0" strokeWidth="1.8"/>
+                {{ $linkedCount }} &times; {{ __('messages.attached_to_purchases') }}
+            </div>
+        </div>
+    @endif
     <div class="card overflow-hidden mb-4">
         <div class="section-header">
             <div class="w-1 h-4 rounded-full bg-danger-400"></div>

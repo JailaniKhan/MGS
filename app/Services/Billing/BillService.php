@@ -11,6 +11,7 @@ use App\Models\Supplier;
 use App\Services\WhatsApp\OpenWaService;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 class BillService
@@ -30,38 +31,38 @@ class BillService
         $order->loadMissing('customer', 'supplier', 'orderItems.product.unit', 'payments');
         $party = $order->party;
         $currency = $order->currency_symbol;
-        $invoiceNumber = Setting::get('invoice_prefix', 'INV-') . $order->id;
+        $invoiceNumber = Setting::get('invoice_prefix', 'INV-').$order->id;
 
         $lines = $this->companyHeader();
         $lines[] = str_repeat('=', 30);
-        $lines[] = __('messages.invoice') . ' #' . $invoiceNumber;
-        $lines[] = __('messages.date') . ': ' . $order->created_at->format('Y/m/d H:i');
-        $lines[] = __('messages.status') . ': ' . $this->statusLabel($order->display_status);
+        $lines[] = __('messages.invoice').' #'.$invoiceNumber;
+        $lines[] = __('messages.date').': '.$order->created_at->format('Y/m/d H:i');
+        $lines[] = __('messages.status').': '.$this->statusLabel($order->display_status);
         $lines[] = str_repeat('-', 30);
         $lines = array_merge($lines, $this->partyLines($party));
         $lines[] = str_repeat('=', 30);
 
         foreach ($order->orderItems as $item) {
-            $productName = $item->product?->name ?? '#' . $item->product_id;
+            $productName = $item->product?->name ?? '#'.$item->product_id;
             $unit = $item->product?->unit ? ($item->product->unit->short_name ?? $item->product->unit->name) : '';
             $lines[] = $productName;
-            $lines[] = '  ' . $item->quantity . ($unit ? ' ' . $unit : '')
-                . ' x ' . number_format((float) $item->unit_price)
-                . ' = ' . number_format((float) $item->subtotal) . ' ' . $currency;
+            $lines[] = '  '.$this->isolated(fn () => $item->quantity.($unit ? ' '.$unit : '')
+                .' x '.money_format($item->unit_price)
+                .' = '.money_format($item->subtotal).' '.$currency);
             if ($item->lot_number) {
-                $lines[] = '  ' . __('messages.lot_number') . ': ' . $item->lot_number;
+                $lines[] = '  '.__('messages.lot_number').': '.$item->lot_number;
             }
         }
 
         $lines[] = str_repeat('-', 30);
 
-        $lines[] = __('messages.total_amount') . ': ' . number_format((float) $order->total_amount) . ' ' . $currency;
-        $lines[] = __('messages.paid') . ': ' . number_format($order->paid_amount) . ' ' . $currency;
+        $lines[] = __('messages.total_amount').': '.$this->isolated(fn () => money_format($order->total_amount).' '.$currency);
+        $lines[] = __('messages.paid').': '.$this->isolated(fn () => money_format($order->paid_amount).' '.$currency);
         $lines[] = $order->is_fully_paid
             ? __('messages.fully_paid')
-            : __('messages.remaining') . ': ' . number_format($order->remaining_amount) . ' ' . $currency;
+            : __('messages.remaining').': '.$this->isolated(fn () => money_format($order->remaining_amount).' '.$currency);
         $lines[] = str_repeat('=', 30);
-        $lines[] = __('messages.business_mgmt_system') . ' (MGS)';
+        $lines[] = __('messages.business_mgmt_system').' (MGS)';
 
         return [
             'phone' => $party?->phone ?? '',
@@ -81,38 +82,38 @@ class BillService
         $purchase->loadMissing('customer', 'supplier', 'purchaseItems.product.unit', 'purchasePayments');
         $party = $purchase->party;
         $currency = $purchase->currency_symbol;
-        $billNumber = Setting::get('purchase_prefix', 'PUR-') . $purchase->id;
+        $billNumber = Setting::get('purchase_prefix', 'PUR-').$purchase->id;
 
         $lines = $this->companyHeader();
         $lines[] = str_repeat('=', 30);
-        $lines[] = __('messages.purchase') . ' #' . $billNumber;
-        $lines[] = __('messages.date') . ': ' . $purchase->created_at->format('Y/m/d H:i');
-        $lines[] = __('messages.status') . ': ' . $this->statusLabel($purchase->display_status);
+        $lines[] = __('messages.purchase').' #'.$billNumber;
+        $lines[] = __('messages.date').': '.$purchase->created_at->format('Y/m/d H:i');
+        $lines[] = __('messages.status').': '.$this->statusLabel($purchase->display_status);
         $lines[] = str_repeat('-', 30);
         $lines = array_merge($lines, $this->partyLines($party));
         $lines[] = str_repeat('=', 30);
 
         foreach ($purchase->purchaseItems as $item) {
-            $productName = $item->product?->name ?? '#' . $item->product_id;
+            $productName = $item->product?->name ?? '#'.$item->product_id;
             $unit = $item->product?->unit ? ($item->product->unit->short_name ?? $item->product->unit->name) : '';
             $lines[] = $productName;
-            $lines[] = '  ' . $item->quantity . ($unit ? ' ' . $unit : '')
-                . ' x ' . number_format((float) $item->unit_price)
-                . ' = ' . number_format((float) $item->subtotal) . ' ' . $currency;
+            $lines[] = '  '.$this->isolated(fn () => $item->quantity.($unit ? ' '.$unit : '')
+                .' x '.money_format($item->unit_price)
+                .' = '.money_format($item->subtotal).' '.$currency);
             if ($item->lot_number) {
-                $lines[] = '  ' . __('messages.lot_number') . ': ' . $item->lot_number;
+                $lines[] = '  '.__('messages.lot_number').': '.$item->lot_number;
             }
         }
 
         $lines[] = str_repeat('-', 30);
 
-        $lines[] = __('messages.total_amount') . ': ' . number_format((float) $purchase->total_amount) . ' ' . $currency;
-        $lines[] = __('messages.paid') . ': ' . number_format($purchase->paid_amount) . ' ' . $currency;
+        $lines[] = __('messages.total_amount').': '.$this->isolated(fn () => money_format($purchase->total_amount).' '.$currency);
+        $lines[] = __('messages.paid').': '.$this->isolated(fn () => money_format($purchase->paid_amount).' '.$currency);
         $lines[] = $purchase->is_fully_paid
             ? __('messages.fully_paid')
-            : __('messages.remaining') . ': ' . number_format($purchase->remaining_amount) . ' ' . $currency;
+            : __('messages.remaining').': '.$this->isolated(fn () => money_format($purchase->remaining_amount).' '.$currency);
         $lines[] = str_repeat('=', 30);
-        $lines[] = __('messages.business_mgmt_system') . ' (MGS)';
+        $lines[] = __('messages.business_mgmt_system').' (MGS)';
 
         return [
             'phone' => $party?->phone ?? '',
@@ -126,8 +127,8 @@ class BillService
      * Build a plain-text cashbook statement for one customer/supplier
      * (mirrors cashbook/person.blade.php).
      *
-     * @param array<string, array{in: float, out: float, net: float}> $totals
-     * @param \Illuminate\Support\Collection<int, object> $transactions
+     * @param  array<string, array{in: float, out: float, net: float}>  $totals
+     * @param  Collection<int, object>  $transactions
      * @return array{phone: string, message: string, amount: float, currency: string}
      */
     public function personStatement(string $type, Customer|Supplier $person, array $totals, $transactions): array
@@ -135,10 +136,10 @@ class BillService
         $lines = $this->companyHeader();
         $lines[] = str_repeat('=', 30);
         $lines[] = __('messages.statement');
-        $lines[] = __('messages.party') . ': ' . $person->name;
-        $lines[] = __('messages.date') . ': ' . now()->format('Y/m/d H:i');
+        $lines[] = __('messages.party').': '.$person->name;
+        $lines[] = __('messages.date').': '.now()->format('Y/m/d H:i');
         if ($person->phone) {
-            $lines[] = __('messages.phone') . ': ' . $person->phone;
+            $lines[] = __('messages.phone').': '.$person->phone;
         }
         $lines[] = str_repeat('=', 30);
 
@@ -148,25 +149,25 @@ class BillService
             }
 
             $total = $totals[$currency];
-            $lines[] = __('messages.cashbook_in_total') . ': ' . number_format((float) $total['in'], 2) . ' ' . $currency;
-            $lines[] = __('messages.cashbook_out_total') . ': ' . number_format((float) $total['out'], 2) . ' ' . $currency;
+            $lines[] = __('messages.cashbook_in_total').': '.number_format((float) $total['in'], 2).' '.$currency;
+            $lines[] = __('messages.cashbook_out_total').': '.number_format((float) $total['out'], 2).' '.$currency;
             $netLabel = $total['net'] >= 0 ? '+' : '-';
-            $lines[] = __('messages.net_balance') . ': ' . $netLabel . number_format(abs((float) $total['net']), 2) . ' ' . $currency;
+            $lines[] = __('messages.net_balance').': '.$netLabel.number_format(abs((float) $total['net']), 2).' '.$currency;
             $lines[] = str_repeat('-', 30);
         }
 
         foreach ($transactions as $tx) {
             $sign = $tx->direction === 'in' ? '+' : '-';
             $lines[] = $tx->date->format('d M Y')
-                . ' | ' . $tx->label
-                . ' | ' . $sign . number_format((float) $tx->amount, 2) . ' ' . $tx->currency;
+                .' | '.$tx->label
+                .' | '.$sign.number_format((float) $tx->amount, 2).' '.$tx->currency;
             if (! empty($tx->notes)) {
-                $lines[] = '  (' . $tx->notes . ')';
+                $lines[] = '  ('.$tx->notes.')';
             }
         }
 
         $lines[] = str_repeat('=', 30);
-        $lines[] = __('messages.business_mgmt_system') . ' (MGS)';
+        $lines[] = __('messages.business_mgmt_system').' (MGS)';
 
         return [
             'phone' => $person->phone ?? '',
@@ -191,7 +192,7 @@ class BillService
 
         $reminder = Reminder::create([
             'user_id' => auth()->id(),
-            'remindable_type' => $party ? get_class($party) : null,
+            'remindable_type' => $party?->getMorphClass(),
             'remindable_id' => $party?->id,
             'amount' => $amount,
             'currency' => $currency ?: 'AFN',
@@ -256,11 +257,11 @@ class BillService
         }
 
         if ($company['phone']) {
-            $lines[] = __('messages.phone') . ': ' . $company['phone'];
+            $lines[] = __('messages.phone').': '.$company['phone'];
         }
 
         if ($company['email']) {
-            $lines[] = __('messages.email') . ': ' . $company['email'];
+            $lines[] = __('messages.email').': '.$company['email'];
         }
 
         return $lines;
@@ -278,11 +279,11 @@ class BillService
         $lines = [$party->name];
 
         if ($party->phone) {
-            $lines[] = __('messages.phone') . ': ' . $party->phone;
+            $lines[] = __('messages.phone').': '.$party->phone;
         }
 
         if ($party->address) {
-            $lines[] = __('messages.address') . ': ' . $party->address;
+            $lines[] = __('messages.address').': '.$party->address;
         }
 
         return $lines;
@@ -297,5 +298,15 @@ class BillService
             'cancelled' => __('messages.cancelled'),
             default => __('messages.pending'),
         };
+    }
+
+    /**
+     * Wrap an amount/equation run in Unicode bidi isolates (LRI…PDI) so the
+     * plain-text bill keeps its logical order when an RTL locale (ps/fa)
+     * renders it — both in the in-app chat view and in real WhatsApp.
+     */
+    private function isolated(\Closure $render): string
+    {
+        return "\u{2066}".$render()."\u{2069}";
     }
 }

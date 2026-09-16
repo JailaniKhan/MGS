@@ -128,6 +128,39 @@
         </div>
     </div>
 
+    {{-- Attached expenses (landed costs) --}}
+    @if ($purchase->expenses->isNotEmpty())
+        <div class="card overflow-hidden mb-4 page-enter" style="animation-delay: 0.13s;">
+            <div class="px-4 py-3 border-b border-ink-100 dark:border-ink-700/30">
+                <div class="flex items-center gap-2">
+                    <x-icon name="truck" class="w-4 h-4 text-accent-600 dark:text-accent-400"/>
+                    <h3 class="text-sm font-semibold text-ink-800 dark:text-ink-200">{{ __('messages.landed_costs') }}</h3>
+                </div>
+            </div>
+            <div class="divide-y divide-ink-100 dark:divide-ink-700/30">
+                @foreach ($purchase->expenses as $expense)
+                    <a href="{{ route('expenses.show', $expense) }}" class="flex items-center justify-between gap-3 px-4 py-3 hover:bg-ink-50 dark:hover:bg-white/[0.03] transition-colors">
+                        <div class="min-w-0">
+                            <div class="text-sm font-bold text-ink-800 dark:text-ink-200 truncate">{{ $expense->category }}</div>
+                            <div class="text-[11px] text-ink-500 dark:text-ink-400 mt-0.5"><bdi>{{ local_date($expense->expense_date, 'd M Y') }}</bdi>@if($expense->notes) &middot; {{ Str::limit($expense->notes, 30) }} @endif</div>
+                        </div>
+                        <div class="text-sm font-extrabold tabular-nums text-danger-500 flex-shrink-0 ms-3" dir="ltr">
+                            <x-money :amount="$expense->amount" :currency="$expense->currency" symbol-class="text-[10px] font-medium text-ink-500"/>
+                        </div>
+                    </a>
+                @endforeach
+            </div>
+            <div class="px-4 py-3 bg-accent-500/5 dark:bg-accent-500/10 border-t border-ink-100 dark:border-ink-700/30">
+                <div class="flex justify-between">
+                    <span class="text-sm font-bold text-ink-900 dark:text-white">{{ __('messages.incl_landed_costs') }}</span>
+                    <span class="text-sm font-extrabold tabular-nums text-accent-600 dark:text-accent-400">
+                        <x-money :amount="$purchase->expenses->where('currency', $purchase->currency)->sum('amount')" :currency="$purchase->currency" symbol-class="text-[10px] font-medium text-accent-600 dark:text-accent-400"/>
+                    </span>
+                </div>
+            </div>
+        </div>
+    @endif
+
     {{-- Payment summary --}}
     @if ($purchase->status !== 'cancelled')
     <div class="card overflow-hidden mb-4 page-enter" style="animation-delay: 0.15s;">

@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\Employee;
 use App\Models\Expense;
 use App\Models\JournalEntry;
+use App\Models\LedgerEntry;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderReturn;
@@ -20,7 +21,6 @@ use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\PurchasePayment;
 use App\Models\PurchaseReturn;
-use App\Models\Reminder;
 use App\Models\SalaryPayment;
 use App\Models\Setting;
 use App\Models\StockMovement;
@@ -55,7 +55,7 @@ class BackupController extends Controller
                 if (! $this->safeFilename($filename)) {
                     continue;
                 }
-                $base = substr($filename, 0, -4);
+                $base = $this->stripExtension($filename);
                 $hasPdf = $disk->exists("{$userDir}/{$base}.pdf");
                 $download = $hasPdf ? "{$base}.pdf" : "{$base}.json";
 
@@ -128,6 +128,11 @@ class BackupController extends Controller
     {
         $backupData = $this->gatherBackupData();
 
+        // Render first: if the PDF blows up (bad data, font issue), no
+        // half-written archive is left on disk. Only when both artifacts
+        // are built in memory do we write them to storage.
+        $pdfBinary = $pdfService->generate($backupData);
+
         $filename = 'backup_'.date('Y_m_d_H_i_s');
         $jsonContent = json_encode(
             ['generated_at' => now()->toDateTimeString(), 'user_id' => Auth::id()] + $backupData,
@@ -136,8 +141,6 @@ class BackupController extends Controller
 
         $dir = $this->userDir();
         Storage::disk('local')->put("{$dir}/{$filename}.json", $jsonContent);
-
-        $pdfBinary = $pdfService->generate($backupData);
         Storage::disk('local')->put("{$dir}/{$filename}.pdf", $pdfBinary);
 
         return redirect()->route('backup.index')
@@ -172,7 +175,7 @@ class BackupController extends Controller
         }
 
         $disk = Storage::disk('local');
-        $base = substr($filename, 0, -4);
+        $base = $this->stripExtension($filename);
         $pdfPath = $this->userDir().'/'.$base.'.pdf';
         $jsonPath = $this->userDir().'/'.$base.'.json';
 
@@ -199,6 +202,15 @@ class BackupController extends Controller
         return (bool) preg_match('/^backup_[0-9]{4}_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}\.(pdf|json)$/', $filename);
     }
 
+    /**
+     * Strip the real extension (.pdf is 4 chars but .json is 5 — a blind
+     * substr(-4) leaves a trailing dot and builds "..json" paths).
+     */
+    protected function stripExtension(string $filename): string
+    {
+        return (string) preg_replace('/\.(pdf|json)$/', '', $filename);
+    }
+
     protected function humanSize(int $bytes): string
     {
         if ($bytes >= 1048576) {
@@ -219,7 +231,10 @@ class BackupController extends Controller
             'payments' => Payment::count() + PurchasePayment::count() + PartyPayment::count(),
             'expenses' => Expense::count(),
             'staff' => Employee::count(),
-            'cashbook' => CashbookEntry::count(),
+            // Both cashbook generations: legacy cashbook_entries rows plus
+            // journal-based entries (the only write path since the redesign).
+            'cashbook' => CashbookEntry::count()
+                + JournalEntry::whereIn('source', ['cashbook_in', 'cashbook_out'])->count(),
         ];
     }
 
@@ -232,6 +247,7 @@ class BackupController extends Controller
         $orderIds = Order::pluck('id');
         $purchaseIds = Purchase::pluck('id');
         $employeeIds = Employee::pluck('id');
+        $journalIds = JournalEntry::pluck('id');
 
         // Child rows carry display names/currency for the PDF rendering step;
         // the JSON archive stays the raw machine-readable copy.
@@ -276,7 +292,9 @@ class BackupController extends Controller
             'cashbook_entries' => CashbookEntry::get()->toArray(),
             'accounts' => Account::get()->toArray(),
             'journal_entries' => JournalEntry::get()->toArray(),
-            'reminders' => Reminder::get()->toArray(),
+            // Journal money lives in its ledger lines; without them the JSON
+            // archive can't answer "how much was this cashbook entry?".
+            'ledger_entries' => LedgerEntry::whereIn('journal_entry_id', $journalIds)->get()->toArray(),
             'stock_movements' => StockMovement::get()->toArray(),
             'audit_logs' => AuditLog::where('user_id', Auth::id())->get()->toArray(),
             'settings' => Setting::all()->toArray(),

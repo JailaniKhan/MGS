@@ -10,6 +10,7 @@ use App\Models\Setting;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Services\Billing\BillService;
+use App\Services\Billing\PartyBalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -195,7 +196,7 @@ class PurchaseController extends Controller
 
     public function show(Purchase $purchase)
     {
-        $purchase->load('supplier', 'purchaseItems.product.unit', 'purchasePayments');
+        $purchase->load('supplier', 'purchaseItems.product.unit', 'purchasePayments', 'expenses');
         $company = [
             'name' => Setting::get('company_name', 'My Business'),
             'address' => Setting::get('company_address', ''),
@@ -217,7 +218,13 @@ class PurchaseController extends Controller
         $billPrefix = Setting::get('purchase_prefix', 'PUR-');
         $billNumber = $billPrefix.$purchase->id;
 
-        return view('purchases.print', compact('purchase', 'company', 'billNumber'));
+        // Party-wide pending in the purchase's currency (mirrors the ledger).
+        $totalPending = $purchase->person_type && $purchase->person_id
+            ? (float) app(PartyBalanceService::class)
+                ->pendingAmount($purchase->person_type, $purchase->person_id, $purchase->currency)
+            : (float) $purchase->remaining_amount;
+
+        return view('purchases.print', compact('purchase', 'company', 'billNumber', 'totalPending'));
     }
 
     public function sendWhatsApp(Purchase $purchase, BillService $bills)

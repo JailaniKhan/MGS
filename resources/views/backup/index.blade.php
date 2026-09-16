@@ -62,15 +62,15 @@
             <span class="text-xs font-bold text-secondary-800 dark:text-secondary-300 uppercase tracking-wider">{{ __('messages.backup_problems') }}</span>
         </div>
         <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.customers_dash') }}</span>
-            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.suppliers_dash') }}</span>
-            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.products_dash') }}</span>
-            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.orders_dash') }}</span>
-            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.purchases_dash') }}</span>
-            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.payments_dash') }}</span>
-            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.expenses_dash') }}</span>
-            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.staff_dash') }}</span>
-            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.cashbook_dash') }}</span>
+            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.customers') }}</span>
+            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.suppliers') }}</span>
+            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.products') }}</span>
+            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.orders') }}</span>
+            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.purchases') }}</span>
+            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.payments') }}</span>
+            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.expenses') }}</span>
+            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.staff') }}</span>
+            <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.cashbook_section') }}</span>
             <span class="text-[11px] text-secondary-700 dark:text-secondary-300">&bull; {{ __('messages.settings') }}</span>
         </div>
     </div>

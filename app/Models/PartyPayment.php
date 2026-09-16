@@ -41,11 +41,14 @@ class PartyPayment extends Model
         });
     }
 
+    /**
+     * The party this payment belongs to. Must be a real morphTo (not a
+     * type-branching belongsTo): eager loading (with('person')) invokes the
+     * relation on an empty prototype where person_type is null, which a
+     * conditional belongsTo would resolve to the wrong table.
+     */
     public function person()
     {
-        if ($this->person_type === 'customer') {
-            return $this->belongsTo(Customer::class, 'person_id');
-        }
-        return $this->belongsTo(Supplier::class, 'person_id');
+        return $this->morphTo();
     }
 }

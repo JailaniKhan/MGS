@@ -49,6 +49,11 @@ class Purchase extends Model
         return $this->hasMany(PurchaseReturn::class);
     }
 
+    public function expenses()
+    {
+        return $this->hasMany(Expense::class);
+    }
+
     public function products()
     {
         return $this->belongsToMany(Product::class, 'purchase_items')

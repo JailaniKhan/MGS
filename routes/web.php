@@ -114,7 +114,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
     Route::get('/reports/stock', [ReportController::class, 'stockReport'])->name('reports.stock');
     Route::get('/reports/daybook', [ReportController::class, 'daybook'])->name('reports.daybook');
-    Route::get('/reports/aging', [ReportController::class, 'aging'])->name('reports.aging');
 
     // Payments
     Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');

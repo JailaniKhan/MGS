@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\CashbookEntry;
-use App\Models\Customer;
 use App\Models\Expense;
+use App\Models\JournalEntry;
 use App\Models\Order;
 use App\Models\OrderReturn;
 use App\Models\PartyPayment;
@@ -15,8 +15,9 @@ use App\Models\PurchasePayment;
 use App\Models\PurchaseReturn;
 use App\Models\SalaryPayment;
 use App\Models\Setting;
-use App\Models\Supplier;
 use App\Services\Accounting\BalanceService;
+use App\Services\Accounting\CashFlowService;
+use App\Services\Reporting\LandedCostService;
 use App\Services\Reporting\UnitProfitService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -28,21 +29,18 @@ class ReportController extends Controller
     public function __construct(
         private BalanceService $balanceService,
         private UnitProfitService $unitProfit,
+        private LandedCostService $landedCost,
     ) {}
 
     public function profitLoss(Request $request)
     {
         $anchor = Carbon::parse($request->get('date_to', now()->toDateString()));
-        $period = $request->get('period', 'month');
         $currency = $request->get('currency', 'AFN');
 
         $anchorDate = $anchor->toDateString();
-        $startDateTime = match ($period) {
-            '30' => $anchor->copy()->subDays(29)->startOfDay(),
-            'quarter' => $anchor->copy()->startOfQuarter(),
-            'year' => $anchor->copy()->startOfYear(),
-            default => $anchor->copy()->startOfMonth(),
-        };
+        // All Time window: from the user's earliest record to the anchor's
+        // end of day. The end date input still bounds the window's end.
+        $startDateTime = $this->earliestRecordStart($anchor);
         $endDateTime = $anchor->copy()->endOfDay();
 
         // Total Revenue from non-cancelled orders (net of returns)
@@ -72,16 +70,35 @@ class ReportController extends Controller
         $totalCOGS = $unitTotals['cost'];
 
         // Operating expenses
-        $cashExpenses = CashbookEntry::where('type', 'out')
-            ->where('currency', $currency)
-            ->whereBetween('created_at', [$startDateTime, $endDateTime])
-            ->sum('amount');
+        // Cash expenses cover BOTH cashbook generations (journal entries posted
+        // by the live cashbook form + legacy cashbook_entries rows); the window
+        // uses the same inclusive-lower / exclusive-upper date bound as the
+        // return/expense queries above because date-only columns may hold either
+        // 'Y-m-d' or a full timestamp.
+        $cashExpenses = app(CashFlowService::class)->cashbookOutBetween(
+            $currency,
+            $startDateTime->toDateString(),
+            $toExclusive
+        );
         $salaryExpenses = SalaryPayment::where('currency', $currency)
             ->whereHas('employee', fn ($q) => $q->where('user_id', Auth::id()))
             ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->sum('amount');
-        // Include the dedicated Expense table (Fix C4)
+        // Operating expenses. Linked (landed-cost) expenses are EXCLUDED here —
+        // they already sit in COGS via the landed-inclusive cost basis, and
+        // counting them twice would understate profit by the freight amount.
         $operatingExpenses = Expense::where('currency', $currency)
+            ->whereNull('purchase_id')
+            ->where('expense_date', '>=', $startDateTime->toDateString())
+            ->where('expense_date', '<', $toExclusive)
+            ->sum('amount');
+
+        // Period's landed costs (linked expenses) for the COGS badge: the
+        // landed basis spans all history, so the badge reports what was
+        // linked within this window in this currency.
+        $landedCosts = Expense::where('currency', $currency)
+            ->whereNotNull('purchase_id')
+            ->whereIn('purchase_id', Purchase::where('user_id', Auth::id())->where('status', '!=', 'cancelled')->pluck('id'))
             ->where('expense_date', '>=', $startDateTime->toDateString())
             ->where('expense_date', '<', $toExclusive)
             ->sum('amount');
@@ -99,45 +116,52 @@ class ReportController extends Controller
         return view('reports.profit_loss', compact(
             'totalRevenue', 'totalCOGS', 'cashExpenses', 'salaryExpenses', 'operatingExpenses',
             'totalExpenses', 'netProfit', 'grossProfit', 'netMarginPercent',
-            'unitProfitData', 'unitTotals',
-            'anchorDate', 'period', 'selectedCurrency'
+            'unitProfitData', 'unitTotals', 'landedCosts',
+            'anchorDate', 'selectedCurrency'
         ));
     }
 
-    public function balanceSheet(Request $request)
+    /**
+     * Start of the "All Time" P&L window: the earliest record this report
+     * aggregates — orders, order returns, cashbook entries (both the legacy
+     * table and the journal generation the live cashbook form posts),
+     * expenses and salary payments (all user-scoped the same way the
+     * aggregates above are). No currency/status filters: a foreign-currency
+     * or cancelled row starting the window earlier shifts no numbers, the
+     * window is only a container. A fresh install (no records at all)
+     * reports from today.
+     */
+    private function earliestRecordStart(Carbon $anchor): Carbon
+    {
+        $dates = [
+            Order::min('created_at'),
+            OrderReturn::min('return_date'),
+            // The P&L filters legacy cashbook rows by entry_date, so the
+            // window must anchor on it — a backdated entry (entry_date before
+            // every created_at) still belongs to the window it expenses.
+            CashbookEntry::min('entry_date'),
+            JournalEntry::min('transaction_date'),
+            Expense::min('expense_date'),
+            SalaryPayment::whereHas('employee', fn ($q) => $q->where('user_id', Auth::id()))->min('created_at'),
+        ];
+
+        $earliest = collect($dates)->filter()->sort()->first();
+
+        return $earliest !== null
+            ? Carbon::parse($earliest)->startOfDay()
+            : $anchor->copy()->startOfDay();
+    }
+
+    public function balanceSheet(Request $request, CashFlowService $cashFlow)
     {
         $currency = $request->get('currency', 'AFN');
 
         // ASSETS
-        // Cash in hand, derived from the live transaction tables (Fix C1 — the double-entry
-        // ledger is not yet populated by the app, so BalanceService returns 0.00).
-        $cashIn = bcadd(
-            bcadd(
-                (string) Payment::where('currency', $currency)->sum('amount'),
-                (string) PartyPayment::where('currency', $currency)->where('type', 'payment_received')->sum('amount'),
-                2
-            ),
-            (string) CashbookEntry::where('type', 'in')->where('currency', $currency)->sum('amount'),
-            2
-        );
-        $cashOut = bcadd(
-            bcadd(
-                bcadd(
-                    (string) PurchasePayment::where('currency', $currency)->sum('amount'),
-                    (string) PartyPayment::where('currency', $currency)->where('type', 'payment_made')->sum('amount'),
-                    2
-                ),
-                (string) CashbookEntry::where('type', 'out')->where('currency', $currency)->sum('amount'),
-                2
-            ),
-            bcadd(
-                (string) SalaryPayment::where('currency', $currency)->whereHas('employee', fn ($q) => $q->where('user_id', Auth::id()))->sum('amount'),
-                (string) Expense::where('currency', $currency)->sum('amount'),
-                2
-            ),
-            2
-        );
-        $cashBalance = bcsub($cashIn, $cashOut, 2);
+        // Cash in hand, from the canonical cash-flow union (payments, ledger
+        // payments, BOTH cashbook generations, expenses, salaries) — the same
+        // figure the wallet hero and the daybook closing balance show.
+        $totals = $cashFlow->totals();
+        $cashBalance = number_format($totals[$currency]['balance'], 2, '.', '');
 
         // Accounts Receivable (what customers owe us) = sum of order remaining_amount per currency.
         // Single grouped SQL: each order's remaining is computed via subselects, clamped to 0 per row,
@@ -154,18 +178,12 @@ class ReportController extends Controller
         }, 'per_order')->sum('remaining');
         $receivables = bcadd('0.00', (string) ($receivableRow ?: '0'), 2);
 
-        // Inventory Value (stock * weighted average purchase price). One grouped query per product_id
-        // over purchase_items joined to parent currency+status, instead of one AVG query per product.
-        // Weighted (unit_price × qty) / qty matches the stock report, so both pages agree.
-        $avgPurchaseByProduct = DB::table('purchase_items')
-            ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
-            ->where('purchases.user_id', Auth::id())
-            ->where('purchases.currency', $currency)
-            ->where('purchases.status', '!=', 'cancelled')
-            ->select('purchase_items.product_id', DB::raw('SUM(purchase_items.unit_price * purchase_items.quantity) * 1.0 / NULLIF(SUM(purchase_items.quantity), 0) as avg_price'))
-            ->groupBy('purchase_items.product_id')
-            ->pluck('avg_price', 'product_id')
-            ->map(fn ($v) => number_format((float) $v, 2, '.', ''));
+        // Inventory Value (stock × landed-inclusive weighted average purchase
+        // price). One shared service call keeps the stock report, P&L and this
+        // sheet on the same cost basis. Flatten to product_id => price for the
+        // single-currency lookups below.
+        $avgPurchaseByProduct = collect($this->landedCost->weightedAverageCost(Auth::id(), $currency))
+            ->map(fn ($prices) => $prices[$currency] ?? '0.00');
 
         $inventoryValue = '0.00';
         foreach (Product::select('id', 'stock_afn', 'stock_usd')->get() as $product) {
@@ -200,8 +218,9 @@ class ReportController extends Controller
         // Cashbook-in entries are cash income with no order attached (matching cashbook-out
         // being treated as an expense). They count in Cash in Hand above, so they must also sit
         // in equity here — otherwise Assets = Liabilities + Equity can never balance.
-        $cashIncome = CashbookEntry::where('type', 'in')->where('currency', $currency)->sum('amount');
-        $totalRevenue = bcadd($totalRevenue, (string) $cashIncome, 2);
+        // Both cashbook generations count (journal entries + legacy rows).
+        $cashIncome = $cashFlow->cashbookIn($currency);
+        $totalRevenue = bcadd($totalRevenue, $cashIncome, 2);
 
         $purchasesCost = Purchase::where('currency', $currency)->where('status', '!=', 'cancelled')->sum('total_amount');
         $purchaseReturns = PurchaseReturn::where('currency', $currency)->where('status', '!=', 'cancelled')->sum('total_amount');
@@ -212,7 +231,7 @@ class ReportController extends Controller
 
         $operating = bcadd(
             bcadd(
-                (string) CashbookEntry::where('type', 'out')->where('currency', $currency)->sum('amount'),
+                $cashFlow->cashbookOut($currency),
                 (string) SalaryPayment::where('currency', $currency)->whereHas('employee', fn ($q) => $q->where('user_id', Auth::id()))->sum('amount'),
                 2
             ),
@@ -250,19 +269,12 @@ class ReportController extends Controller
         $products = Product::select('id', 'name', 'lot_number', 'stock_afn', 'stock_usd', 'category_id')->with('category:id,name')->get();
 
         // One grouped query per relation (not one per product), mapped back per product_id.
-        // Weighted average = SUM(unit_price × quantity) / SUM(quantity). A plain AVG(unit_price)
-        // treats a 1-unit purchase at 100 and a 100-unit purchase at 10 identically (avg 55),
-        // which misstates the average cost a unit of stock is actually carried at (~10.9).
-        $avgPurchaseByProduct = DB::table('purchase_items')
-            ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
-            ->where('purchases.user_id', Auth::id())
-            ->where('purchases.currency', $currency)
-            ->where('purchases.status', '!=', 'cancelled')
-            ->select('purchase_items.product_id',
-                DB::raw('SUM(purchase_items.unit_price * purchase_items.quantity) * 1.0 / NULLIF(SUM(purchase_items.quantity), 0) as avg_price'))
-            ->groupBy('purchase_items.product_id')
-            ->pluck('avg_price', 'product_id')
-            ->map(fn ($v) => number_format((float) $v, 2, '.', ''));
+        // Weighted average = SUM(unit_price × quantity) / SUM(quantity), landed-cost
+        // inclusive (linked expenses allocated by line value) so the stock report,
+        // the P&L and the balance sheet all value inventory on the same basis.
+        // Flattened to product_id => price for the single-currency lookups below.
+        $avgPurchaseByProduct = collect($this->landedCost->weightedAverageCost(Auth::id(), $currency))
+            ->map(fn ($prices) => $prices[$currency] ?? '0.00');
 
         $avgSaleByProduct = DB::table('order_items')
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
@@ -311,21 +323,25 @@ class ReportController extends Controller
         ));
     }
 
+    /**
+     * Single-day daybook: every cash movement of one date (default today),
+     * with the opening balance derived from ALL cash history before that
+     * date and the closing balance matching the balance sheet's Cash in Hand.
+     */
     public function daybook(Request $request)
     {
-        $anchor = Carbon::parse($request->get('date_to', now()->toDateString()));
-        $period = $request->get('period', '30');
-        $currency = $request->get('currency', 'AFN');
+        $validated = validator($request->all(), [
+            'date_to' => ['nullable', 'date'],
+            'currency' => ['nullable', 'in:AFN,USD'],
+        ])->validate();
+
+        $anchorDate = $validated['date_to'] ?? now()->toDateString();
+        $currency = $validated['currency'] ?? 'AFN';
         $selectedCurrency = $currency;
 
-        $anchorDate = $anchor->toDateString();
+        $anchor = Carbon::parse($anchorDate);
+        $startDate = $anchor->copy()->startOfDay();
         $endDate = $anchor->copy()->endOfDay();
-        $startDate = match ($period) {
-            '7' => $anchor->copy()->subDays(6)->startOfDay(),
-            '90' => $anchor->copy()->subDays(89)->startOfDay(),
-            'month' => $anchor->copy()->startOfMonth(),
-            default => $anchor->copy()->subDays(29)->startOfDay(),
-        };
 
         $typeLabels = [
             'sale' => __('messages.type_sale'),
@@ -333,6 +349,10 @@ class ReportController extends Controller
             'customer_payment' => __('messages.type_customer_payment'),
             'cash_in' => __('messages.type_cash_in'),
             'cash_out' => __('messages.type_cash_out'),
+            'expense_out' => __('messages.expense_out'),
+            'salary' => __('messages.salary_dash'),
+            'party_payment_in' => __('messages.payment_from'),
+            'party_payment_out' => __('messages.payment_to'),
         ];
 
         $transactions = collect();
@@ -367,7 +387,7 @@ class ReportController extends Controller
                     'date' => $payment->created_at->toDateString(),
                     'type' => 'purchase_payment',
                     'type_label' => $typeLabels['purchase_payment'],
-                    'description' => __('messages.pending_purchase_dash').optional($payment->purchase)->party?->name,
+                    'description' => __('messages.payment_to').optional($payment->purchase?->party)->name,
                     'in_amount' => 0,
                     'out_amount' => (string) $payment->amount,
                     'created_at' => $payment->created_at,
@@ -384,16 +404,51 @@ class ReportController extends Controller
                     'date' => $payment->created_at->toDateString(),
                     'type' => 'customer_payment',
                     'type_label' => $typeLabels['customer_payment'],
-                    'description' => __('messages.supplier_delivery_dash').optional($payment->order->customer)->name,
+                    'description' => __('messages.payment_from').optional($payment->order->customer)->name,
                     'in_amount' => (string) $payment->amount,
                     'out_amount' => 0,
                     'created_at' => $payment->created_at,
                 ];
             });
 
-        // Cash entries
-        $cashEntries = CashbookEntry::where('currency', $currency)
-            ->whereBetween('entry_date', [$startDate, $endDate])
+        // Cashbook entries — BOTH representations. The live CashbookController posts
+        // journal entries (source cashbook_in/out) since Fix C2; legacy rows in
+        // cashbook_entries predate it. The two sources are disjoint (the double-entry
+        // migration command migrates neither), so summing both never double-counts.
+        // Date-cast columns store "Y-m-d 00:00:00" in SQLite, so the day window uses
+        // an inclusive-lower / exclusive-upper bound — bare equality on "Y-m-d"
+        // never matches a time-suffixed value.
+        $journalCashbook = JournalEntry::with(['reference', 'ledgerEntries'])
+            ->whereIn('source', ['cashbook_in', 'cashbook_out'])
+            ->where('currency', $currency)
+            ->where('transaction_date', '>=', $startDate->toDateString())
+            ->where('transaction_date', '<', $endDate->copy()->addDay()->toDateString())
+            ->get()
+            ->map(function ($journal) use ($typeLabels) {
+                $cashLine = $journal->ledgerEntries->first();
+                $isIn = $journal->source === 'cashbook_in';
+                $party = $journal->reference?->name;
+                $notes = $journal->ledgerEntries->pluck('notes')->filter()->first();
+                $description = trim(implode(' - ', array_filter([
+                    $journal->description,
+                    $party,
+                    $notes,
+                ])));
+
+                return [
+                    'date' => $journal->transaction_date->toDateString(),
+                    'type' => $isIn ? 'cash_in' : 'cash_out',
+                    'type_label' => $isIn ? $typeLabels['cash_in'] : $typeLabels['cash_out'],
+                    'description' => $description !== '' ? $description : ($isIn ? __('messages.cash_income') : __('messages.cash_expense')),
+                    'in_amount' => $isIn ? (string) ($cashLine->amount ?? '0') : 0,
+                    'out_amount' => ! $isIn ? (string) ($cashLine->amount ?? '0') : 0,
+                    'created_at' => $journal->created_at,
+                ];
+            });
+
+        $legacyCashbook = CashbookEntry::where('currency', $currency)
+            ->where('entry_date', '>=', $startDate->toDateString())
+            ->where('entry_date', '<', $endDate->copy()->addDay()->toDateString())
             ->get()
             ->map(function ($entry) use ($typeLabels) {
                 return [
@@ -407,18 +462,89 @@ class ReportController extends Controller
                 ];
             });
 
-        // Ledger entries (manual PartyPayment adjustments). These are kept for visibility but,
-        // to avoid double-counting supplier/customer payments already captured in the structured
-        // Payment / PurchasePayment tables (Fix M3), we only include ledger entries that are NOT
-        // already represented by those tables. Since PartyPayment has no link back, and the
-        // structured tables are the system of record for document-linked cash, we OMIT the
-        // PartyPayment merge here and rely on Payment + PurchasePayment for cash movements.
-        // (Manual PartyPayment rows remain visible in the dedicated Ledger screens.)
+        // Salary payments (money going out; posted to the journal with source
+        // 'salary' and mirrored in salary_payments).
+        $salaryRows = SalaryPayment::with('employee')
+            ->where('currency', $currency)
+            ->whereHas('employee', fn ($q) => $q->where('user_id', Auth::id()))
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->get()
+            ->map(function ($salary) use ($typeLabels) {
+                return [
+                    'date' => $salary->created_at->toDateString(),
+                    'type' => 'salary',
+                    'type_label' => $typeLabels['salary'],
+                    'description' => __('messages.salary_dash').optional($salary->employee)->name.($salary->notes ? ' - '.$salary->notes : ''),
+                    'in_amount' => 0,
+                    'out_amount' => (string) $salary->amount,
+                    'created_at' => $salary->created_at,
+                ];
+            });
+
+        // Unallocated party payments (PaymentAllocationService keep-on-account
+        // remainders). These are real cash that never lands in Payment /
+        // PurchasePayment, so the daybook must show them or the day's cash
+        // would not reconcile with the balance sheet.
+        $partyRows = PartyPayment::with('person')
+            ->where('currency', $currency)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->get()
+            ->map(function ($partyPayment) use ($typeLabels) {
+                $isIn = $partyPayment->type === 'payment_received';
+
+                return [
+                    'date' => $partyPayment->created_at->toDateString(),
+                    'type' => $isIn ? 'party_payment_in' : 'party_payment_out',
+                    'type_label' => $isIn ? $typeLabels['party_payment_in'] : $typeLabels['party_payment_out'],
+                    'description' => ($isIn ? __('messages.payment_from') : __('messages.payment_to')).optional($partyPayment->person)->name.($partyPayment->notes ? ' - '.$partyPayment->notes : ''),
+                    'in_amount' => $isIn ? (string) $partyPayment->amount : 0,
+                    'out_amount' => ! $isIn ? (string) $partyPayment->amount : 0,
+                    'created_at' => $partyPayment->created_at,
+                ];
+            });
+
+        // Expense rows (money going out for regular + landed-cost expenses).
+        // expense_date is date-only, so the same inclusive-lower / exclusive-
+        // upper bound pattern as the P&L applies here. Linked (landed) ones
+        // mention their purchase so the daybook shows where the money went.
+        $expenseRows = Expense::with('purchase.purchaseItems')
+            ->where('currency', $currency)
+            ->where('expense_date', '>=', $startDate->toDateString())
+            ->where('expense_date', '<', $endDate->copy()->addDay()->toDateString())
+            ->get()
+            ->map(function ($expense) use ($typeLabels) {
+                $description = __('messages.expense_out').': '.$expense->category;
+                if ($expense->purchase) {
+                    $lots = $expense->purchase->purchaseItems
+                        ->pluck('lot_number')
+                        ->filter(fn ($lot) => $lot !== null && trim((string) $lot) !== '')
+                        ->unique()
+                        ->implode(', ');
+                    $description .= ' · '.__('messages.purchase').' #'.$expense->purchase->id
+                        .($lots !== '' ? ' ('.__('messages.lot').' '.$lots.')' : '');
+                } elseif ($expense->notes) {
+                    $description .= ' - '.$expense->notes;
+                }
+
+                return [
+                    'date' => $expense->expense_date->toDateString(),
+                    'type' => 'expense',
+                    'type_label' => $typeLabels['expense_out'],
+                    'description' => $description,
+                    'in_amount' => 0,
+                    'out_amount' => (string) $expense->amount,
+                    'created_at' => $expense->created_at,
+                ];
+            });
 
         $transactions = $transactions->merge($sales)
             ->merge($purchasePayments)
             ->merge($customerPayments)
-            ->merge($cashEntries)
+            ->merge($journalCashbook)
+            ->merge($legacyCashbook)
+            ->merge($salaryRows)
+            ->merge($partyRows)
+            ->merge($expenseRows)
             ->sortByDesc('created_at');
 
         $totalIn = '0.00';
@@ -428,18 +554,17 @@ class ReportController extends Controller
             $totalOut = bcadd($totalOut, (string) $tx['out_amount'], 2);
         }
 
-        // Opening balance is DERIVED by backing the period's net movement out of
-        // the live cash position (BalanceService::cashBalance is current-only, no
-        // as-of-date variant). This keeps the running balance self-consistent:
-        // the oldest day starts at the true opening and the newest day lands
-        // exactly on the live cash balance. Adding the period net to the current
-        // balance instead would double-count the period's movements.
-        $periodNet = bcsub($totalIn, $totalOut, 2);
-        $openingBalance = bcsub(
-            $this->balanceService->cashBalance(Auth::id(), $currency),
-            $periodNet,
-            2
+        // Opening balance = cash in hand just before the day started, from
+        // the SAME canonical union the balance sheet / wallet hero count.
+        // Closing then equals the balance sheet's Cash in Hand exactly for
+        // today.
+        $openingBalance = number_format(
+            app(CashFlowService::class)->balanceBefore($startDate->toDateString())[$currency],
+            2,
+            '.',
+            ''
         );
+        $closingBalance = bcadd($openingBalance, bcsub($totalIn, $totalOut, 2), 2);
 
         // Group by date
         $dailyTotals = [];
@@ -459,10 +584,9 @@ class ReportController extends Controller
             $dailyTotals[$date]['out_total'] = bcadd($dailyTotals[$date]['out_total'], (string) $tx['out_amount'], 2);
         }
 
-        // Accumulate oldest → newest so each day carries its true running balance,
-        // then present newest-first. (Accumulating newest → oldest would put the
-        // closing balance on the OLDEST row and only opening+own-net on today's row.)
-        $dailyTotals = collect($dailyTotals)->sortBy('date')->values();
+        // Single day: the day's running balance opens at the opening balance
+        // and lands exactly on the closing balance.
+        $dailyTotals = collect($dailyTotals)->values();
 
         $runningBalance = $openingBalance;
         $dailyTotals = $dailyTotals->map(function ($day) use (&$runningBalance) {
@@ -470,217 +594,11 @@ class ReportController extends Controller
             $day['running_balance'] = $runningBalance;
 
             return $day;
-        })->sortByDesc('date')->values();
-
-        $closingBalance = $runningBalance;
+        });
 
         return view('reports.daybook', compact(
-            'dailyTotals', 'anchorDate', 'period', 'selectedCurrency', 'totalIn', 'totalOut',
+            'dailyTotals', 'anchorDate', 'selectedCurrency', 'totalIn', 'totalOut',
             'openingBalance', 'closingBalance'
         ));
-    }
-
-    public function aging(Request $request)
-    {
-        $currency = $request->get('currency', 'AFN');
-
-        // Customer aging — outstanding orders grouped by their real party (person_type/person_id),
-        // with customer_id as a legacy fallback. Supplier-type orders keep their supplier's name
-        // instead of being lumped into a fake "Walk-in Customer" bucket.
-        // outstanding = total_amount - SUM(payments.amount) - SUM(order_returns.total_amount)
-        // Every money side is restricted to the order's own currency: a payment or return recorded
-        // in a different currency must not offset (or silently drop) the balance in this currency.
-        $customerOrders = Order::with(['customer', 'supplier'])
-            ->withSum(['payments as paid_sum' => fn ($q) => $q->whereColumn('payments.currency', 'orders.currency')], 'amount')
-            ->withSum(['orderReturns as returned_sum' => fn ($q) => $q
-                ->whereColumn('order_returns.currency', 'orders.currency')
-                ->where('status', '!=', 'cancelled')], 'total_amount')
-            ->where('status', '!=', 'cancelled')
-            ->where('currency', $currency)
-            ->whereRaw(
-                'orders.total_amount > (
-                    COALESCE((SELECT SUM(amount) FROM payments
-                              WHERE payments.order_id = orders.id
-                                AND payments.currency = orders.currency), 0)
-                    +
-                    COALESCE((SELECT SUM(total_amount) FROM order_returns
-                              WHERE order_returns.order_id = orders.id
-                                AND order_returns.status != ?
-                                AND order_returns.currency = orders.currency), 0)
-                )',
-                ['cancelled']
-            )
-            ->get();
-
-        $customerAging = collect();
-        // Group key includes person_type: a customer and a supplier can share the same
-        // person_id, and lumping them together would merge unrelated debts under one name.
-        foreach ($customerOrders->groupBy(fn ($o) => ($o->person_type ?? 'customer').':'.($o->person_id ?? $o->customer_id ?? 'walkin')) as $key => $orderGroup) {
-            $party = $orderGroup->first()->party;
-            $customer = $party ?? (object) ['name' => __('messages.walk_in_customer')];
-
-            $mapped = $orderGroup->map(function ($order) {
-                $days = (int) Carbon::parse($order->created_at->toDateString())->diffInDays(now());
-                $bucket = $this->getAgeBucket($days);
-
-                return [
-                    'order_id' => $order->id,
-                    'order_date' => $order->created_at->toDateString(),
-                    'outstanding' => $this->outstandingAmount($order->total_amount, $order->paid_sum, $order->returned_sum),
-                    'days' => $days,
-                    'bucket' => $bucket,
-                ];
-            })->values();
-
-            $bucketTotals = $this->emptyBucketTotals();
-            foreach ($mapped as $order) {
-                $bucketTotals[$order['bucket']] = bcadd($bucketTotals[$order['bucket']], $order['outstanding'], 2);
-            }
-
-            $customerAging->push([
-                'customer' => $customer,
-                'orders' => $mapped,
-                'bucket_totals' => $bucketTotals,
-                'total_outstanding' => $this->sumBuckets($bucketTotals),
-            ]);
-        }
-        $customerAging = $customerAging
-            ->filter(fn ($item) => bccomp($item['total_outstanding'], '0', 2) > 0)
-            // Cast to float: total_outstanding is a decimal string, and a lexicographic
-            // sort would rank "900.00" above "1000.00".
-            ->sortByDesc(fn ($item) => (float) $item['total_outstanding'])
-            ->values();
-
-        $customerBucketTotal = $this->aggregateBuckets($customerAging);
-
-        // Supplier aging — outstanding purchases grouped by their real party, supplier_id as a
-        // legacy fallback. Mirrors the customer side: party-aware grouping and currency-matched
-        // payments/returns so foreign-currency money never distorts a currency's balance.
-        $supplierPurchases = Purchase::with(['customer', 'supplier'])
-            ->withSum(['purchasePayments as paid_sum' => fn ($q) => $q->whereColumn('purchase_payments.currency', 'purchases.currency')], 'amount')
-            ->withSum(['purchaseReturns as returned_sum' => fn ($q) => $q
-                ->whereColumn('purchase_returns.currency', 'purchases.currency')
-                ->where('status', '!=', 'cancelled')], 'total_amount')
-            ->where('status', '!=', 'cancelled')
-            ->where('currency', $currency)
-            ->whereRaw(
-                'purchases.total_amount > (
-                    COALESCE((SELECT SUM(amount) FROM purchase_payments
-                              WHERE purchase_payments.purchase_id = purchases.id
-                                AND purchase_payments.currency = purchases.currency), 0)
-                    +
-                    COALESCE((SELECT SUM(total_amount) FROM purchase_returns
-                              WHERE purchase_returns.purchase_id = purchases.id
-                                AND purchase_returns.status != ?
-                                AND purchase_returns.currency = purchases.currency), 0)
-                )',
-                ['cancelled']
-            )
-            ->get();
-
-        $supplierAging = collect();
-        // Same person_type-aware grouping as the customer side (see note above).
-        foreach ($supplierPurchases->groupBy(fn ($p) => ($p->person_type ?? 'supplier').':'.($p->person_id ?? $p->supplier_id ?? 'walkin')) as $key => $purchaseGroup) {
-            $party = $purchaseGroup->first()->party
-                ?? ($purchaseGroup->first()->supplier_id ? Supplier::find($purchaseGroup->first()->supplier_id) : null);
-            $supplier = $party ?? (object) ['name' => __('messages.walk_in_supplier')];
-
-            $mapped = $purchaseGroup->map(function ($purchase) {
-                $days = (int) Carbon::parse($purchase->created_at->toDateString())->diffInDays(now());
-                $bucket = $this->getAgeBucket($days);
-
-                return [
-                    'purchase_id' => $purchase->id,
-                    'purchase_date' => $purchase->created_at->toDateString(),
-                    'outstanding' => $this->outstandingAmount($purchase->total_amount, $purchase->paid_sum, $purchase->returned_sum),
-                    'days' => $days,
-                    'bucket' => $bucket,
-                ];
-            })->values();
-
-            $bucketTotals = $this->emptyBucketTotals();
-            foreach ($mapped as $purchase) {
-                $bucketTotals[$purchase['bucket']] = bcadd($bucketTotals[$purchase['bucket']], $purchase['outstanding'], 2);
-            }
-
-            $supplierAging->push([
-                'supplier' => $supplier,
-                'purchases' => $mapped,
-                'bucket_totals' => $bucketTotals,
-                'total_outstanding' => $this->sumBuckets($bucketTotals),
-            ]);
-        }
-        $supplierAging = $supplierAging
-            ->filter(fn ($item) => bccomp($item['total_outstanding'], '0', 2) > 0)
-            ->sortByDesc(fn ($item) => (float) $item['total_outstanding'])
-            ->values();
-
-        $supplierBucketTotal = $this->aggregateBuckets($supplierAging);
-
-        $customerGrandTotal = $this->sumBuckets($customerBucketTotal);
-        $supplierGrandTotal = $this->sumBuckets($supplierBucketTotal);
-        $selectedCurrency = $currency;
-        $currencySymbol = $currency === 'USD' ? '$' : __('messages.afn');
-
-        return view('reports.aging', compact(
-            'customerAging', 'customerBucketTotal',
-            'supplierAging', 'supplierBucketTotal',
-            'customerGrandTotal', 'supplierGrandTotal',
-            'selectedCurrency', 'currencySymbol'
-        ));
-    }
-
-    /**
-     * Outstanding = total - paid - returned, clamped at zero, all in the same currency.
-     * paid/returned come from withSum aggregate columns (null when no rows exist).
-     */
-    private function outstandingAmount(string $total, $paid, $returned): string
-    {
-        $remaining = bcsub((string) $total, (string) ($paid ?? '0'), 2);
-        $remaining = bcsub($remaining, (string) ($returned ?? '0'), 2);
-
-        return bccomp($remaining, '0', 2) >= 0 ? $remaining : '0.00';
-    }
-
-    /**
-     * @return array{0-30: string, 31-60: string, 61-90: string, 90+: string}
-     */
-    private function emptyBucketTotals(): array
-    {
-        return ['0-30' => '0.00', '31-60' => '0.00', '61-90' => '0.00', '90+' => '0.00'];
-    }
-
-    private function sumBuckets(array $bucketTotals): string
-    {
-        return bcadd(
-            bcadd(bcadd($bucketTotals['0-30'], $bucketTotals['31-60'], 2), $bucketTotals['61-90'], 2),
-            $bucketTotals['90+'],
-            2
-        );
-    }
-
-    private function aggregateBuckets($aging): array
-    {
-        $totals = $this->emptyBucketTotals();
-        foreach ($aging as $item) {
-            foreach ($totals as $bucket => $_) {
-                $totals[$bucket] = bcadd($totals[$bucket], $item['bucket_totals'][$bucket], 2);
-            }
-        }
-
-        return $totals;
-    }
-
-    private function getAgeBucket(int $days): string
-    {
-        if ($days <= 30) {
-            return '0-30';
-        } elseif ($days <= 60) {
-            return '31-60';
-        } elseif ($days <= 90) {
-            return '61-90';
-        } else {
-            return '90+';
-        }
     }
 }

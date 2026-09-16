@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Models\JournalEntry;
 use App\Models\Order;
 use App\Models\OrderReturn;
 use App\Models\PartyPayment;
@@ -19,13 +20,59 @@ use Illuminate\Support\Facades\DB;
  * only non-cancelled documents count, only same-currency payments settle a
  * document, non-cancelled returns reduce the balance, and each document's
  * remainder is clamped at zero BEFORE it is summed.
+ *
+ * Person-tagged cashbook journal entries (source cashbook_in/out with a
+ * reference to the party) settle the party's balance like a payment does:
+ * a cashbook-in from a customer reduces what they owe, a cashbook-out to a
+ * supplier reduces what we owe them — matching what the cashbook statement
+ * page already shows.
  */
 class PartyBalanceService
 {
     /**
+     * Person-tagged cashbook journal amounts per currency for one party:
+     * ['in' => ['AFN' => string, 'USD' => string], 'out' => [...]] — the
+     * settlement side only ('in' for customers, 'out' for suppliers).
+     *
+     * @return array{in: array{AFN: string, USD: string}, out: array{AFN: string, USD: string}}
+     */
+    public function cashbookSettlements(string $personType, int $personId): array
+    {
+        $result = [
+            'in' => ['AFN' => '0.00', 'USD' => '0.00'],
+            'out' => ['AFN' => '0.00', 'USD' => '0.00'],
+        ];
+
+        $rows = JournalEntry::query()
+            ->whereIn('source', ['cashbook_in', 'cashbook_out'])
+            ->where('reference_type', $personType)
+            ->where('reference_id', $personId)
+            ->joinSub(
+                DB::table('ledger_entries')
+                    ->selectRaw('journal_entry_id, MAX(amount) as amount')
+                    ->groupBy('journal_entry_id'),
+                'ledger_amounts',
+                'ledger_amounts.journal_entry_id',
+                '=',
+                'journal_entries.id'
+            )
+            ->groupBy('journal_entries.source', 'journal_entries.currency')
+            ->selectRaw('journal_entries.source, journal_entries.currency, SUM(ledger_amounts.amount) as total')
+            ->get();
+
+        foreach ($rows as $row) {
+            $side = $row->source === 'cashbook_in' ? 'in' : 'out';
+            $result[$side][$row->currency] = bcadd($result[$side][$row->currency], (string) $row->total, 2);
+        }
+
+        return $result;
+    }
+
+    /**
      * Outstanding balance per currency for one party (customer or supplier),
      * across every order AND purchase held under the canonical
-     * person_type / person_id, plus unallocated party-level payments.
+     * person_type / person_id, plus unallocated party-level payments and
+     * person-tagged cashbook entries.
      *
      * Returns ['total_documents' => int, 'total_amount_afn' => string, ...
      *          'paid_afn' => string, 'remaining_afn' => string, ...].
@@ -40,6 +87,11 @@ class PartyBalanceService
         $summary = [
             'total_documents' => count($orderIds) + count($purchaseIds),
         ];
+
+        // Person-tagged cashbook entries settle the balance in the party's
+        // own direction (customer cash-in / supplier cash-out), mirroring the
+        // cashbook statement page. The reverse direction adds to it.
+        $cashbook = $this->cashbookSettlements($personType, $personId);
 
         foreach (['AFN', 'USD'] as $currency) {
             $sfx = strtolower($currency);
@@ -71,7 +123,15 @@ class PartyBalanceService
                 ->sum('amount');
             $partyPaid = bcadd('0.00', (string) $partyPaid, 2);
 
-            $remaining = bcsub($remaining, $partyPaid, 2);
+            // Person-tagged cashbook entries settle in the party's direction;
+            // the reverse direction (customer cash-out / supplier cash-in)
+            // grows the balance instead.
+            $cashbookSettling = $personType === 'customer' ? $cashbook['in'][$currency] : $cashbook['out'][$currency];
+            $cashbookReverse = $personType === 'customer' ? $cashbook['out'][$currency] : $cashbook['in'][$currency];
+
+            $settlements = bcadd($partyPaid, $cashbookSettling, 2);
+            $remaining = bcsub($remaining, $settlements, 2);
+            $remaining = bcadd($remaining, $cashbookReverse, 2);
 
             // On-account money beyond what the documents owe is a prepayment:
             // surface it as credit instead of letting the clamp swallow it.
@@ -83,7 +143,7 @@ class PartyBalanceService
 
             $summary["total_amount_{$sfx}"] = $billed;
             $summary["returned_{$sfx}"] = $returned;
-            $summary["paid_{$sfx}"] = bcadd($paid, $partyPaid, 2);
+            $summary["paid_{$sfx}"] = bcadd($paid, $settlements, 2);
             $summary["remaining_{$sfx}"] = $remaining;
             $summary["credit_{$sfx}"] = $credit;
         }
@@ -150,6 +210,42 @@ class PartyBalanceService
             $key = $p->person_type.':'.$p->person_id;
             $balances[$key]['type'] = $p->person_type;
             $balances[$key][$p->currency] = bcsub($balances[$key][$p->currency] ?? '0.00', (string) $p->amount, 2);
+        }
+
+        // Person-tagged cashbook journal entries settle the owning party's
+        // balance too — same direction rule as partySummary(): customer
+        // cashbook-in / supplier cashbook-out settle; the reverse grows it.
+        // One grouped query (journal amount = MAX of its balanced lines).
+        $cashbookRows = JournalEntry::query()
+            ->whereIn('source', ['cashbook_in', 'cashbook_out'])
+            ->whereNotNull('reference_type')
+            ->whereIn('reference_type', ['customer', 'supplier'])
+            ->joinSub(
+                DB::table('ledger_entries')
+                    ->selectRaw('journal_entry_id, MAX(amount) as amount')
+                    ->groupBy('journal_entry_id'),
+                'ledger_amounts',
+                'ledger_amounts.journal_entry_id',
+                '=',
+                'journal_entries.id'
+            )
+            ->groupBy('journal_entries.reference_type', 'journal_entries.reference_id', 'journal_entries.currency', 'journal_entries.source')
+            ->selectRaw('journal_entries.reference_type, journal_entries.reference_id, journal_entries.currency, journal_entries.source, SUM(ledger_amounts.amount) as total')
+            ->get();
+
+        foreach ($cashbookRows as $row) {
+            if (! isset($totals[$row->reference_type][$row->currency])) {
+                continue;
+            }
+
+            $settles = ($row->reference_type === 'customer' && $row->source === 'cashbook_in')
+                || ($row->reference_type === 'supplier' && $row->source === 'cashbook_out');
+
+            $key = $row->reference_type.':'.$row->reference_id;
+            $balances[$key]['type'] = $row->reference_type;
+            $balances[$key][$row->currency] = $settles
+                ? bcsub($balances[$key][$row->currency] ?? '0.00', (string) $row->total, 2)
+                : bcadd($balances[$key][$row->currency] ?? '0.00', (string) $row->total, 2);
         }
 
         // Clamp each party at zero, then roll up per party type.

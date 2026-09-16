@@ -13,6 +13,7 @@ class Expense extends Model
     protected $fillable = [
         'user_id',
         'expense_id',
+        'purchase_id',
         'category',
         'amount',
         'currency',
@@ -38,6 +39,11 @@ class Expense extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function purchase()
+    {
+        return $this->belongsTo(Purchase::class);
     }
 
     public function getCurrencySymbolAttribute()

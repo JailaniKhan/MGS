@@ -5,12 +5,27 @@ namespace Tests\Feature;
 use App\Models\Customer;
 use App\Models\Reminder;
 use App\Models\User;
+use App\Services\Billing\BillService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class WhatsAppChatsTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Gateway credentials, so BillService::send() reaches the faked
+        // HTTP layer instead of being skipped as "not configured".
+        config([
+            'services.openwa.api_key' => 'test-key',
+            'services.openwa.base_url' => 'http://127.0.0.1:2785',
+            'services.openwa.session' => 'default',
+        ]);
+    }
 
     protected function actingUser(): User
     {
@@ -132,13 +147,32 @@ class WhatsAppChatsTest extends TestCase
 
         $res = $this->get("/whatsapp-chats/customer/{$customer->id}");
         $res->assertOk();
-        $res->assertSee("Alpha message");
-        $res->assertSee("Beta failed message");
-        $res->assertSee("session not ready");
+        $res->assertSee('Alpha message');
+        $res->assertSee('Beta failed message');
+        $res->assertSee('session not ready');
         $res->assertSee(route('whatsapp.chats.index'));
         $res->assertSee(route('customers.show', $customer->id));
 
         $this->assertTrue(strpos($res->content(), 'Alpha message') < strpos($res->content(), 'Beta failed message'));
+    }
+
+    public function test_show_renders_bill_messages_with_dir_auto(): void
+    {
+        $this->actingUser();
+        $customer = Customer::create(['name' => 'Bidi', 'phone' => '+93700000006']);
+
+        // Mixed RTL/LTR bill line: stored order must survive the rtl page.
+        $this->reminder([
+            'remindable_id' => $customer->id,
+            'message' => "10 لیټره\n 12 کارتن x 20.50 = 246 $",
+        ]);
+
+        $res = $this->get("/whatsapp-chats/customer/{$customer->id}");
+        $res->assertOk();
+        // The bubble picks direction from the message's first strong char
+        // (M/LTR here), keeping mixed lines in stored order under dir=rtl.
+        $res->assertSee('dir="auto"', false);
+        $res->assertSee('12 کارتن x 20.50 = 246 $', false);
     }
 
     public function test_show_aborts_for_unknown_type_or_missing_messages(): void
@@ -147,5 +181,33 @@ class WhatsAppChatsTest extends TestCase
 
         $this->get('/whatsapp-chats/robot/1')->assertNotFound();
         $this->get('/whatsapp-chats/customer/999999')->assertNotFound();
+    }
+
+    public function test_bill_send_logs_morph_alias_and_chat_link_resolves(): void
+    {
+        $user = $this->actingUser();
+        $customer = Customer::create(['name' => 'Bill Chat', 'phone' => '+93700000005']);
+
+        Http::fake([
+            '*/api/sessions/*' => Http::response(['status' => 'ready'], 200),
+            '*127.0.0.1:2785*' => Http::response(['status' => 'sent', 'id' => 'BILL1'], 200),
+        ]);
+
+        $result = app(BillService::class)->send($customer, $customer->phone, 'Invoice total', 250.0, 'AFN');
+        $this->assertTrue($result['ok']);
+
+        // The reminder must carry the morph alias, not the FQCN —
+        // FQCN rows produce /whatsapp-chats/App%5CModels... links that 404.
+        $reminder = Reminder::where('channel', 'whatsapp')->where('remindable_id', $customer->id)->first();
+        $this->assertNotNull($reminder);
+        $this->assertSame('customer', $reminder->remindable_type);
+
+        $list = $this->get('/whatsapp-chats')->assertOk();
+        $list->assertSee(route('whatsapp.chats.show', ['customer', $customer->id]));
+        $this->assertStringNotContainsString('App%5C', $list->getContent());
+        $this->assertStringNotContainsString('App\Models', $list->getContent());
+
+        // The generated chat link itself must open the conversation.
+        $this->get("/whatsapp-chats/customer/{$customer->id}")->assertOk();
     }
 }

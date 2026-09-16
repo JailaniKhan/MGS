@@ -79,12 +79,12 @@ class PaymentsTest extends TestCase
 
         $response = $this->get(route('payments.index'))->assertOk();
 
-        $this->assertSame(40, $response->viewData('incomingAFN'));
-        $this->assertSame(50, $response->viewData('incomingUSD'));
-        $this->assertSame(25, $response->viewData('outgoingAFN'));
-        $this->assertSame(0, $response->viewData('outgoingUSD'));
-        $this->assertSame(15, $response->viewData('balanceAFN'));
-        $this->assertSame(50, $response->viewData('balanceUSD'));
+        $this->assertSame(40.0, $response->viewData('incomingAFN'));
+        $this->assertSame(50.0, $response->viewData('incomingUSD'));
+        $this->assertSame(25.0, $response->viewData('outgoingAFN'));
+        $this->assertSame(0.0, $response->viewData('outgoingUSD'));
+        $this->assertSame(15.0, $response->viewData('balanceAFN'));
+        $this->assertSame(50.0, $response->viewData('balanceUSD'));
     }
 
     public function test_index_lists_only_outstanding_non_cancelled_documents(): void
