@@ -22,6 +22,9 @@ env:
   NATIVEPHP_ANDROID_SHRINK_RESOURCES: "true"
   NATIVEPHP_ANDROID_DEBUG_SYMBOLS: NONE
   NATIVEPHP_ANDROID_MIN_SDK: "26"
+  OPENWA_BASE_URL: http://127.0.0.1:2785
+  OPENWA_SESSION: default
+  OPENWA_AUTO_START: "true"
 
 jobs:
   build:
@@ -110,6 +113,10 @@ jobs:
             NATIVEPHP_ANDROID_DEBUG_SYMBOLS = $env:NATIVEPHP_ANDROID_DEBUG_SYMBOLS
             NATIVEPHP_ANDROID_MIN_SDK = $env:NATIVEPHP_ANDROID_MIN_SDK
             NATIVEPHP_ANDROID_SDK_LOCATION = $env:ANDROID_HOME
+            OPENWA_BASE_URL = $env:OPENWA_BASE_URL
+            OPENWA_SESSION = $env:OPENWA_SESSION
+            OPENWA_AUTO_START = $env:OPENWA_AUTO_START
+            OPENWA_API_KEY = "mgs_ci_" + [Guid]::NewGuid().ToString("N")
           }
           $lines = Get-Content .env
           foreach ($key in $required.Keys) {
@@ -161,6 +168,36 @@ jobs:
         with:
           path: nativephp/binaries
           key: nativephp-binaries-${{ hashFiles('nativephp.lock') }}
+
+      - name: Cache OpenWA downloads and modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            storage/app/openwa/downloads
+            storage/app/openwa/modules
+            storage/app/openwa/node
+          key: openwa-${{ hashFiles('composer.json', 'app/Console/Commands/OpenWaInstall.php') }}
+
+      - name: Build OpenWA gateway bundle
+        shell: pwsh
+        run: |
+          php artisan openwa:install --target=android-arm64 --no-interaction
+          if ($LASTEXITCODE -ne 0) { throw "openwa:install failed with exit code $LASTEXITCODE" }
+          php artisan openwa:bundle --target=android-arm64 --no-interaction
+          if ($LASTEXITCODE -ne 0) { throw "openwa:bundle failed with exit code $LASTEXITCODE" }
+
+          # APK ships bootstrap/openwa/ (storage/app/openwa is excluded from the
+          # NativePHP zip). openwa:bundle builds under storage/.../build and only
+          # writes .bundle_version into bootstrap — mirror the full tree here.
+          $src = "storage/app/openwa/build"
+          $dst = "bootstrap/openwa"
+          if (-not (Test-Path "$src/app/package.json")) { throw "OpenWA build incomplete at $src" }
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          robocopy $src $dst /MIR /NFL /NDL /NJH /NJS /NC /NS /NP | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy bootstrap/openwa failed with $LASTEXITCODE" }
+          if (-not (Test-Path "$dst/app/package.json")) { throw "bootstrap/openwa mirror missing app/package.json" }
+          if (-not (Test-Path "$dst/node/node")) { throw "bootstrap/openwa mirror missing node/node" }
+          Write-Host "OpenWA mirrored to bootstrap/openwa"
 
       - name: Install NativePHP Android project
         shell: pwsh
