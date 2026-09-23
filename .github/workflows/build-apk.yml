@@ -1,0 +1,229 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NATIVEPHP_APP_ID: com.mgs.ordermanager
+  NATIVEPHP_APP_VERSION: "1.0.0"
+  NATIVEPHP_APP_VERSION_CODE: "60"
+  NATIVEPHP_START_URL: /
+  NATIVEPHP_ANDROID_MINIFY_ENABLED: "true"
+  NATIVEPHP_ANDROID_SHRINK_RESOURCES: "true"
+  NATIVEPHP_ANDROID_DEBUG_SYMBOLS: NONE
+  NATIVEPHP_ANDROID_MIN_SDK: "26"
+
+jobs:
+  build:
+    name: Release APK
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate signing secrets
+        shell: pwsh
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:KS_B64)) { $missing += "ANDROID_KEYSTORE_BASE64" }
+          if ([string]::IsNullOrWhiteSpace($env:KS_PASS)) { $missing += "ANDROID_KEYSTORE_PASSWORD" }
+          if ([string]::IsNullOrWhiteSpace($env:KEY_ALIAS)) { $missing += "ANDROID_KEY_ALIAS" }
+          if ([string]::IsNullOrWhiteSpace($env:KEY_PASS)) { $missing += "ANDROID_KEY_PASSWORD" }
+          if ($missing.Count -gt 0) {
+            throw "Missing GitHub Actions secrets: $($missing -join ', '). Add them under Settings → Secrets and variables → Actions."
+          }
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: zip, openssl, mbstring, dom, fileinfo, curl, bcmath, gd, sqlite3, pdo_sqlite
+          tools: composer:v2
+          coverage: none
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Setup Android SDK + NDK + CMake
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:ANDROID_HOME\cmdline-tools\latest\bin;$env:ANDROID_HOME\platform-tools;$env:PATH"
+          sdkmanager --install "ndk;27.0.12077973" "cmake;3.22.1" "platforms;android-36" "build-tools;36.0.0"
+          if ($LASTEXITCODE -ne 0) { throw "sdkmanager failed with exit code $LASTEXITCODE" }
+
+      - name: Decode release keystore
+        shell: pwsh
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          $b64 = ($env:KS_B64 -replace '\s', '')
+          $bytes = [Convert]::FromBase64String($b64)
+          New-Item -ItemType Directory -Force -Path credentials | Out-Null
+          [IO.File]::WriteAllBytes("$PWD\credentials\app-release-key.jks", $bytes)
+          Write-Host "Keystore decoded ($($bytes.Length) bytes)"
+
+      - name: Create Laravel .env
+        shell: pwsh
+        run: |
+          Copy-Item .env.example .env
+          $required = @{
+            APP_NAME = "MGS"
+            APP_ENV = "production"
+            APP_DEBUG = "false"
+            APP_URL = "http://localhost"
+            DB_CONNECTION = "sqlite"
+            NATIVEPHP_APP_ID = $env:NATIVEPHP_APP_ID
+            NATIVEPHP_APP_VERSION = $env:NATIVEPHP_APP_VERSION
+            NATIVEPHP_APP_VERSION_CODE = $env:NATIVEPHP_APP_VERSION_CODE
+            NATIVEPHP_START_URL = $env:NATIVEPHP_START_URL
+            NATIVEPHP_ANDROID_MINIFY_ENABLED = $env:NATIVEPHP_ANDROID_MINIFY_ENABLED
+            NATIVEPHP_ANDROID_SHRINK_RESOURCES = $env:NATIVEPHP_ANDROID_SHRINK_RESOURCES
+            NATIVEPHP_ANDROID_DEBUG_SYMBOLS = $env:NATIVEPHP_ANDROID_DEBUG_SYMBOLS
+            NATIVEPHP_ANDROID_MIN_SDK = $env:NATIVEPHP_ANDROID_MIN_SDK
+            NATIVEPHP_ANDROID_SDK_LOCATION = $env:ANDROID_HOME
+          }
+          $lines = Get-Content .env
+          foreach ($key in $required.Keys) {
+            $value = $required[$key]
+            $pattern = "^$key=.*$"
+            if ($lines | Select-String -Pattern $pattern -Quiet) {
+              $lines = $lines | ForEach-Object {
+                if ($_ -match $pattern) { "$key=$value" } else { $_ }
+              }
+            } else {
+              $lines += "$key=$value"
+            }
+          }
+          Set-Content -Path .env -Value $lines
+
+      - name: Ensure Laravel runtime directories
+        shell: pwsh
+        run: |
+          $dirs = @(
+            "storage/framework/cache",
+            "storage/framework/sessions",
+            "storage/framework/views",
+            "storage/framework/testing",
+            "storage/logs",
+            "bootstrap/cache",
+            "database"
+          )
+          foreach ($d in $dirs) { New-Item -ItemType Directory -Force -Path $d | Out-Null }
+          if (-not (Test-Path "database/database.sqlite")) {
+            New-Item -ItemType File -Path "database/database.sqlite" | Out-Null
+          }
+
+      - name: Generate APP_KEY
+        shell: pwsh
+        run: php artisan key:generate --force --no-interaction
+
+      - name: Install Composer dependencies
+        shell: pwsh
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Build frontend assets
+        shell: pwsh
+        run: |
+          npm ci
+          npm run build
+
+      - name: Cache NativePHP Android PHP binaries
+        uses: actions/cache@v4
+        with:
+          path: nativephp/binaries
+          key: nativephp-binaries-${{ hashFiles('nativephp.lock') }}
+
+      - name: Install NativePHP Android project
+        shell: pwsh
+        run: php artisan native:install android --no-interaction
+
+      - name: Apply tracked Kotlin patches
+        shell: pwsh
+        run: php artisan native:patch --no-interaction
+
+      - name: Raise Gradle heap (fix R8 crash)
+        shell: pwsh
+        run: |
+          $gradleProps = "nativephp/android/gradle.properties"
+          if (-not (Test-Path $gradleProps)) { throw "Missing $gradleProps after native:install" }
+          $content = Get-Content $gradleProps -Raw
+          $content = $content -replace 'org\.gradle\.jvmargs=.*', 'org.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8'
+          Set-Content -Path $gradleProps -Value $content -NoNewline
+          New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.gradle" | Out-Null
+          Set-Content -Path "$env:USERPROFILE\.gradle\gradle.properties" -Value "org.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8"
+          Select-String -Path $gradleProps -Pattern "jvmargs"
+
+      - name: Write local.properties
+        shell: pwsh
+        run: |
+          $sdk = ($env:ANDROID_HOME -replace '\\', '/')
+          Set-Content -Path "nativephp/android/local.properties" -Value "sdk.dir=$sdk"
+          Get-Content "nativephp/android/local.properties"
+
+      - name: Package signed release APK
+        shell: pwsh
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ github.workspace }}\credentials\app-release-key.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GRADLE_OPTS: -Xmx4096m
+        run: |
+          $ks = Join-Path $PWD "credentials\app-release-key.jks"
+          php artisan native:package android `
+            --keystore="$ks" `
+            --keystore-password="$env:ANDROID_KEYSTORE_PASSWORD" `
+            --key-alias="$env:ANDROID_KEY_ALIAS" `
+            --key-password="$env:ANDROID_KEY_PASSWORD" `
+            --build-type=release `
+            --no-tty `
+            --no-interaction
+
+      - name: Collect APK artifact
+        id: apk
+        shell: pwsh
+        run: |
+          $src = "nativephp/android/app/build/outputs/apk/release/app-release.apk"
+          if (-not (Test-Path $src)) { throw "APK not found at $src" }
+          Copy-Item $src "MGS-release-signed.apk" -Force
+          $item = Get-Item "MGS-release-signed.apk"
+          Write-Host "APK: $($item.FullName) ($([math]::Round($item.Length / 1MB, 1)) MB)"
+          "path=$($item.FullName)" >> $env:GITHUB_OUTPUT
+          "size=$($item.Length)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MGS-release-signed-apk
+          path: MGS-release-signed.apk
+          if-no-files-found: error
+          retention-days: 14
