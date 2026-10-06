@@ -27,7 +27,7 @@
             <div><span class="text-ink-500 dark:text-ink-400">{{ __('messages.party') }}: </span><span class="font-medium text-ink-800 dark:text-ink-200">{{ $purchaseReturn->purchase->party?->name ?? __('messages.unknown') }}</span></div>
             <div><span class="text-ink-500 dark:text-ink-400">{{ __('messages.return_date') }}: </span><span class="font-medium"><bdi>{{ local_date($purchaseReturn->return_date, 'Y/m/d') }}</bdi></span></div>
             @if ($purchaseReturn->reason)<div><span class="text-ink-500 dark:text-ink-400">{{ __('messages.reason') }}: </span><span class="font-medium">{{ $purchaseReturn->reason }}</span></div>@endif
-            <div><span class="text-ink-500 dark:text-ink-400">{{ __('messages.currency_unit') }}: </span><span class="font-medium">{{ $purchaseReturn->purchase->currency === 'USD' ? __('messages.usd_with_paren') . '$)' : __('messages.afn') . ' (' . __('messages.afn') . ')' }}</span></div>
+            <div><span class="text-ink-500 dark:text-ink-400">{{ __('messages.currency_unit') }}: </span><span class="font-medium">{{ $purchaseReturn->purchase->currency === 'USD' ? __('messages.usd_with_paren') . '$)' : __('messages.afghani_with_paren') . 'AFN)' }}</span></div>
         </div>
     </div>
 

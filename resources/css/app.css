@@ -468,7 +468,26 @@ html.keyboard-open .bottom-nav {
 
 /* Fixed stack so multiple toasts queue vertically instead of overlapping */
 @utility toast-stack {
-    @apply fixed top-4 left-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none;
+    @apply fixed left-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none;
+    /* Clear the status bar on edge-to-edge devices (viewport-fit=cover) */
+    top: max(1rem, env(safe-area-inset-top));
+}
+
+/* Header clears the status bar: the app renders edge-to-edge
+   (viewport-fit=cover), so the sticky header needs the top inset
+   the bottom nav already gets via env(safe-area-inset-bottom). */
+header.app-header {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+/* Legibility floor — HIG / Material 3 guidance: nothing below 10px.
+   9px captions and badges are unreadable on phones in daylight, so
+   every 9px utility (including the !important variant) renders at
+   10px. Unlayered rules beat Tailwind's layered utilities. */
+.text-\[9px\],
+.\!text-\[9px\] {
+    /* !important beats Tailwind's layered !text-[9px] variant */
+    font-size: 10px !important;
 }
 
 /* Exit animation for auto-dismiss */
@@ -975,6 +994,19 @@ textarea.form-input:has(+ .text-danger-500) {
 }
 .search-bar input:focus {
     @apply ring-0;
+}
+
+/* Sticky offsets track the real header height (set by
+   ui.js as --app-header-h): the header grows with the
+   top safe-area inset, so a hardcoded 3.5rem would
+   slide the sticky element under it on notched devices. */
+.search-bar.sticky {
+    top: var(--app-header-h, 3.5rem);
+}
+
+/* Chat sub-header (whatsapp/show) */
+.wa-header-stick {
+    top: var(--app-header-h, 3.5rem);
 }
 
 /* Segmented control polish (selected item lift) */

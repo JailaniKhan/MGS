@@ -38,7 +38,7 @@
             </div>
         @endif
 
-        <div class="text-xs text-ink-500 dark:text-ink-400 mb-3">{{ __('messages.currency_unit') }}: <span class="font-medium text-ink-700 dark:text-ink-300">{{ $expense->currency === 'USD' ? __('messages.usd_with_paren') . '$)' : __('messages.afn') . ' (' . __('messages.afn') . ')' }}</span></div>
+        <div class="text-xs text-ink-500 dark:text-ink-400 mb-3">{{ __('messages.currency_unit') }}: <span class="font-medium text-ink-700 dark:text-ink-300">{{ $expense->currency === 'USD' ? __('messages.usd_with_paren') . '$)' : __('messages.afghani_with_paren') . 'AFN)' }}</span></div>
 
         <div class="flex gap-2">
             <a href="{{ route('expenses.edit', $expense) }}" class="btn-sm">{{ __('messages.edit') }}</a>

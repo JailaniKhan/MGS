@@ -260,6 +260,11 @@
         stack.appendChild(toast);
 
         let timer = setTimeout(dismiss, DURATION);
+        // Pause while hovered so the message can be read
+        toast.addEventListener('mouseenter', () => clearTimeout(timer));
+        toast.addEventListener('mouseleave', () => {
+            timer = setTimeout(dismiss, 2500);
+        });
         btn.addEventListener('click', () => {
             clearTimeout(timer);
             dismiss();
@@ -291,6 +296,25 @@
         document.documentElement.classList.add('os-android');
     } else if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
         document.documentElement.classList.add('os-ios');
+    }
+})();
+
+/* Header height sync — sticky search bars and the chat
+   sub-header offset by the real header height. The header
+   grows with the top safe-area inset on notched devices,
+   so a hardcoded offset would slide content under it. */
+(function () {
+    var root = document.documentElement;
+    function syncHeaderOffset() {
+        var header = document.querySelector('header.app-header');
+        if (!header) return;
+        root.style.setProperty('--app-header-h', header.offsetHeight + 'px');
+    }
+    syncHeaderOffset();
+    window.addEventListener('resize', syncHeaderOffset);
+    // Web fonts swap after first paint and change the header height
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(syncHeaderOffset);
     }
 })();
 
@@ -748,6 +772,39 @@
             setX(cur < -max() / 2 ? -max() : 0);
         });
     });
+
+    // Discoverability: swipe actions are invisible by design, so
+    // teach the gesture once — a quiet hint bar at the top of the
+    // first swipe list, shown a single time per device.
+    try {
+        if (rows.length && !localStorage.getItem('mgs-swipe-hint')) {
+            var card = rows[0].closest('.card');
+            if (card) {
+                var hint = document.createElement('div');
+                hint.className =
+                    'flex items-center gap-2 px-4 py-2.5 text-[11px] font-medium text-ink-400 dark:text-ink-500 border-b border-ink-100 dark:border-white/[0.06]';
+                var svgNS = 'http://www.w3.org/2000/svg';
+                var svg = document.createElementNS(svgNS, 'svg');
+                svg.setAttribute('class', 'w-3.5 h-3.5 flex-shrink-0 rtl:-scale-x-100');
+                svg.setAttribute('fill', 'none');
+                svg.setAttribute('stroke', 'currentColor');
+                svg.setAttribute('viewBox', '0 0 24 24');
+                svg.setAttribute('stroke-width', '2');
+                var path = document.createElementNS(svgNS, 'path');
+                path.setAttribute('stroke-linecap', 'round');
+                path.setAttribute('stroke-linejoin', 'round');
+                path.setAttribute('d', 'M15 19l-7-7 7-7');
+                svg.appendChild(path);
+                var span = document.createElement('span');
+                span.textContent =
+                    (window.MGS_STRINGS && window.MGS_STRINGS.swipeHint) || 'Swipe a row for quick actions';
+                hint.appendChild(svg);
+                hint.appendChild(span);
+                card.insertBefore(hint, card.firstChild);
+            }
+            localStorage.setItem('mgs-swipe-hint', '1');
+        }
+    } catch (e) {}
 
     // Tap outside an open row to snap it closed.
     document.addEventListener(

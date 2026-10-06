@@ -46,37 +46,18 @@
         </a>
     </div>
 
-    <!-- Summary Metrics -->
-    <div class="grid-responsive-3 mb-6 stagger">
-        <div class="metric-tile">
-            <span class="metric-label">{{ __('messages.revenue') }} &middot; {{ __('messages.afn') }}</span>
-            <span class="metric-value text-primary-600 dark:text-primary-400" data-count="{{ $totalRevenueAFN }}">{{ number_format($totalRevenueAFN) }}</span>
-            <span class="text-[9px] text-ink-400">{{ __('messages.afn') }}</span>
-        </div>
-        <div class="metric-tile">
-            <span class="metric-label">{{ __('messages.revenue') }} &middot; {{ __('messages.usd') }}</span>
-            <span class="metric-value text-primary-600 dark:text-primary-400" data-count="{{ $totalRevenueUSD }}">{{ number_format($totalRevenueUSD) }}</span>
-            <span class="text-[9px] text-ink-400">{{ __('messages.usd') }}</span>
-        </div>
-        <div class="metric-tile">
-            <span class="metric-label">{{ __('messages.expenses') }} &middot; {{ __('messages.afn') }}</span>
-            <span class="metric-value text-danger-500" data-count="{{ $totalExpenseAFN }}">{{ number_format($totalExpenseAFN) }}</span>
-            <span class="text-[9px] text-ink-400">{{ __('messages.afn') }}</span>
-        </div>
-        <div class="metric-tile">
-            <span class="metric-label">{{ __('messages.expenses') }} &middot; {{ __('messages.usd') }}</span>
-            <span class="metric-value text-danger-500" data-count="{{ $totalExpenseUSD }}">{{ number_format($totalExpenseUSD) }}</span>
-            <span class="text-[9px] text-ink-400">{{ __('messages.usd') }}</span>
-        </div>
+    <!-- Summary Metrics — revenue / expense detail is in the
+         hero above; these two are the actionable counters -->
+    <div class="grid grid-cols-2 gap-3 mb-6 stagger">
         <div class="metric-tile">
             <span class="metric-label">{{ __('messages.pending') }}</span>
             <span class="metric-value text-accent-500" data-count="{{ $pendingOrders + $pendingPayments }}">{{ $pendingOrders + $pendingPayments }}</span>
-            <span class="text-[9px] text-ink-400">{{ __('messages.documents') }}</span>
+            <span class="text-[10px] text-ink-400">{{ __('messages.documents') }}</span>
         </div>
         <div class="metric-tile">
             <span class="metric-label">{{ __('messages.processing') }}</span>
             <span class="metric-value text-secondary-500" data-count="{{ $processingOrders }}">{{ $processingOrders }}</span>
-            <span class="text-[9px] text-ink-400">{{ __('messages.orders') }}</span>
+            <span class="text-[10px] text-ink-400">{{ __('messages.orders') }}</span>
         </div>
     </div>
 
@@ -86,6 +67,10 @@
             <div class="flex items-center gap-2 mb-3">
                 <div class="w-1 h-5 rounded-full bg-primary-500"></div>
                 <h3 class="text-xs font-bold text-ink-800 dark:text-ink-200">{{ __('messages.weekly_revenue') }}</h3>
+                <div class="ml-auto flex p-0.5 rounded-lg bg-ink-100 dark:bg-white/[0.05] border border-ink-200/70 dark:border-white/[0.06]" data-chart-toggle>
+                    <button type="button" class="px-2.5 py-1 rounded-md text-[10px] font-bold bg-white dark:bg-white/10 text-ink-900 dark:text-white shadow-sm" data-currency="afn">{{ __('messages.afn') }}</button>
+                    <button type="button" class="px-2.5 py-1 rounded-md text-[10px] font-bold text-ink-500 dark:text-ink-400" data-currency="usd">{{ __('messages.usd') }}</button>
+                </div>
             </div>
             <div class="relative" style="height: 160px;">
                 <canvas id="weeklyRevenueChart"></canvas>
@@ -95,6 +80,10 @@
             <div class="flex items-center gap-2 mb-3">
                 <div class="w-1 h-5 rounded-full bg-danger-400"></div>
                 <h3 class="text-xs font-bold text-ink-800 dark:text-ink-200">{{ __('messages.weekly_expenses') }}</h3>
+                <div class="ml-auto flex p-0.5 rounded-lg bg-ink-100 dark:bg-white/[0.05] border border-ink-200/70 dark:border-white/[0.06]" data-chart-toggle>
+                    <button type="button" class="px-2.5 py-1 rounded-md text-[10px] font-bold bg-white dark:bg-white/10 text-ink-900 dark:text-white shadow-sm" data-currency="afn">{{ __('messages.afn') }}</button>
+                    <button type="button" class="px-2.5 py-1 rounded-md text-[10px] font-bold text-ink-500 dark:text-ink-400" data-currency="usd">{{ __('messages.usd') }}</button>
+                </div>
             </div>
             <div class="relative" style="height: 160px;">
                 <canvas id="weeklyExpenseChart"></canvas>
@@ -330,6 +319,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     {
                         label: '{{ __('messages.revenue') }} ({{ __('messages.afn') }})',
                         data: @json($weeklyRevenue['data_afn']),
+                        currency: 'afn',
                         backgroundColor: revenueGradient,
                         borderColor: C.brand,
                         borderWidth: 2,
@@ -338,12 +328,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         pointBackgroundColor: C.brand,
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2,
-                        pointRadius: 3,
-                        pointHoverRadius: 5
+                        pointRadius: 4,
+                        pointHoverRadius: 7
                     },
                     {
                         label: '{{ __('messages.revenue') }} ({{ __('messages.usd') }})',
                         data: @json($weeklyRevenue['data_usd']),
+                        currency: 'usd',
+                        hidden: true,
                         backgroundColor: usdGradient,
                         borderColor: C.secondary,
                         borderWidth: 2,
@@ -352,8 +344,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         pointBackgroundColor: C.secondary,
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2,
-                        pointRadius: 3,
-                        pointHoverRadius: 5
+                        pointRadius: 4,
+                        pointHoverRadius: 7
                     }
                 ]
             },
@@ -361,21 +353,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 ...commonOptions,
                 plugins: {
                     ...commonOptions.plugins,
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            boxWidth: 8,
-                            boxHeight: 8,
-                            usePointStyle: true,
-                            font: { size: 9 }
-                        }
-                    },
-                    tooltip: {
-                        ...commonOptions.plugins.tooltip,
-                        callbacks: {
-                            label: function(context) {
-                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                boxWidth: 8,
+                                boxHeight: 8,
+                                usePointStyle: true,
+                                font: { size: 10 }
+                            }
+                        },
+                        tooltip: {
+                            ...commonOptions.plugins.tooltip,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+                                }
                             }
                         }
                     }
@@ -393,6 +386,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     {
                         label: '{{ __('messages.expenses') }} ({{ __('messages.afn') }})',
                         data: @json($weeklyExpenses['data_afn']),
+                        currency: 'afn',
                         backgroundColor: MGSCharts.alpha(C.danger, 0.6),
                         borderColor: C.danger,
                         borderWidth: 0,
@@ -401,6 +395,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     {
                         label: '{{ __('messages.expenses') }} ({{ __('messages.usd') }})',
                         data: @json($weeklyExpenses['data_usd']),
+                        currency: 'usd',
+                        hidden: true,
                         backgroundColor: MGSCharts.alpha(C.secondary, 0.6),
                         borderColor: C.secondary,
                         borderWidth: 0,
@@ -412,26 +408,48 @@ document.addEventListener('DOMContentLoaded', function () {
                 ...commonOptions,
                 plugins: {
                     ...commonOptions.plugins,
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            boxWidth: 8,
-                            boxHeight: 8,
-                            usePointStyle: true,
-                            font: { size: 9 }
-                        }
-                    },
-                    tooltip: {
-                        ...commonOptions.plugins.tooltip,
-                        callbacks: {
-                            label: function(context) {
-                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                boxWidth: 8,
+                                boxHeight: 8,
+                                usePointStyle: true,
+                                font: { size: 10 }
+                            }
+                        },
+                        tooltip: {
+                            ...commonOptions.plugins.tooltip,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+                                }
                             }
                         }
                     }
                 }
             }
+        });
+
+        // Currency toggle — AFN and USD differ by ~70x, so both
+        // series on one axis flattens the smaller one. Each
+        // chart shows a single currency at a time.
+        document.querySelectorAll('[data-chart-toggle]').forEach(function (group) {
+            var canvas = group.closest('.chart-container').querySelector('canvas');
+            group.querySelectorAll('button').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    group.querySelectorAll('button').forEach(function (b) {
+                        b.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold text-ink-500 dark:text-ink-400';
+                    });
+                    btn.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold bg-white dark:bg-white/10 text-ink-900 dark:text-white shadow-sm';
+                    var chart = window.Chart && Chart.getChart ? Chart.getChart(canvas) : null;
+                    if (!chart) return;
+                    chart.data.datasets.forEach(function (ds) {
+                        if (ds.currency) ds.hidden = ds.currency !== btn.dataset.currency;
+                    });
+                    chart.update();
+                });
+            });
         });
     });
 });

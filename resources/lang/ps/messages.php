@@ -16,6 +16,7 @@ return [
     'amount_amount' => 'اندازه',
     'another_product' => 'بل محصول',
     'are_you_sure' => 'آیا ډاډه یاست؟',
+    'swipe_hint' => 'د چټکو کړنو لپاره ردیف سوايپ کړئ',
     'duplicate_submission' => 'دا فورم مخکې هم لیږل شوی و — هیڅ تکراري معلومات ذخیره نه شول.',
     'assets' => 'شتمنۍ',
     'assets_section' => 'شتمني',

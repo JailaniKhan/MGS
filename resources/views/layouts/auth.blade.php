@@ -7,7 +7,7 @@
 <html lang="{{ $locale }}" dir="{{ $isRtl ? 'rtl' : 'ltr' }}" data-language-url="{{ route('language.update') }}">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>MGS - @yield('title', __('messages.login'))</title>
     <script>

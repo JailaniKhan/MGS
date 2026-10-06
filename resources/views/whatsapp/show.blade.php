@@ -32,10 +32,10 @@
      class="relative flex flex-col h-[calc(100dvh-3.5rem)]">
 
     {{-- Conversation header --}}
-    <div class="relative flex items-center gap-3 px-3 py-2.5 bg-white/95 dark:bg-[#14161a]/95 backdrop-blur-xl border-b border-ink-100 dark:border-white/[0.06] sticky top-14 z-20">
+    <div class="relative flex items-center gap-3 px-3 py-2.5 bg-white/95 dark:bg-[#14161a]/95 backdrop-blur-xl border-b border-ink-100 dark:border-white/[0.06] sticky wa-header-stick z-20">
         <div class="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-brand/30 dark:via-brand/40 to-transparent" aria-hidden="true"></div>
 
-        <x-back-button href="{{ route('whatsapp.chats.index') }}" class="!w-9 !h-9 !rounded-xl"/>
+        <x-back-button href="{{ route('whatsapp.chats.index') }}"/>
 
         <div class="wa-avatar relative overflow-hidden w-11 h-11 rounded-[0.95rem] flex items-center justify-center text-sm font-bold text-white {{ $avatarClass }} flex-shrink-0 ring-1 ring-black/[0.06] dark:ring-white/[0.1]">
             {{ $initials }}
@@ -53,7 +53,7 @@
         </div>
 
         @if ($profileRoute)
-            <x-icon-button name="user" href="{{ $profileRoute }}" label="{{ $type === 'customer' ? __('messages.customer') : __('messages.supplier') }}" class="!w-9 !h-9 !rounded-xl"/>
+            <x-icon-button name="user" href="{{ $profileRoute }}" label="{{ $type === 'customer' ? __('messages.customer') : __('messages.supplier') }}"/>
         @endif
     </div>
 

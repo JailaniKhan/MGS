@@ -16,6 +16,7 @@ return [
     'amount_amount' => 'Amount',
     'another_product' => 'Another Product',
     'are_you_sure' => 'Are you sure?',
+    'swipe_hint' => 'Swipe a row for quick actions',
     'duplicate_submission' => 'This was already submitted — no duplicate was saved.',
     'assets' => 'Assets',
     'assets_section' => 'Assets',

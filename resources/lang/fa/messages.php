@@ -16,6 +16,7 @@ return [
     'amount_amount' => 'مقدار',
     'another_product' => 'محصول دیگر',
     'are_you_sure' => 'آیا مطمئن هستید؟',
+    'swipe_hint' => 'برای عملیات سریع، روی ردیف بکشید',
     'duplicate_submission' => 'این فرم قبلاً ارسال شده بود — هیچ چیز تکراری ذخیره نشد.',
     'assets' => 'دارایی‌ها',
     'assets_section' => 'دارایی‌ها',

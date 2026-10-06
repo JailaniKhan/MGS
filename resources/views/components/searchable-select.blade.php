@@ -136,14 +136,53 @@
         });
     }
 
+    // The dropdown is position:fixed so it can never be clipped by
+    // overflow-hidden ancestors (cards, list rows, tables). Placed in
+    // viewport coordinates; flips above the input when there is no
+    // room below it.
+    function mgsPosition(root) {
+        var input = root.querySelector('[data-searchable-input]');
+        var list = root.querySelector('[data-searchable-list]');
+        var r = input.getBoundingClientRect();
+        var MAX_H = 256; /* matches the list's max-h-64 */
+        var spaceBelow = window.innerHeight - r.bottom - 8;
+        var openUp = spaceBelow < MAX_H && r.top > spaceBelow;
+        list.style.position = 'fixed';
+        list.style.top = openUp
+            ? Math.max(8, r.top - MAX_H - 4) + 'px'
+            : r.bottom + 4 + 'px';
+        list.style.left = r.left + 'px';
+        list.style.right = 'auto';
+        list.style.width = r.width + 'px';
+    }
+
+    // Keep the dropdown glued to its input while it is open.
+    var mgsUntrack = function () {};
+    function mgsTrack(root) {
+        mgsUntrack();
+        var move = function () {
+            mgsPosition(root);
+        };
+        window.addEventListener('scroll', move, true);
+        window.addEventListener('resize', move);
+        mgsUntrack = function () {
+            window.removeEventListener('scroll', move, true);
+            window.removeEventListener('resize', move);
+        };
+    }
+
     function mgsOpen(root) {
         mgsRender(root);
         mgsHighlight(root);
-        root.querySelector('[data-searchable-list]').classList.remove('hidden');
+        var list = root.querySelector('[data-searchable-list]');
+        list.classList.remove('hidden');
+        mgsPosition(root);
+        mgsTrack(root);
     }
 
     function mgsClose(root) {
         root.querySelector('[data-searchable-list]').classList.add('hidden');
+        mgsUntrack();
         mgsSyncDisplay(root);
     }
 
@@ -177,6 +216,7 @@
             mgsRender(root);
             mgsHighlight(root);
             list.classList.remove('hidden');
+            mgsPosition(root);
         });
         input.addEventListener('click', function () { mgsOpen(root); });
         input.addEventListener('keydown', function (e) {

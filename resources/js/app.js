@@ -30,7 +30,14 @@
             if (toast.dataset.bound) return;
             toast.dataset.bound = '1';
 
-            const auto = setTimeout(() => dismiss(toast), 4500);
+            let auto = setTimeout(() => dismiss(toast), 4500);
+
+            // Pause the countdown while the user is reading the
+            // message — errors especially must not vanish mid-read.
+            toast.addEventListener('mouseenter', () => clearTimeout(auto));
+            toast.addEventListener('mouseleave', () => {
+                auto = setTimeout(() => dismiss(toast), 2500);
+            });
 
             const closeBtn = toast.querySelector('button');
             if (closeBtn) {

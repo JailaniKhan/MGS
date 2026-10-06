@@ -94,11 +94,11 @@ window.MGSCharts = {
                     grid: {
                         color: dark ? 'rgba(255,255,255,0.05)' : 'rgba(20,20,21,0.05)',
                     },
-                    ticks: { font: { size: 9 }, padding: 6, maxTicksLimit: 4 },
+                    ticks: { font: { size: 10 }, padding: 6, maxTicksLimit: 4 },
                 },
                 x: {
                     grid: { display: false },
-                    ticks: { font: { size: 9 }, maxTicksLimit: 7 },
+                    ticks: { font: { size: 10 }, maxTicksLimit: 7 },
                 },
             },
         };
