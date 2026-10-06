@@ -31,6 +31,48 @@ class BackupIndexTest extends TestCase
         $response->assertDontSee('..json', false);
     }
 
+    public function test_index_badges_both_twins_of_a_new_backup(): void
+    {
+        Storage::fake('local');
+
+        $user = User::create(['name' => 'T3', 'email' => 'bi3@test.dev', 'password' => bcrypt('x')]);
+        $this->actingAs($user);
+        $disk = Storage::disk('local');
+        $dir = 'backups/user_'.$user->id;
+        // Sized so the pair and the PDF alone round to visibly different KB.
+        $disk->put("{$dir}/backup_2026_09_06_09_00_00.pdf", str_repeat('p', 1500));
+        $disk->put("{$dir}/backup_2026_09_06_09_00_00.json", str_repeat('j', 500));
+
+        // Every new backup writes both artifacts, so the row must show both
+        // badges. A PDF-only badge made the JSON read as if it was never
+        // created.
+        $response = $this->get('/backup');
+        $response->assertOk();
+        $response->assertSeeInOrder(['PDF', 'JSON']);
+
+        // The size shown is the whole archive, not just the PDF: the row now
+        // claims to be both files, so counting one would understate it.
+        $response->assertSee('1.95 KB');
+        $response->assertDontSee('1.46 KB');
+    }
+
+    public function test_index_badges_only_the_half_that_exists(): void
+    {
+        Storage::fake('local');
+
+        $user = User::create(['name' => 'T4', 'email' => 'bi4@test.dev', 'password' => bcrypt('x')]);
+        $this->actingAs($user);
+        $disk = Storage::disk('local');
+        $dir = 'backups/user_'.$user->id;
+        // JSON-only legacy archive: one badge, not two.
+        $disk->put("{$dir}/backup_2026_07_04_10_00_00.json", '{}');
+
+        $response = $this->get('/backup');
+        $response->assertOk();
+        $response->assertSee('JSON');
+        $response->assertDontSee('PDF');
+    }
+
     public function test_index_lists_json_only_backup_and_delete_removes_it(): void
     {
         Storage::fake('local');

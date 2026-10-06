@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AddsListBalances;
+use App\Http\Controllers\Concerns\DeliversDocuments;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Purchase;
@@ -10,6 +11,7 @@ use App\Models\Setting;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Services\Billing\BillService;
+use App\Services\Billing\InvoicePdfService;
 use App\Services\Billing\PartyBalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +20,7 @@ use Illuminate\Validation\ValidationException;
 class PurchaseController extends Controller
 {
     use AddsListBalances;
+    use DeliversDocuments;
 
     public function index(Request $request)
     {
@@ -169,12 +172,34 @@ class PurchaseController extends Controller
 
         $purchase->purchaseItems()->createMany($purchaseItems);
 
-        // A purchase with a lot number sets the product's current lot forward.
+        // A purchase sets the product's lot AND price forward: the last line
+        // for a product wins, written to the price column of the pool the
+        // goods were paid in. Only products already priced in this currency
+        // take the price forward — unpriced ones stay unpriced so they remain
+        // purchasable in both currencies (the first purchase must not lock
+        // the price currency). The currency-match rule above guarantees a
+        // priced product is only ever bought in its priced currency.
+        $priceColumn = $validated['currency'] === 'USD' ? 'price_usd' : 'price';
+        $priced = [];
+        foreach ($products as $product) {
+            $priced[$product->id] = $validated['currency'] === 'USD'
+                ? (float) ($product->price_usd ?? 0) > 0
+                : (float) $product->price > 0;
+        }
+        $latestLine = [];
         foreach ($purchaseItems as $item) {
+            $latestLine[$item['product_id']] = $item;
+        }
+        foreach ($latestLine as $productId => $item) {
+            $update = [];
+            if ($priced[$productId]) {
+                $update[$priceColumn] = number_format((float) $item['unit_price'], 2, '.', '');
+            }
             if (! empty($item['lot_number'])) {
-                Product::where('id', $item['product_id'])
-                    ->where('lot_number', '<>', $item['lot_number'])
-                    ->update(['lot_number' => $item['lot_number']]);
+                $update['lot_number'] = $item['lot_number'];
+            }
+            if ($update !== []) {
+                Product::where('id', $productId)->update($update);
             }
         }
 
@@ -208,15 +233,94 @@ class PurchaseController extends Controller
 
     public function print(Purchase $purchase)
     {
-        $purchase->load('supplier', 'purchaseItems.product.unit', 'purchasePayments');
+        ['company' => $company, 'number' => $billNumber, 'pending' => $totalPending] = $this->billContext($purchase);
+
+        // Same device/browser split as OrderController::print: the WebView
+        // has no print pipeline, so the preview page carries the view / save /
+        // WhatsApp actions itself (device gate lives inside the view).
+        return view('purchases.print', compact('purchase', 'company', 'billNumber', 'totalPending'));
+    }
+
+    /** Open the bill PDF once in the phone's viewer. */
+    public function openPdf(Purchase $purchase)
+    {
+        ['binary' => $binary, 'number' => $number] = $this->renderBill($purchase);
+
+        return $this->openDocument(
+            $binary,
+            $number.'.pdf',
+            __('messages.purchase').' '.$number,
+            route('purchases.print', $purchase),
+        );
+    }
+
+    /** Keep the bill PDF in the phone's Downloads/MGS folder. */
+    public function savePdf(Purchase $purchase)
+    {
+        ['binary' => $binary, 'number' => $number] = $this->renderBill($purchase);
+
+        return $this->saveDocument(
+            $binary,
+            $number.'.pdf',
+            __('messages.purchase').' '.$number,
+            route('purchases.print', $purchase),
+        );
+    }
+
+    /** Hand the bill PDF to the share sheet (WhatsApp first). */
+    public function sharePdf(Purchase $purchase)
+    {
+        ['binary' => $binary, 'number' => $number] = $this->renderBill($purchase);
+
+        return $this->shareDocument(
+            $binary,
+            $number.'.pdf',
+            __('messages.purchase').' '.$number,
+            $this->billCaption($purchase, $number),
+            route('purchases.print', $purchase),
+        );
+    }
+
+    /** Send the bill PDF to the party over the WhatsApp gateway. */
+    public function sendPdf(Purchase $purchase, BillService $bills)
+    {
+        ['binary' => $binary, 'number' => $number] = $this->renderBill($purchase);
+
+        $result = $bills->sendPdf(
+            $purchase->party,
+            (string) ($purchase->party?->phone ?? ''),
+            $binary,
+            $number.'.pdf',
+            $this->billCaption($purchase, $number),
+            (float) $purchase->total_amount,
+            $purchase->currency,
+        );
+
+        return back()->with(
+            $result['ok'] ? 'success' : 'error',
+            $result['ok']
+                ? __('messages.pdf_sent', ['phone' => $purchase->party?->phone])
+                : $result['error'],
+        );
+    }
+
+    /**
+     * Everything the print page and the PDF renderer need about one purchase.
+     *
+     * @return array{company: array<string, string>, number: string, pending: float}
+     */
+    private function billContext(Purchase $purchase): array
+    {
+        $purchase->load('supplier', 'customer', 'purchaseItems.product.unit', 'purchasePayments');
+
         $company = [
             'name' => Setting::get('company_name', 'My Business'),
             'address' => Setting::get('company_address', ''),
             'phone' => Setting::get('company_phone', ''),
             'email' => Setting::get('company_email', ''),
         ];
-        $billPrefix = Setting::get('purchase_prefix', 'PUR-');
-        $billNumber = $billPrefix.$purchase->id;
+
+        $billNumber = Setting::get('purchase_prefix', 'PUR-').$purchase->id;
 
         // Party-wide pending in the purchase's currency (mirrors the ledger).
         $totalPending = $purchase->person_type && $purchase->person_id
@@ -224,7 +328,29 @@ class PurchaseController extends Controller
                 ->pendingAmount($purchase->person_type, $purchase->person_id, $purchase->currency)
             : (float) $purchase->remaining_amount;
 
-        return view('purchases.print', compact('purchase', 'company', 'billNumber', 'totalPending'));
+        return ['company' => $company, 'number' => $billNumber, 'pending' => $totalPending];
+    }
+
+    /**
+     * Rendered bill bytes + its document number.
+     *
+     * @return array{binary: string, number: string}
+     */
+    private function renderBill(Purchase $purchase): array
+    {
+        ['company' => $company, 'number' => $number, 'pending' => $pending] = $this->billContext($purchase);
+
+        return [
+            'binary' => app(InvoicePdfService::class)->forPurchase($purchase, $company, $number, $pending),
+            'number' => $number,
+        ];
+    }
+
+    /** Short caption that rides along with the PDF into WhatsApp. */
+    private function billCaption(Purchase $purchase, string $number): string
+    {
+        return __('messages.purchase').' '.$number.' — '.money_format($purchase->total_amount)
+            .' '.($purchase->currency === 'USD' ? '$' : __('messages.afn'));
     }
 
     public function sendWhatsApp(Purchase $purchase, BillService $bills)

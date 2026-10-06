@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\Reminder;
 use App\Models\Supplier;
+use App\Services\Billing\PartyBalanceService;
 use App\Services\Reminder\ReminderService;
 use Illuminate\Http\Request;
 
@@ -22,12 +24,12 @@ class ReminderController extends Controller
         $currency = $validated['currency'] ?? 'AFN';
         // Canonical pending amount (same rule as orders/wallet/ledger pages):
         // only non-cancelled docs, same-currency payments, returns reduce.
-        $pendingAmount = app(\App\Services\Billing\PartyBalanceService::class)
+        $pendingAmount = app(PartyBalanceService::class)
             ->pendingAmount('customer', $customer->id, $currency);
 
         $amount = $validated['amount'] ?? (float) $pendingAmount;
 
-        if (!$customer->phone) {
+        if (! $customer->phone) {
             return $request->expectsJson()
                 ? response()->json(['error' => __('messages.customer_no_phone')], 422)
                 : back()->with('error', __('messages.customer_no_phone'));
@@ -77,12 +79,12 @@ class ReminderController extends Controller
 
         $currency = $validated['currency'] ?? 'AFN';
         // Canonical pending amount (same rule as orders/wallet/ledger pages).
-        $pendingAmount = app(\App\Services\Billing\PartyBalanceService::class)
+        $pendingAmount = app(PartyBalanceService::class)
             ->pendingAmount('supplier', $supplier->id, $currency);
 
         $amount = $validated['amount'] ?? (float) $pendingAmount;
 
-        if (!$supplier->phone) {
+        if (! $supplier->phone) {
             return $request->expectsJson()
                 ? response()->json(['error' => __('messages.supplier_no_phone')], 422)
                 : back()->with('error', __('messages.supplier_no_phone'));
@@ -124,7 +126,7 @@ class ReminderController extends Controller
 
     public function history()
     {
-        $reminders = \App\Models\Reminder::with('remindable')
+        $reminders = Reminder::with('remindable')
             ->orderBy('created_at', 'desc')
             ->paginate(self::PER_PAGE)
             ->withQueryString();

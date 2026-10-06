@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
 use App\Services\WhatsApp\OpenWaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -26,10 +27,11 @@ class OpenWaWebhookController extends Controller
         }
 
         $signature = $request->header('X-OpenWA-Signature') ?: $request->header('X-Hub-Signature-256');
-        $expected = 'sha256=' . hash_hmac('sha256', $request->getContent(), $secret);
+        $expected = 'sha256='.hash_hmac('sha256', $request->getContent(), $secret);
 
-        if (!hash_equals($expected, (string) $signature)) {
+        if (! hash_equals($expected, (string) $signature)) {
             Log::warning('OpenWA webhook rejected: invalid signature');
+
             return response()->json(['error' => 'invalid signature'], 401);
         }
 
@@ -54,34 +56,34 @@ class OpenWaWebhookController extends Controller
     {
         try {
             $chatId = data_get($payload, 'data.from') ?? data_get($payload, 'data.author');
-            if (!$chatId) {
+            if (! $chatId) {
                 return;
             }
 
             $phone = OpenWaService::chatIdToPhone((string) $chatId);
-            if (!$phone) {
+            if (! $phone) {
                 return;
             }
 
             // Build the set of plausible phone formats the customer row may store:
             //   +93700123456 | 93700123456 | 0700123456 | 700 12 34 56
             $digits = preg_replace('/[^0-9]/', '', $phone);
-            $local  = $digits;
+            $local = $digits;
             if (str_starts_with($local, '93')) {
-                $local = '0' . substr($local, 2);
+                $local = '0'.substr($local, 2);
             }
 
             $needles = array_unique(array_filter([
                 $phone,
                 $digits,
                 $local,
-                '+' . $digits,
+                '+'.$digits,
             ]));
 
-            $query = \App\Models\Customer::query();
+            $query = Customer::query();
             foreach ($needles as $i => $needle) {
                 $method = $i === 0 ? 'where' : 'orWhere';
-                $query->{$method}('phone', 'like', '%' . $needle . '%');
+                $query->{$method}('phone', 'like', '%'.$needle.'%');
             }
             $customer = $query->first();
 

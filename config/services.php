@@ -55,6 +55,20 @@ return [
         'api_key' => env('ANTHROPIC_API_KEY'),
     ],
 
+    /*
+    | TypeSafe (Jev, System One)
+    |
+    | Jev returns typed judgments (choices, probabilities) rather than text.
+    | It powers the reminder-tone decision layer: code owns message
+    | composition, Jev supplies the common-sense judgment of how pressing
+    | a reminder should be. Docs: https://docs.typesafe.ai
+    */
+    'typesafe' => [
+        'api_key' => env('TYPESAFE_API_KEY'),
+        'url' => env('TYPESAFE_URL', 'https://api.typesafe.ai/v1/systemone'),
+        'model' => env('TYPESAFE_MODEL', 'jev-latest'),
+    ],
+
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),

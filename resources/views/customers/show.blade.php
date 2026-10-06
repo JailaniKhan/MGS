@@ -261,7 +261,10 @@
         } else {
             const ov = document.getElementById('page-skeleton');
             if (ov) ov.hidden = false;
-            form.submit();
+            // mgsSubmitForm keeps the platform's submit listeners firing so
+            // the NativePHP bridge can capture _token/_method (a bare
+            // form.submit() reaches Laravel with an empty body on device).
+            if (window.mgsSubmitForm) { window.mgsSubmitForm(form); } else { form.submit(); }
         }
         return false;
     }

@@ -20,6 +20,7 @@ class Reminder extends Model
         'media_path',
         'media_type',
         'status',
+        'direction',
         'provider_message_id',
         'error_message',
         'sent_at',

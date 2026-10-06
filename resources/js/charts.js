@@ -21,20 +21,38 @@ function token(name) {
 /** hex -> rgba() string, e.g. rgba('#10ae64', 0.2) */
 export function alpha(hex, a) {
     const h = hex.replace('#', '');
-    const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+    const n = parseInt(
+        h.length === 3
+            ? h
+                  .split('')
+                  .map((c) => c + c)
+                  .join('')
+            : h,
+        16
+    );
     return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
 window.MGSCharts = {
     /** Brand palette resolved live from the app.css design tokens. */
     colors: {
-        get brand() { return token('--color-brand'); },
-        get secondary() { return token('--color-secondary-500'); },
-        get danger() { return token('--color-danger-500'); },
-        get accent() { return token('--color-accent-500'); },
+        get brand() {
+            return token('--color-brand');
+        },
+        get secondary() {
+            return token('--color-secondary-500');
+        },
+        get danger() {
+            return token('--color-danger-500');
+        },
+        get accent() {
+            return token('--color-accent-500');
+        },
     },
     alpha,
-    isDark() { return document.documentElement.classList.contains('dark'); },
+    isDark() {
+        return document.documentElement.classList.contains('dark');
+    },
 
     /**
      * Run fn(Chart) once window.Chart is available (module scripts are deferred).
@@ -90,8 +108,6 @@ window.MGSCharts = {
     applyDefaults() {
         Chart.defaults.font.family = "'Plus Jakarta Sans', 'Vazirmatn', sans-serif";
         Chart.defaults.font.size = 10;
-        Chart.defaults.color = this.isDark()
-            ? token('--color-ink-400')
-            : token('--color-ink-500');
+        Chart.defaults.color = this.isDark() ? token('--color-ink-400') : token('--color-ink-500');
     },
 };

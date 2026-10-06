@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\WhatsApp\OpenWaManager;
+use App\Services\WhatsApp\OpenWaService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -12,7 +13,7 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::call(function () {
-    if (!config('services.openwa.auto_start', false)) {
+    if (! config('services.openwa.auto_start', false)) {
         return;
     }
 
@@ -34,12 +35,12 @@ Schedule::call(function () {
     $safe = static function (callable $fn, mixed $fallback = null): mixed {
         try {
             return $fn();
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             return $fallback;
         }
     };
 
-    $failures = (int) $safe(fn() => Cache::get('openwa:health:failures', 0), 0);
+    $failures = (int) $safe(fn () => Cache::get('openwa:health:failures', 0), 0);
 
     if ($failures >= 10) {
         return;
@@ -48,7 +49,7 @@ Schedule::call(function () {
     try {
         $manager = app(OpenWaManager::class);
 
-        if (!$manager->isRunning()) {
+        if (! $manager->isRunning()) {
             // Apply backoff: after 4+ consecutive failures, only attempt a
             // restart every 5 minutes (skip the other 4 ticks out of 5).
             if ($failures >= 4 && (now()->minute % 5) !== 0) {
@@ -59,36 +60,46 @@ Schedule::call(function () {
                 'consecutive_failures' => $failures,
             ]);
             $started = $manager->start();
-            if (!$started) {
-                $safe(fn() => Cache::increment('openwa:health:failures'));
+            if (! $started) {
+                $safe(fn () => Cache::increment('openwa:health:failures'));
                 Log::error('OpenWA health-check: start failed', [
                     'consecutive_failures' => $failures + 1,
                 ]);
+
                 return;
             }
 
-            $safe(fn() => Cache::forget('openwa:health:failures'));
+            $safe(fn () => Cache::forget('openwa:health:failures'));
+
             return;
         }
 
         // Gateway is up — clear the failure counter and make sure the
         // WhatsApp session is also active.
         if ($failures > 0) {
-            $safe(fn() => Cache::forget('openwa:health:failures'));
+            $safe(fn () => Cache::forget('openwa:health:failures'));
         }
 
-        $openWa = app(\App\Services\WhatsApp\OpenWaService::class);
+        $openWa = app(OpenWaService::class);
         $status = $openWa->sessionStatus();
 
         if ($status && ($status['status'] ?? null) === 'disconnected') {
             Log::info('OpenWA health-check: session disconnected, starting');
             $manager->startSession();
         }
-    } catch (\Throwable $e) {
-        $safe(fn() => Cache::increment('openwa:health:failures'));
+    } catch (Throwable $e) {
+        $safe(fn () => Cache::increment('openwa:health:failures'));
         Log::error('OpenWA health-check error', [
             'error' => $e->getMessage(),
             'consecutive_failures' => $failures + 1,
         ]);
     }
 })->everyMinute()->name('openwa-health-check');
+
+// Inbound WhatsApp replies: poll the gateway's buffer and fold new messages
+// into the chats. Idempotent on provider_message_id, so the webhook (when
+// configured) racing this is harmless.
+Schedule::command('whatsapp:sync-inbound')
+    ->everyMinute()
+    ->name('openwa-inbound-sync')
+    ->withoutOverlapping();

@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
     @php
@@ -219,11 +219,14 @@
                 const msg = encodeURIComponent(data.message);
                 openNativeSms(p, msg);
             })
-            .catch(() => { form.submit(); });
+            .catch(() => {
+                if (window.mgsSubmitForm) { window.mgsSubmitForm(form); } else { form.submit(); }
+            });
         } else {
             const ov = document.getElementById('page-skeleton');
             if (ov) ov.hidden = false;
-            form.submit();
+            // Same reason as above: keep the platform submit listeners alive.
+            if (window.mgsSubmitForm) { window.mgsSubmitForm(form); } else { form.submit(); }
         }
         return false;
     }

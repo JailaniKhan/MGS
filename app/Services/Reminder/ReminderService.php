@@ -86,7 +86,7 @@ class ReminderService
 
         // SMS: return a lightweight object with the message & status for the frontend
         // to open the native SMS app. No API call, no DB record.
-        $reminder = new Reminder();
+        $reminder = new Reminder;
         $reminder->message = $message;
         $reminder->status = 'drafted';
         $reminder->phone = $phone;

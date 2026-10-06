@@ -1,0 +1,38 @@
+# Dependencies & vendored
+node_modules
+vendor
+
+# Laravel generated
+storage
+bootstrap/cache
+public/build
+public/hot
+logs
+
+# Lock files (machine-generated)
+package-lock.json
+composer.lock
+
+# NativePHP / Android build artifacts
+nativephp
+native-patches
+
+# Agent & IDE tooling
+.agents
+.claude
+.idea
+.kilo
+.opencode
+.repowise
+.vscode
+.husky
+
+# Sensitive / binary
+credentials
+data
+*.jks
+*.apk
+MGS-release-signed.apk
+
+# Blade has no Prettier parser; formatted by Pint instead
+*.blade.php

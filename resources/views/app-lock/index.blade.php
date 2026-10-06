@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
 <div class="page-enter">
@@ -68,7 +68,7 @@
             </div>
             <form action="{{ route('app-lock.toggle-biometric') }}" method="POST">
                 @csrf
-                <button type="submit" class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                <button type="submit" class="switch-toggle relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors
                     {{ $biometricEnabled === '1' ? 'bg-primary-500' : 'bg-ink-200 dark:bg-ink-700' }}">
                     <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform
                         {{ $biometricEnabled === '1' ? 'translate-x-6' : 'translate-x-1' }}"/>

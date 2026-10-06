@@ -1,23 +1,30 @@
 {
-    "$schema": "https://www.schemastore.org/package.json",
-    "private": true,
-    "type": "module",
-    "scripts": {
-        "build": "vite build",
-        "dev": "vite"
-    },
-    "devDependencies": {
-        "@tailwindcss/vite": "^4.0.0",
-        "concurrently": "^9.0.1",
-        "laravel-vite-plugin": "^3.1",
-        "postcss-rtlcss": "^6.0.0",
-        "tailwindcss": "^4.0.0",
-        "vite": "^8.0.0"
-    },
-    "dependencies": {
-        "@ai-sdk/openai-compatible": "^3.0.14",
-        "chart.js": "^4.5.1",
-        "heroicons": "^2.2.0",
-        "tw-shimmer": "^0.4.11"
-    }
+  "$schema": "https://www.schemastore.org/package.json",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "lint": "prettier --check . && php vendor/bin/pint --test",
+    "lint:fix": "prettier --write . && php vendor/bin/pint",
+    "test": "php artisan test",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "concurrently": "^9.0.1",
+    "husky": "^9.1.7",
+    "laravel-vite-plugin": "^3.1",
+    "lint-staged": "^17.6.0",
+    "postcss-rtlcss": "^6.0.0",
+    "prettier": "^3.9.9",
+    "tailwindcss": "^4.0.0",
+    "vite": "^8.0.0"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.14",
+    "chart.js": "^4.5.1",
+    "heroicons": "^2.2.0",
+    "tw-shimmer": "^0.4.11"
+  }
 }

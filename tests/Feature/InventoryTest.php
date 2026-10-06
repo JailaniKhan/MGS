@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -586,7 +587,7 @@ class InventoryTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        \App\Models\StockMovement::create([
+        StockMovement::create([
             'user_id' => $user->id,
             'product_id' => $product->id,
             'quantity_change' => 7,
@@ -595,7 +596,7 @@ class InventoryTest extends TestCase
             'reference_type' => 'purchase',
             'reference_id' => $purchaseId,
         ]);
-        \App\Models\StockMovement::create([
+        StockMovement::create([
             'user_id' => $user->id,
             'product_id' => $product->id,
             'quantity_change' => -2,

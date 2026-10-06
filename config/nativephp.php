@@ -246,8 +246,13 @@ return [
         '.claude',
         '.vscode',
         // mPDF ships ~66MB of world-script fonts; this app only renders
-        // Latin (DejaVu/Free*) + Arabic (XB Riyaz) via BackupPdfService,
-        // so the unused-script fonts are excluded from the bundle.
+        // Latin (DejaVu) + Arabic script (Lateef) via BackupPdfService /
+        // InvoicePdfService, so the unused-script fonts are excluded from the
+        // bundle. LateefRegOT.ttf and DejaVuSans*.ttf are REQUIRED by those
+        // services and must stay in the bundle — excluding LateefRegOT.ttf
+        // made every PDF generation fail on device (the backup page looked
+        // "not working" in the APK while working fine on a dev machine, where
+        // the file is always present).
         'vendor/mpdf/mpdf/ttfonts/Sun-ExtA.ttf',
         'vendor/mpdf/mpdf/ttfonts/Sun-ExtB.ttf',
         'vendor/mpdf/mpdf/ttfonts/UnBatang_0613.ttf',
@@ -267,7 +272,6 @@ return [
         'vendor/mpdf/mpdf/ttfonts/Lohit-Kannada.ttf',
         'vendor/mpdf/mpdf/ttfonts/Pothana2000.ttf',
         'vendor/mpdf/mpdf/ttfonts/TaiHeritagePro.ttf',
-        'vendor/mpdf/mpdf/ttfonts/LateefRegOT.ttf',
         'vendor/mpdf/mpdf/ttfonts/SyrCOMEdessa.otf',
         'vendor/mpdf/mpdf/ttfonts/TaameyDavidCLM-Medium.ttf',
         'vendor/mpdf/mpdf/ttfonts/SundaneseUnicode-1.0.5.ttf',

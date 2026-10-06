@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\Reminder;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -134,7 +135,7 @@ class ReminderTest extends TestCase
                     'amount' => '50',
                 ])->assertSessionHas('success');
 
-            $reminder = \App\Models\Reminder::latest('id')->first();
+            $reminder = Reminder::latest('id')->first();
             $this->assertStringContainsString($needle, $reminder->message, "Locale {$locale} should render its own template");
             $this->assertStringContainsString('Locale Customer', $reminder->message);
         }

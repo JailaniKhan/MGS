@@ -187,6 +187,22 @@ use App\Models\Setting;
             </div>
         @endif
 
+        <!-- CONNECTION STATUS: offline snack-bar (internet) -->
+        <script>
+            window.MGS_I18N = @json([
+                'internet_online' => __('messages.internet_online'),
+                'internet_offline' => __('messages.internet_offline'),
+                'status_online' => __('messages.connected'),
+                'status_offline' => __('messages.disconnected'),
+                'printer_ready' => __('messages.printer_ready'),
+                'status_template' => __('messages.connection_status'),
+            ]);
+        </script>
+        <div id="connectivity-banner" class="connectivity-banner" role="status" hidden>
+            <x-icon name="wifi" class="w-4 h-4 flex-shrink-0" strokeWidth="2"/>
+            <p class="text-xs font-bold flex-1">{{ __('messages.internet_offline') }}</p>
+        </div>
+
         <!-- MAIN CONTENT -->
         <main class="flex-1 px-4 pt-4 page-enter">
             @yield('content')

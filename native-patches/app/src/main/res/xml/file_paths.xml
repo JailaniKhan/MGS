@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Transient print/share copies written by PrintFunctions -->
+    <cache-path name="cache" path="." />
+    <!-- Android 9 and older fall back to the app's own external dir when the
+         public Downloads folder is not writable -->
+    <external-files-path name="external_files" path="." />
+    <!-- Documents saved straight into Downloads/MGS on legacy devices -->
+    <external-path name="downloads" path="Download/" />
+</paths>

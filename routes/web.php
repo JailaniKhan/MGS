@@ -31,6 +31,8 @@ use App\Http\Controllers\TransactionsController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\WhatsAppChatController;
 use App\Http\Controllers\WhatsAppMessageController;
+use App\Models\Order;
+use App\Models\Purchase;
 use Illuminate\Support\Facades\Route;
 
 // Auth routes (no auth middleware)
@@ -86,12 +88,34 @@ Route::middleware('auth')->group(function () {
     Route::post('/purchases/{purchase}/status/{status}', [PurchaseController::class, 'status'])->name('purchases.status');
     Route::get('/purchases/{purchase}/print', [PurchaseController::class, 'print'])->name('purchases.print');
     Route::post('/purchases/{purchase}/send-whatsapp', [PurchaseController::class, 'sendWhatsApp'])->name('purchases.send-whatsapp');
+    // Printed bill: view on the phone / keep in Downloads / send as a PDF.
+    Route::post('/purchases/{purchase}/pdf/open', [PurchaseController::class, 'openPdf'])->name('purchases.pdf.open');
+    Route::post('/purchases/{purchase}/pdf/save', [PurchaseController::class, 'savePdf'])->name('purchases.pdf.save');
+    Route::post('/purchases/{purchase}/pdf/share', [PurchaseController::class, 'sharePdf'])->name('purchases.pdf.share');
+    Route::post('/purchases/{purchase}/pdf/whatsapp', [PurchaseController::class, 'sendPdf'])->name('purchases.pdf.whatsapp');
+    // Chrome's prefetcher (sec-purpose: prefetch) re-requests these POST-only
+    // document endpoints as GET straight from history — land those on their
+    // GET-able page instead of flooding the log with 405s. State-changing
+    // routes (status) deliberately have no GET fallback: a stray GET must
+    // never mutate anything.
+    Route::get('/purchases/{purchase}/pdf/{action}', fn (Purchase $purchase) => redirect()->route('purchases.print', $purchase))
+        ->whereIn('action', ['open', 'save', 'share', 'whatsapp']);
+    Route::get('/purchases/{purchase}/send-whatsapp', fn (Purchase $purchase) => redirect()->route('purchases.show', $purchase));
     Route::resource('orders', OrderController::class)->except(['show']);
 
     Route::get('/orders/{order}/show', [OrderController::class, 'show'])->name('orders.show');
     Route::get('/orders/{order}/print', [OrderController::class, 'print'])->name('orders.print');
     Route::post('/orders/{order}/send-whatsapp', [OrderController::class, 'sendWhatsApp'])->name('orders.send-whatsapp');
     Route::post('/orders/{order}/status/{status}', [OrderController::class, 'status'])->name('orders.status');
+    // Printed invoice: view on the phone / keep in Downloads / send as a PDF.
+    Route::post('/orders/{order}/pdf/open', [OrderController::class, 'openPdf'])->name('orders.pdf.open');
+    Route::post('/orders/{order}/pdf/save', [OrderController::class, 'savePdf'])->name('orders.pdf.save');
+    Route::post('/orders/{order}/pdf/share', [OrderController::class, 'sharePdf'])->name('orders.pdf.share');
+    Route::post('/orders/{order}/pdf/whatsapp', [OrderController::class, 'sendPdf'])->name('orders.pdf.whatsapp');
+    // Same prefetch fallback as the purchases block above.
+    Route::get('/orders/{order}/pdf/{action}', fn (Order $order) => redirect()->route('orders.print', $order))
+        ->whereIn('action', ['open', 'save', 'share', 'whatsapp']);
+    Route::get('/orders/{order}/send-whatsapp', fn (Order $order) => redirect()->route('orders.show', $order));
 
     Route::prefix('orders/returns')->name('orders.returns.')->group(function () {
         Route::get('/', [OrderReturnController::class, 'index'])->name('index');
@@ -130,6 +154,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/backup/create', [BackupController::class, 'create'])->name('backup.create');
     Route::post('/backup', [BackupController::class, 'store'])->name('backup.store');
     Route::get('/backup/download/{filename}', [BackupController::class, 'download'])->name('backup.download');
+    Route::get('/backup/share/{filename}', [BackupController::class, 'share'])->name('backup.share');
+    // Restore: pick an archive (phone storage or browser upload), confirm what
+    // it holds, then apply. The JSON twin is the restorable artifact.
+    Route::get('/backup/restore', [BackupController::class, 'restore'])->name('backup.restore');
+    Route::post('/backup/restore', [BackupController::class, 'restoreUpload'])->name('backup.restore.upload');
+    Route::post('/backup/restore/device', [BackupController::class, 'restoreFromDevice'])->name('backup.restore.device');
+    Route::get('/backup/restore/confirm', [BackupController::class, 'restorePreview'])->name('backup.restore.preview');
+    Route::post('/backup/restore/apply', [BackupController::class, 'applyRestore'])->name('backup.restore.apply');
+    Route::get('/backup/json/{filename}', [BackupController::class, 'saveJson'])->name('backup.json');
     Route::delete('/backup/{filename}', [BackupController::class, 'destroy'])->name('backup.destroy');
 
     // Cashbook
@@ -138,6 +171,18 @@ Route::middleware('auth')->group(function () {
     Route::post('/cashbook', [CashbookController::class, 'store'])->name('cashbook.store');
     Route::get('/cashbook/{type}/{id}', [CashbookController::class, 'person'])->name('cashbook.person');
     Route::post('/cashbook/person/{type}/{id}/send-statement', [CashbookController::class, 'sendStatement'])->name('cashbook.send-statement')->where('type', 'customer|supplier');
+    // Printed statement: preview, view on the phone, keep in Downloads, WhatsApp PDF.
+    Route::get('/cashbook/{type}/{id}/print', [CashbookController::class, 'printStatement'])->name('cashbook.print')->where('type', 'customer|supplier');
+    Route::post('/cashbook/{type}/{id}/pdf/open', [CashbookController::class, 'openStatementPdf'])->name('cashbook.pdf.open')->where('type', 'customer|supplier');
+    Route::post('/cashbook/{type}/{id}/pdf/save', [CashbookController::class, 'saveStatementPdf'])->name('cashbook.pdf.save')->where('type', 'customer|supplier');
+    Route::post('/cashbook/{type}/{id}/pdf/share', [CashbookController::class, 'shareStatementPdf'])->name('cashbook.pdf.share')->where('type', 'customer|supplier');
+    Route::post('/cashbook/{type}/{id}/pdf/whatsapp', [CashbookController::class, 'sendStatementPdf'])->name('cashbook.pdf.whatsapp')->where('type', 'customer|supplier');
+    // Same prefetch fallback as the orders/purchases blocks above.
+    Route::get('/cashbook/{type}/{id}/pdf/{action}', fn (string $type, int $id) => redirect()->route('cashbook.print', [$type, $id]))
+        ->where('type', 'customer|supplier')
+        ->whereIn('action', ['open', 'save', 'share', 'whatsapp']);
+    Route::get('/cashbook/{type}/{id}/send-statement', fn (string $type, int $id) => redirect()->route('cashbook.person', [$type, $id]))
+        ->where('type', 'customer|supplier');
 
     // Staff
     Route::resource('staff', StaffController::class)->parameters(['staff' => 'employee']);
@@ -151,6 +196,7 @@ Route::middleware('auth')->group(function () {
     // WhatsApp chats (reminder messages in a WhatsApp-style UI)
     Route::get('/whatsapp-chats', [WhatsAppChatController::class, 'index'])->name('whatsapp.chats.index');
     Route::get('/whatsapp-chats/{type}/{id}', [WhatsAppChatController::class, 'show'])->name('whatsapp.chats.show')->where('type', 'customer|supplier');
+    Route::get('/whatsapp-chats/{type}/{id}/messages', [WhatsAppChatController::class, 'messages'])->name('whatsapp.chats.messages')->where('type', 'customer|supplier');
 
     // Free-form messages (custom text / voice notes) from the chats hub
     Route::post('/customers/{customer}/message', [WhatsAppMessageController::class, 'storeCustomer'])->name('customers.message');

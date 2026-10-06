@@ -2,16 +2,21 @@
     $isVoice = !empty($reminder->media_path) && str_starts_with((string) $reminder->media_type, 'audio/');
     $isImage = !empty($reminder->media_path) && str_starts_with((string) $reminder->media_type, 'image/');
     $status = $reminder->status;
-    $bubbleTone = match ($status) {
-        'sent' => 'bg-[#d9fdd3] dark:bg-[#005c4b] text-ink-900 dark:text-[#e9edef]',
-        'failed' => 'bg-danger-100 dark:bg-danger-900/50 text-danger-800 dark:text-danger-200',
-        default => 'bg-white dark:bg-[#1e2127] text-ink-900 dark:text-ink-100',
-    };
-    $tailTone = $status === 'failed'
-        ? 'bg-danger-100 dark:bg-danger-900/50'
-        : ($status === 'sent'
-            ? ($isImage ? 'bg-[#d9fdd3] dark:bg-[#005c4b]' : 'bg-[#d9fdd3] dark:bg-[#005c4b]')
-            : 'bg-white dark:bg-[#1e2127]');
+    // Incoming replies (folded in by InboundMessageService) align left with
+    // WhatsApp's white bubble and carry no delivery ticks.
+    $isIncoming = ($reminder->direction ?? 'out') === 'in' || $status === 'received';
+    $bubbleTone = $isIncoming
+        ? 'bg-white dark:bg-[#1e2127] text-ink-900 dark:text-[#e9edef]'
+        : match ($status) {
+            'sent' => 'bg-[#d9fdd3] dark:bg-[#005c4b] text-ink-900 dark:text-[#e9edef]',
+            'failed' => 'bg-danger-100 dark:bg-danger-900/50 text-danger-800 dark:text-danger-200',
+            default => 'bg-white dark:bg-[#1e2127] text-ink-900 dark:text-ink-100',
+        };
+    $tailTone = $isIncoming
+        ? 'bg-white dark:bg-[#1e2127]'
+        : ($status === 'failed'
+            ? 'bg-danger-100 dark:bg-danger-900/50'
+            : 'bg-[#d9fdd3] dark:bg-[#005c4b]');
 @endphp
 @if ($loop->first || !($messages[$loop->index - 1]->created_at->isSameDay($reminder->created_at)))
     <div class="flex justify-center py-2.5">
@@ -20,7 +25,7 @@
         </span>
     </div>
 @endif
-<div class="flex justify-end page-enter">
+<div class="flex {{ $isIncoming ? 'justify-start' : 'justify-end' }} page-enter">
     <div class="wa-bubble relative max-w-[85%] px-3 py-2 shadow-sm break-words {{ $bubbleTone }}">
         <span class="wa-tail absolute -me-2 bottom-1.5 w-2 h-3 {{ $tailTone }}" aria-hidden="true"></span>
         @if ($isImage)
@@ -57,9 +62,11 @@
             <span class="text-[10px] opacity-70 tabular-nums" dir="ltr">
                 {{ ($reminder->sent_at ?? $reminder->created_at)->format('H:i') }}
             </span>
-            <x-icon name="{{ $status === 'sent' ? 'check' : ($status === 'failed' ? 'x-mark' : 'clock') }}"
-                    class="w-3.5 h-3.5 {{ $status === 'sent' ? 'text-[#53bdeb]' : ($status === 'failed' ? 'text-danger-500' : 'text-accent-600') }}"
-                    strokeWidth="{{ $status === 'failed' ? 2.5 : 2 }}"/>
+            @if (! $isIncoming)
+                <x-icon name="{{ $status === 'sent' ? 'check' : ($status === 'failed' ? 'x-mark' : 'clock') }}"
+                        class="w-3.5 h-3.5 {{ $status === 'sent' ? 'text-[#53bdeb]' : ($status === 'failed' ? 'text-danger-500' : 'text-accent-600') }}"
+                        strokeWidth="{{ $status === 'failed' ? 2.5 : 2 }}"/>
+            @endif
         </div>
     </div>
 </div>

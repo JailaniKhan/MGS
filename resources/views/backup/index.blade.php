@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
     {{-- Header --}}
@@ -12,7 +12,10 @@
                 <p class="text-[11px] text-ink-500 dark:text-ink-400 truncate">{{ __('messages.backup_instruction') }}</p>
             </div>
         </div>
-        <a href="{{ route('backup.create') }}" class="btn-primary btn-sm flex-shrink-0"><x-icon name="plus" class="w-3.5 h-3.5" strokeWidth="2"/>{{ __('messages.new_backup') }}</a>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+            <a href="{{ route('backup.restore') }}" class="btn-secondary btn-sm"><x-icon name="arrow-path" class="w-3.5 h-3.5" strokeWidth="2"/>{{ __('messages.restore') }}</a>
+            <a href="{{ route('backup.create') }}" class="btn-primary btn-sm"><x-icon name="plus" class="w-3.5 h-3.5" strokeWidth="2"/>{{ __('messages.new_backup') }}</a>
+        </div>
     </div>
 
     {{-- Backups --}}
@@ -26,20 +29,39 @@
                     <div class="min-w-0">
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-semibold text-ink-800 dark:text-ink-200 truncate">{{ __('messages.backup') }} {{ substr($backup['filename'], 7, 4) }}-{{ substr($backup['filename'], 12, 2) }}-{{ substr($backup['filename'], 15, 2) }}</span>
-                            @if ($backup['is_json_only'])
-                                <span class="badge badge-warning">JSON</span>
-                            @else
+                            {{-- One backup is a PDF + JSON pair; badge whichever of
+                                 the two actually exists (legacy archives are
+                                 JSON-only, so both cases are real). --}}
+                            @if (! $backup['is_json_only'])
                                 <span class="badge badge-danger">PDF</span>
+                            @endif
+                            @if ($backup['has_json'])
+                                <span class="badge badge-warning">JSON</span>
                             @endif
                         </div>
                         <div class="text-[11px] text-ink-500 dark:text-ink-400 tabular-nums" dir="ltr">{{ $backup['date'] }} &middot; {{ $backup['size'] }}</div>
                     </div>
                 </div>
                 <div class="flex items-center gap-1 flex-shrink-0 ms-2">
+                    @if (\App\Support\NativeDocument::available())
+                        {{-- The JSON twin is what a restore reads back; on the phone it
+                             has to be exported into Downloads/MGS to be pickable. --}}
+                        <a href="{{ route('backup.json', $backup['json']) }}" aria-label="{{ __('messages.save_json') }}"
+                           class="w-9 h-9 rounded-xl flex items-center justify-center text-ink-500 dark:text-ink-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-600 dark:hover:text-primary-400 transition-all duration-200 active:scale-95">
+                            <x-icon name="document-arrow-down" class="w-4 h-4" strokeWidth="1.8"/>
+                        </a>
+                    @endif
+                    @if(\App\Support\NativeDocument::available() && str_ends_with($backup['download'], '.pdf'))
+                        <a href="{{ route('backup.share', $backup['download']) }}" aria-label="{{ __('messages.file_name') }}"
+                           class="w-9 h-9 rounded-xl flex items-center justify-center text-ink-500 dark:text-ink-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-600 dark:hover:text-primary-400 transition-all duration-200 active:scale-95">
+                            <x-icon name="arrow-up-tray" class="w-4 h-4" strokeWidth="1.8"/>
+                        </a>
+                    @else
                     <a href="{{ route('backup.download', $backup['download']) }}" aria-label="{{ __('messages.file_name') }}"
                        class="w-9 h-9 rounded-xl flex items-center justify-center text-ink-500 dark:text-ink-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-600 dark:hover:text-primary-400 transition-all duration-200 active:scale-95">
                         <x-icon name="arrow-down-tray" class="w-4 h-4" strokeWidth="1.8"/>
                     </a>
+                    @endif
                     <form action="{{ route('backup.destroy', $backup['download']) }}" method="POST" onsubmit="return confirm('{{ __('messages.are_you_sure') }}')">
                         @csrf @method('DELETE')
                         <button class="w-9 h-9 rounded-xl flex items-center justify-center text-ink-400 dark:text-ink-500 hover:bg-danger-50 dark:hover:bg-danger-900/20 hover:text-danger-500 transition-all duration-200 active:scale-95" aria-label="{{ __('messages.delete') }}">

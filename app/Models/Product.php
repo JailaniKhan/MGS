@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToUser;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 
 class Product extends Model
 {
@@ -91,9 +92,9 @@ class Product extends Model
      * to its own master lot_number at the call site.
      *
      * @param  array<int, int>  $productIds
-     * @return \Illuminate\Support\Collection<string, string> keyed "productId:CURRENCY"
+     * @return Collection<string, string> keyed "productId:CURRENCY"
      */
-    public static function latestPurchaseLots(array $productIds): \Illuminate\Support\Collection
+    public static function latestPurchaseLots(array $productIds): Collection
     {
         if ($productIds === []) {
             return collect();

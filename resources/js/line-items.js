@@ -31,12 +31,9 @@ window.MGSLineItems = {
         const container = document.getElementById('products-container');
 
         const formCurrency = () =>
-            document.querySelector('input[name="currency"]:checked')?.value === 'USD'
-                ? 'USD'
-                : 'AFN';
+            document.querySelector('input[name="currency"]:checked')?.value === 'USD' ? 'USD' : 'AFN';
 
-        const getCurrencySymbol = () =>
-            formCurrency() === 'USD' ? currencySymbol : afnLabel;
+        const getCurrencySymbol = () => (formCurrency() === 'USD' ? currencySymbol : afnLabel);
 
         // A lot is priced in exactly one currency; its price only autofills
         // when the document is in that same currency.
@@ -70,8 +67,7 @@ window.MGSLineItems = {
             if (productLots) {
                 const lots = productLots[select.value] || [];
                 if (lot && !lots.includes(lot)) lots.unshift(lot);
-                document.getElementById(lotSuggestionsId).innerHTML =
-                    lots.map((l) => `<option value="${l}">`).join('');
+                document.getElementById(lotSuggestionsId).innerHTML = lots.map((l) => `<option value="${l}">`).join('');
                 document.getElementById(lotHintId).textContent = lots.length
                     ? availableLotsLabel + ': ' + lots.join(', ')
                     : '';
@@ -124,9 +120,7 @@ window.MGSLineItems = {
                     // falls back to the option's data-price when left untouched.
                     if (!(select.value && qty.value)) return;
                     const price =
-                        parseFloat(priceInput.value) ||
-                        optionPrice(select.options[select.selectedIndex]) ||
-                        0;
+                        parseFloat(priceInput.value) || optionPrice(select.options[select.selectedIndex]) || 0;
                     subtotal += price * parseInt(qty.value);
                 } else {
                     // Purchase form: row counts only with qty AND an entered price.

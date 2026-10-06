@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Setting;
 use App\Models\Category;
+use App\Models\Setting;
 use App\Models\Unit;
 use Illuminate\Http\Request;
 
@@ -31,8 +31,12 @@ class OnboardingController extends Controller
         ]);
 
         Setting::set('company_name', $validated['company_name']);
-        if (!empty($validated['company_phone'])) Setting::set('company_phone', $validated['company_phone']);
-        if (!empty($validated['company_address'])) Setting::set('company_address', $validated['company_address']);
+        if (! empty($validated['company_phone'])) {
+            Setting::set('company_phone', $validated['company_phone']);
+        }
+        if (! empty($validated['company_address'])) {
+            Setting::set('company_address', $validated['company_address']);
+        }
         Setting::set('currency', $validated['currency']);
 
         return response()->json(['success' => true, 'next' => 'categories']);
@@ -44,10 +48,10 @@ class OnboardingController extends Controller
             'categories' => 'nullable|string',
         ]);
 
-        if (!empty($validated['categories'])) {
+        if (! empty($validated['categories'])) {
             $categories = array_map('trim', explode(',', $validated['categories']));
             foreach ($categories as $cat) {
-                if (!empty($cat)) {
+                if (! empty($cat)) {
                     Category::firstOrCreate(['name' => $cat]);
                 }
             }
@@ -62,10 +66,10 @@ class OnboardingController extends Controller
             'units' => 'nullable|string',
         ]);
 
-        if (!empty($validated['units'])) {
+        if (! empty($validated['units'])) {
             $units = array_map('trim', explode(',', $validated['units']));
             foreach ($units as $unit) {
-                if (!empty($unit)) {
+                if (! empty($unit)) {
                     $parts = explode(':', $unit);
                     $name = trim($parts[0]);
                     $short = isset($parts[1]) ? trim($parts[1]) : strtoupper(substr($name, 0, 3));

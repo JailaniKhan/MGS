@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
     <div class="flex items-center justify-between mb-4 page-enter">
@@ -199,7 +199,7 @@
             form.appendChild(ch);
         }
         document.body.appendChild(form);
-        form.submit();
+        if (window.mgsSubmitForm) { window.mgsSubmitForm(form); } else { form.submit(); }
     }
     function openNativeSms(phone, encodedMsg) {
         const smsUrl = 'sms:' + phone + '?body=' + encodedMsg;

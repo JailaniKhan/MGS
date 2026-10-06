@@ -16,11 +16,11 @@ return new class extends Migration
         foreach (['customer' => 'customers', 'supplier' => 'suppliers'] as $type => $table) {
             foreach (DB::table($table)->whereNull('user_id')->pluck('id') as $id) {
                 $owner = DB::table('orders')
-                        ->where('person_type', $type)
-                        ->where('person_id', $id)
-                        ->whereNotNull('user_id')
-                        ->orderBy('user_id')
-                        ->value('user_id')
+                    ->where('person_type', $type)
+                    ->where('person_id', $id)
+                    ->whereNotNull('user_id')
+                    ->orderBy('user_id')
+                    ->value('user_id')
                     ?? DB::table('purchases')
                         ->where('person_type', $type)
                         ->where('person_id', $id)

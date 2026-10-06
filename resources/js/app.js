@@ -57,7 +57,10 @@
    ============================================================ */
 window.changeLanguage = function (lang) {
     const url = document.documentElement.dataset.languageUrl;
-    if (!url) { window.location.reload(); return; }
+    if (!url) {
+        window.location.reload();
+        return;
+    }
     fetch(url, {
         method: 'POST',
         headers: {
@@ -66,6 +69,6 @@ window.changeLanguage = function (lang) {
         },
         body: new URLSearchParams({ language: lang }).toString(),
     })
-    .then(() => window.location.reload())
-    .catch(() => window.location.reload());
+        .then(() => window.location.reload())
+        .catch(() => window.location.reload());
 };

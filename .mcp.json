@@ -2,12 +2,7 @@
   "mcpServers": {
     "repowise": {
       "command": "repowise",
-      "args": [
-        "mcp",
-        "D:/Mobile App/MGS",
-        "--transport",
-        "stdio"
-      ],
+      "args": ["mcp", "D:/Mobile App/MGS", "--transport", "stdio"],
       "description": "repowise: codebase intelligence \u2014 docs, graph, git signals, dead code, decisions"
     }
   }

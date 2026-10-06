@@ -26,9 +26,10 @@ class OpenWaInstall extends Command
     {
         $this->runtimeDir = storage_path('app/openwa');
 
-        if (is_dir($this->runtimeDir) && !$this->option('force')) {
+        if (is_dir($this->runtimeDir) && ! $this->option('force')) {
             $this->components->twoColumnDetail('Installation exists', $this->runtimeDir);
             $this->warn('Use --force to overwrite, or skip if already set up.');
+
             return self::SUCCESS;
         }
 
@@ -46,9 +47,9 @@ class OpenWaInstall extends Command
         }
 
         $nodeBinary = null;
-        if (!$this->option('no-node')) {
+        if (! $this->option('no-node')) {
             $nodeBinary = $this->installNode($target, $nodeVersion);
-            if (!$nodeBinary) {
+            if (! $nodeBinary) {
                 return self::FAILURE;
             }
         }
@@ -63,16 +64,20 @@ class OpenWaInstall extends Command
 
         if ($this->option('lightweight') || $forceLightweight) {
             $appDir = $this->installLightweight();
-            if (!$appDir) return self::FAILURE;
+            if (! $appDir) {
+                return self::FAILURE;
+            }
         } else {
             $appDir = $this->installOpenwa();
-            if (!$appDir) return self::FAILURE;
+            if (! $appDir) {
+                return self::FAILURE;
+            }
 
-            if (!$this->option('no-deps')) {
+            if (! $this->option('no-deps')) {
                 $this->installDependencies($appDir);
             }
 
-            if (!$this->option('no-build') && !$this->option('lightweight')) {
+            if (! $this->option('no-build') && ! $this->option('lightweight')) {
                 $this->buildOpenwa($appDir);
             }
         }
@@ -160,7 +165,7 @@ class OpenWaInstall extends Command
             "{$this->runtimeDir}/modules",
         ];
         foreach ($dirs as $dir) {
-            if (!is_dir($dir)) {
+            if (! is_dir($dir)) {
                 mkdir($dir, 0755, true);
             }
         }
@@ -170,13 +175,16 @@ class OpenWaInstall extends Command
     {
         $appDir = "{$this->runtimeDir}/app";
 
-        if (is_file("{$appDir}/server.js") && !$this->option('force')) {
+        if (is_file("{$appDir}/server.js") && ! $this->option('force')) {
             $this->components->twoColumnDetail('Lightweight gateway', 'already installed');
+
             return $appDir;
         }
 
         $this->components->task('Creating lightweight gateway', function () use ($appDir) {
-            if (is_dir($appDir)) $this->rrmdir($appDir);
+            if (is_dir($appDir)) {
+                $this->rrmdir($appDir);
+            }
             mkdir($appDir, 0755, true);
 
             $packageJson = [
@@ -281,6 +289,45 @@ async function startSession(id) {
             }
         }
     });
+    // Inbound messages. Baileys only hands received messages to listeners of
+    // "messages.upsert" — without this subscription the gateway drops every
+    // incoming message and the chat pages can never show a reply.
+    // Kept in a bounded in-memory buffer per session; the PHP side polls
+    // GET /api/sessions/:id/messages?since=<seq> for everything newer.
+    sock.ev.on("messages.upsert", (up) => {
+        try {
+            for (const msg of up.messages || []) {
+                if (!msg || !msg.key || msg.key.fromMe) continue;
+                const chatId = String(msg.key.remoteJid || "");
+                if (!chatId.endsWith("@c.us") && !chatId.endsWith("@lid")) continue;
+                const m = msg.message || {};
+                const text = m.conversation
+                    || m.extendedTextMessage?.text
+                    || m.imageMessage?.caption
+                    || m.videoMessage?.caption
+                    || "";
+                const mediaType = m.imageMessage ? "image"
+                    : m.audioMessage ? "audio"
+                    : m.documentMessage ? "document"
+                    : null;
+                if (!text && !mediaType) continue;
+                s.inboundSeq = (s.inboundSeq || 0) + 1;
+                s.inbound = s.inbound || [];
+                s.inbound.push({
+                    seq: s.inboundSeq,
+                    id: msg.key.id || null,
+                    chatId,
+                    text: typeof text === "string" ? text : "",
+                    mediaType,
+                    timestamp: Number(msg.messageTimestamp) * 1000 || Date.now(),
+                });
+                if (s.inbound.length > 2000) s.inbound.splice(0, s.inbound.length - 2000);
+                logEvent(id, "inbound message", { seq: s.inboundSeq, chatId, len: String(text).length, mediaType });
+            }
+        } catch (e) {
+            logEvent(id, "inbound upsert failed", { error: e.message });
+        }
+    });
 }
 
 const app = express(); app.use(express.json());
@@ -290,6 +337,15 @@ app.get("/api/sessions", (r, s) => { const o = {}; for (const [i, x] of sessions
 app.get("/api/sessions/:id", (r, s) => { const x = sessions.get(r.params.id); s.json(x ? { status: x.status, phone: x.phone } : { status: "not_found" }); });
 app.post("/api/sessions/:id/start", async (r, s) => { try { await startSession(r.params.id); s.json({ status: "started" }); } catch (e) { s.status(500).json({ error: e.message }); } });
 app.get("/api/sessions/:id/qr", (r, s) => { const x = sessions.get(r.params.id); s.json({ qrCode: x?.qr || null, status: x?.status || "not_found" }); });
+// Poll inbound messages received since the given sequence number (drained by
+// whatsapp:sync-inbound into the reminders table).
+app.get("/api/sessions/:id/messages", (r, s) => {
+    const x = sessions.get(r.params.id);
+    if (!x) return s.status(404).json({ error: "unknown session" });
+    const since = Number(r.query.since || 0);
+    const all = x.inbound || [];
+    s.json({ messages: all.filter(m => m.seq > since), cursor: all.length ? all[all.length - 1].seq : since });
+});
 app.post("/api/sessions/:id/pairing-code", async (r, s) => {
     if (!r.body.phoneNumber) return s.status(400).json({ error: "phoneNumber required" });
     try { const x = await getSession(r.params.id); if (!x.sock || x.status === "dead") { await startSession(r.params.id); await new Promise(r2 => setTimeout(r2, 3000)); }
@@ -324,10 +380,11 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
             }
 
             file_put_contents("{$appDir}/server.js", $serverCode);
+
             return true;
         });
 
-        if (!$this->option('no-deps')) {
+        if (! $this->option('no-deps')) {
             $modulesDir = "{$this->runtimeDir}/modules";
             if (is_dir("{$modulesDir}/node_modules") && count(scandir("{$modulesDir}/node_modules")) > 2) {
                 $this->components->twoColumnDetail('npm dependencies', 'already installed');
@@ -341,22 +398,29 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
                     exec($cmd, $output, $exitCode);
                     if ($exitCode !== 0) {
                         Log::warning('npm install failed', ['output' => implode("\n", $output)]);
+
                         return false;
                     }
                     $nm = "{$appDir}/node_modules";
                     if (is_dir($nm)) {
-                        if (is_dir($modulesDir)) $this->rrmdir($modulesDir);
+                        if (is_dir($modulesDir)) {
+                            $this->rrmdir($modulesDir);
+                        }
                         rename($nm, $modulesDir);
                         $stub = "{$modulesDir}/node_modules";
-                        if (is_dir($stub)) $this->rrmdir($stub);
+                        if (is_dir($stub)) {
+                            $this->rrmdir($stub);
+                        }
                     }
+
                     return true;
                 });
             }
         }
 
-        if (!is_file("{$appDir}/server.js")) {
+        if (! is_file("{$appDir}/server.js")) {
             $this->error('Failed to create lightweight gateway');
+
             return null;
         }
 
@@ -376,6 +440,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         $existing = "{$nodeDir}/{$expectedBinName}";
         if (is_file($existing) && $this->nodeMatchesTarget($existing, $target)) {
             $this->components->twoColumnDetail('Node.js', 'already installed');
+
             return $this->findNodeBinary($nodeDir);
         }
 
@@ -385,24 +450,26 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         // libs are reusable across reinstalls and shouldn't be discarded on
         // every --force cycle when there's no node binary to even mismatch
         // against.
-        if (is_dir($nodeDir) && !is_file($existing)) {
+        if (is_dir($nodeDir) && ! is_file($existing)) {
             $hasLibs = is_dir("{$nodeDir}/lib") && count(array_diff(
-                (array)@scandir("{$nodeDir}/lib"), ['.', '..']
+                (array) @scandir("{$nodeDir}/lib"), ['.', '..']
             )) > 0;
-            if (!$hasLibs) {
+            if (! $hasLibs) {
                 $this->components->task('Clearing previous Node.js (arch mismatch)', function () use ($nodeDir) {
                     $this->rrmdir($nodeDir);
+
                     return true;
                 });
             }
         }
-        if (!is_dir($nodeDir)) {
+        if (! is_dir($nodeDir)) {
             mkdir($nodeDir, 0755, true);
         }
 
         $url = $this->nodeDownloadUrl($target, $version);
-        if (!$url) {
+        if (! $url) {
             $this->error("No Node.js build available for target: {$target}");
+
             return null;
         }
 
@@ -413,7 +480,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
             return $this->download($url, $archive);
         });
 
-        $this->components->task('Extracting Node.js', fn() => $this->extractNode($archive, $nodeDir, $target));
+        $this->components->task('Extracting Node.js', fn () => $this->extractNode($archive, $nodeDir, $target));
 
         // On Android, the Termux `node` binary depends on shared libraries
         // (libc++, openssl, c-ares, libicu, libsqlite) that ship in separate
@@ -425,9 +492,10 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         }
 
         $candidate = $this->findNodeBinary($nodeDir);
-        if (!$candidate || !$this->nodeMatchesTarget($candidate, $target)) {
+        if (! $candidate || ! $this->nodeMatchesTarget($candidate, $target)) {
             $this->warn("Extracted node binary does not match target architecture ({$target}).");
         }
+
         return $candidate;
     }
 
@@ -441,12 +509,12 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
      */
     protected function nodeMatchesTarget(string $binPath, string $target): bool
     {
-        if (!is_file($binPath)) {
+        if (! is_file($binPath)) {
             return false;
         }
 
         $fp = @fopen($binPath, 'rb');
-        if (!$fp) {
+        if (! $fp) {
             return false;
         }
         $magic = fread($fp, 8);
@@ -457,7 +525,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         }
 
         $isElf = substr($magic, 0, 4) === "\x7f\x45\x4c\x46";
-        $isPe  = substr($magic, 0, 2) === "MZ";
+        $isPe = substr($magic, 0, 2) === 'MZ';
 
         if (str_starts_with($target, 'win-')) {
             // Windows targets need a PE (MZ..) executable.
@@ -468,8 +536,9 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
             // Mach-O, but we never install Mach-O here — only the linear ELF).
             // For our purposes, "non-PE" is correct because the macOS tarballs
             // currently download a Mach-O `node` binary which is also non-MZ.
-            return !$isPe && $isElf;
+            return ! $isPe && $isElf;
         }
+
         // Unknown target type — be permissive and assume it's correct.
         return true;
     }
@@ -482,24 +551,26 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
     protected function installTermuxDependencies(string $target, string $nodeDir): void
     {
         $archShort = $this->termuxArch($target);
-        if (!$archShort) {
+        if (! $archShort) {
             $this->warn("Cannot resolve Termux arch for target {$target} — skipping dependency libs.");
+
             return;
         }
 
         $urls = $this->termuxDependencyUrls($archShort);
         $libDir = "{$nodeDir}/lib";
-        if (!is_dir($libDir)) {
+        if (! is_dir($libDir)) {
             mkdir($libDir, 0755, true);
         }
         $dlDir = "{$this->runtimeDir}/downloads";
-        if (!is_dir($dlDir)) {
+        if (! is_dir($dlDir)) {
             mkdir($dlDir, 0755, true);
         }
 
         $alreadyInstalled = is_file("{$libDir}/libssl.so.3") && is_file("{$libDir}/libcrypto.so.3");
         if ($alreadyInstalled) {
             $this->components->twoColumnDetail('Termux libs', 'already installed');
+
             return;
         }
 
@@ -514,14 +585,15 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
             if (PHP_OS_FAMILY === 'Windows' && $debName === '') {
                 // Defensive: if basename returned nothing on Windows due to
                 // the ':', fall back to an explicit package-name based name.
-                $debName = "termux-{$name}-" . $archShort . ".deb";
+                $debName = "termux-{$name}-".$archShort.'.deb';
                 $debPath = "{$dlDir}/{$debName}";
             }
 
-            if (!is_file($debPath)) {
-                $ok = $this->components->task("Downloading Termux {$name}", fn() => $this->download($url, $debPath));
-                if (!$ok) {
+            if (! is_file($debPath)) {
+                $ok = $this->components->task("Downloading Termux {$name}", fn () => $this->download($url, $debPath));
+                if (! $ok) {
                     $this->warn("Failed to download {$name} — Node may fail to start on Android.");
+
                     continue;
                 }
             }
@@ -529,36 +601,37 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
             // Verify the .deb actually has content — empty downloads can happen
             // on flaky networks and silently leave the cache "installed".
             if (is_file($debPath) && filesize($debPath) < 1000) {
-                $this->warn("Termux {$name} deb is suspiciously small (" . filesize($debPath) . " bytes); will redownload.");
+                $this->warn("Termux {$name} deb is suspiciously small (".filesize($debPath).' bytes); will redownload.');
                 @unlink($debPath);
-                $redownloaded = $this->components->task("Re-downloading Termux {$name}", fn() => $this->download($url, $debPath));
-                if (!$redownloaded || !is_file($debPath) || filesize($debPath) < 1000) {
+                $redownloaded = $this->components->task("Re-downloading Termux {$name}", fn () => $this->download($url, $debPath));
+                if (! $redownloaded || ! is_file($debPath) || filesize($debPath) < 1000) {
                     $this->warn("Failed to re-download {$name}; Node may fail to start on Android.");
+
                     continue;
                 }
             }
 
-            $this->components->task("Extracting {$name}", fn() => $this->extractDebInto($debPath, $libDir));
+            $this->components->task("Extracting {$name}", fn () => $this->extractDebInto($debPath, $libDir));
         }
     }
 
     protected function nodeDownloadUrl(string $target, string $version): ?string
     {
         $map = [
-            'win-x64'        => ["https://nodejs.org/dist/v{$version}/node-v{$version}-win-x64.zip", 'zip'],
-            'linux-x64'      => ["https://nodejs.org/dist/v{$version}/node-v{$version}-linux-x64.tar.xz", 'txz'],
-            'linux-arm64'    => ["https://nodejs.org/dist/v{$version}/node-v{$version}-linux-arm64.tar.xz", 'txz'],
-            'darwin-x64'     => ["https://nodejs.org/dist/v{$version}/node-v{$version}-darwin-x64.tar.gz", 'tgz'],
-            'darwin-arm64'   => ["https://nodejs.org/dist/v{$version}/node-v{$version}-darwin-arm64.tar.gz", 'tgz'],
+            'win-x64' => ["https://nodejs.org/dist/v{$version}/node-v{$version}-win-x64.zip", 'zip'],
+            'linux-x64' => ["https://nodejs.org/dist/v{$version}/node-v{$version}-linux-x64.tar.xz", 'txz'],
+            'linux-arm64' => ["https://nodejs.org/dist/v{$version}/node-v{$version}-linux-arm64.tar.xz", 'txz'],
+            'darwin-x64' => ["https://nodejs.org/dist/v{$version}/node-v{$version}-darwin-x64.tar.gz", 'tgz'],
+            'darwin-arm64' => ["https://nodejs.org/dist/v{$version}/node-v{$version}-darwin-arm64.tar.gz", 'tgz'],
             // Android uses Termux's Bionic-compiled Node.js (.deb package).
             // The official nodejs.org linux-arm64 build is glibc-linked and
             // WILL NOT run on stock Android (Android uses Bionic libc, not glibc).
             // Termux ships Node.js built against Android's Bionic libc, so the
             // binary can be exec()'d directly from app-private storage.
-            'android-arm64'  => ["https://packages.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_{$version}_aarch64.deb", 'deb'],
+            'android-arm64' => ["https://packages.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_{$version}_aarch64.deb", 'deb'],
             'android-x86_64' => ["https://packages.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_{$version}_x86_64.deb", 'deb'],
-            'android-x86'    => ["https://packages.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_{$version}_i686.deb", 'deb'],
-            'android-arm'    => ["https://packages.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_{$version}_arm.deb", 'deb'],
+            'android-x86' => ["https://packages.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_{$version}_i686.deb", 'deb'],
+            'android-arm' => ["https://packages.termux.dev/apt/termux-main/pool/main/n/nodejs-lts/nodejs-lts_{$version}_arm.deb", 'deb'],
         ];
 
         return $map[$target][0] ?? null;
@@ -571,16 +644,17 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
     protected function nodeArchiveFormat(string $target): ?string
     {
         $map = [
-            'win-x64'        => 'zip',
-            'linux-x64'      => 'txz',
-            'linux-arm64'    => 'txz',
-            'darwin-x64'     => 'tgz',
-            'darwin-arm64'   => 'tgz',
-            'android-arm64'  => 'deb',
+            'win-x64' => 'zip',
+            'linux-x64' => 'txz',
+            'linux-arm64' => 'txz',
+            'darwin-x64' => 'tgz',
+            'darwin-arm64' => 'tgz',
+            'android-arm64' => 'deb',
             'android-x86_64' => 'deb',
-            'android-x86'    => 'deb',
-            'android-arm'    => 'deb',
+            'android-x86' => 'deb',
+            'android-arm' => 'deb',
         ];
+
         return $map[$target] ?? null;
     }
 
@@ -602,12 +676,12 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         // "libz.so.1", but stock Android only ships libz.so (wrong soname),
         // so the on-device linker fails with "library libz.so.1 not found".
         $packages = [
-            'libc++'    => ['libc++_29',          'libc++'],
-            'openssl'   => ['openssl_1:3.6.3',    'openssl'],
-            'c-ares'    => ['c-ares_1.34.8',      'c-ares'],
-            'libicu'    => ['libicu_78.3',        'libicu'],
+            'libc++' => ['libc++_29',          'libc++'],
+            'openssl' => ['openssl_1:3.6.3',    'openssl'],
+            'c-ares' => ['c-ares_1.34.8',      'c-ares'],
+            'libicu' => ['libicu_78.3',        'libicu'],
             'libsqlite' => ['libsqlite_3.53.4',  'libsqlite'],
-            'zlib'      => ['zlib_1.3.2',         'zlib'],
+            'zlib' => ['zlib_1.3.2',         'zlib'],
         ];
 
         $base = 'https://packages.termux.dev/apt/termux-main/pool/main';
@@ -624,6 +698,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
             }
             $urls[$name] = "{$base}/{$poolSub}/{$dirName}/{$pathSuffix}_{$archShort}.deb";
         }
+
         return $urls;
     }
 
@@ -634,10 +709,10 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
     protected function termuxArch(string $target): ?string
     {
         return [
-            'android-arm64'  => 'aarch64',
+            'android-arm64' => 'aarch64',
             'android-x86_64' => 'x86_64',
-            'android-x86'    => 'i686',
-            'android-arm'    => 'arm',
+            'android-x86' => 'i686',
+            'android-arm' => 'arm',
         ][$target] ?? null;
     }
 
@@ -652,6 +727,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         if (str_starts_with($target, 'android-')) {
             return '24.18.0';
         }
+
         return '22.14.0';
     }
 
@@ -666,8 +742,9 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         if (str_ends_with($archive, '.deb')) {
             // .deb = `ar` archive containing data.tar.xz (or data.tar.gz)
             $ok = $this->extractDebInto($archive, $tmp);
-            if (!$ok) {
+            if (! $ok) {
                 $this->rrmdir($tmp);
+
                 return false;
             }
             // data.tar.xz extracted files into $tmp; move them to $tmp/root
@@ -685,11 +762,11 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         } elseif (str_ends_with($archive, '.tar.xz') || str_ends_with($archive, '.txz')) {
             // .tar.xz: first decompress to .tar, then extract with PharData
             $tarPath = substr($archive, 0, -3); // strip .xz
-            if (!file_exists($tarPath)) {
-                exec('xz -d -k -f "' . $archive . '" 2>NUL', $xzOut, $xzCode);
+            if (! file_exists($tarPath)) {
+                exec('xz -d -k -f "'.$archive.'" 2>NUL', $xzOut, $xzCode);
                 if ($xzCode !== 0) {
                     // Fallback: try using 7-Zip
-                    exec('7z x -y -o"' . $tmp . '" "' . $archive . '" 2>NUL', $szOut, $szCode);
+                    exec('7z x -y -o"'.$tmp.'" "'.$archive.'" 2>NUL', $szOut, $szCode);
                     if ($szCode !== 0) {
                         return false;
                     }
@@ -709,11 +786,11 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
                 // gzip fallback: decompress to tar, then extract
                 $tarPath = str_ends_with($archive, '.gz')
                     ? substr($archive, 0, -3)
-                    : $archive . '.tar';
-                if (!file_exists($tarPath)) {
+                    : $archive.'.tar';
+                if (! file_exists($tarPath)) {
                     $gz = gzopen($archive, 'rb');
                     $out = fopen($tarPath, 'wb');
-                    while (!gzeof($gz)) {
+                    while (! gzeof($gz)) {
                         fwrite($out, gzread($gz, 8192));
                     }
                     gzclose($gz);
@@ -742,13 +819,14 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         $isWindowsTarget = str_starts_with($target, 'win-');
         $expectedName = $isWindowsTarget ? 'node.exe' : 'node';
         $nodeBinary = $this->findFileRecursive($tmp, $expectedName);
-        if (!$nodeBinary) {
+        if (! $nodeBinary) {
             $this->rrmdir($tmp);
+
             return false;
         }
 
-        $destNode = $nodeDir . '/' . basename($nodeBinary);
-        if (!is_dir($nodeDir)) {
+        $destNode = $nodeDir.'/'.basename($nodeBinary);
+        if (! is_dir($nodeDir)) {
             mkdir($nodeDir, 0755, true);
         }
         copy($nodeBinary, $destNode);
@@ -763,22 +841,27 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         // lifting in installTermuxDependencies(), but copy any .so files found
         // in the node deb itself here as a convenience.
         $libDir = "{$nodeDir}/lib";
-        if (!is_dir($libDir)) {
+        if (! is_dir($libDir)) {
             mkdir($libDir, 0755, true);
         }
-        $usrLibDir = dirname($nodeBinary) . '/../lib';
+        $usrLibDir = dirname($nodeBinary).'/../lib';
         if (is_dir($usrLibDir)) {
             $realLibDir = realpath($usrLibDir);
             if ($realLibDir && is_dir($realLibDir)) {
                 foreach (scandir($realLibDir) as $entry) {
-                    if ($entry === '.' || $entry === '..') continue;
-                    if (!str_ends_with($entry, '.so') && !preg_match('/\.so\.\d+/', $entry)) continue;
+                    if ($entry === '.' || $entry === '..') {
+                        continue;
+                    }
+                    if (! str_ends_with($entry, '.so') && ! preg_match('/\.so\.\d+/', $entry)) {
+                        continue;
+                    }
                     copy("{$realLibDir}/{$entry}", "{$libDir}/{$entry}");
                 }
             }
         }
 
         $this->rrmdir($tmp);
+
         return is_file($destNode);
     }
 
@@ -797,15 +880,15 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
      */
     protected function extractDebInto(string $debPath, string $destDir): bool
     {
-        if (!is_file($debPath)) {
+        if (! is_file($debPath)) {
             return false;
         }
-        if (!is_dir($destDir)) {
+        if (! is_dir($destDir)) {
             mkdir($destDir, 0755, true);
         }
 
         $fp = @fopen($debPath, 'rb');
-        if (!$fp) {
+        if (! $fp) {
             return false;
         }
 
@@ -813,6 +896,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         $magic = fread($fp, 8);
         if ($magic !== "!<arch>\n") {
             fclose($fp);
+
             return false;
         }
 
@@ -821,7 +905,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         $dataTarSize = null;
 
         // Each subsequent member is a 60-byte header followed by file data.
-        while (!feof($fp)) {
+        while (! feof($fp)) {
             $header = fread($fp, 60);
             if (strlen($header) < 60) {
                 break;
@@ -835,7 +919,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
             //  40-47  mode     (8)
             //  48-59  size     (10) decimal
             $sizeRaw = trim(substr($header, 48, 10));
-            $size = (int)$sizeRaw;
+            $size = (int) $sizeRaw;
             $name = trim(substr($header, 0, 16));
             // Strip trailing spaces and the "/" terminator ar uses.
             $name = rtrim($name, "/ \t");
@@ -858,15 +942,16 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
 
         if ($dataTarName === null) {
             fclose($fp);
+
             return false;
         }
 
         // Stream the data.tar.* archive out to a temp file.
         fseek($fp, $dataTarOffset, SEEK_SET);
-        $tmpTar = $destDir . '/.' . basename($dataTarName) . '.tmp';
+        $tmpTar = $destDir.'/.'.basename($dataTarName).'.tmp';
         $out = fopen($tmpTar, 'wb');
         $left = $dataTarSize;
-        while ($left > 0 && !feof($fp)) {
+        while ($left > 0 && ! feof($fp)) {
             $buf = fread($fp, min(1 << 20, $left));
             if ($buf === false || $buf === '') {
                 break;
@@ -885,71 +970,79 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
                 // both key off the extension). Strip the trailing ".tmp"
                 // and the ".xz" suffix, then append ".tar".
                 $decompressed = preg_replace('/\.xz\.tmp$/', '.tar', $tmpTar);
-                if (!file_exists($decompressed)) {
+                if (! file_exists($decompressed)) {
                     $xzCode = $this->ensureXzDecompress($tmpTar, $decompressed);
-                    if ($xzCode !== 0 && !is_file($decompressed)) {
+                    if ($xzCode !== 0 && ! is_file($decompressed)) {
                         @unlink($tmpTar);
                         @unlink($decompressed);
+
                         return false;
                     }
                 }
-                if (!file_exists($decompressed)) {
+                if (! file_exists($decompressed)) {
                     @unlink($tmpTar);
+
                     return false;
                 }
-                if (!$this->safeTarExtract($decompressed, $destDir)) {
+                if (! $this->safeTarExtract($decompressed, $destDir)) {
                     @unlink($decompressed);
                     @unlink($tmpTar);
+
                     return false;
                 }
                 @unlink($decompressed);
-            } else if (str_ends_with($dataTarName, '.gz')) {
+            } elseif (str_ends_with($dataTarName, '.gz')) {
                 $decompressed = preg_replace('/\.gz\.tmp$/', '.tar', $tmpTar);
-                if (!file_exists($decompressed)) {
+                if (! file_exists($decompressed)) {
                     $gz = gzopen($tmpTar, 'rb');
                     $out2 = fopen($decompressed, 'wb');
-                    while (!gzeof($gz)) {
+                    while (! gzeof($gz)) {
                         fwrite($out2, gzread($gz, 1 << 20));
                     }
                     gzclose($gz);
                     fclose($out2);
                 }
-                if (!$this->safeTarExtract($decompressed, $destDir)) {
+                if (! $this->safeTarExtract($decompressed, $destDir)) {
                     @unlink($decompressed);
                     @unlink($tmpTar);
+
                     return false;
                 }
                 @unlink($decompressed);
-            } else if (str_ends_with($dataTarName, '.bz2')) {
+            } elseif (str_ends_with($dataTarName, '.bz2')) {
                 $decompressed = preg_replace('/\.bz2\.tmp$/', '.tar', $tmpTar);
-                if (!file_exists($decompressed)) {
+                if (! file_exists($decompressed)) {
                     $bz = bzopen($tmpTar, 'r');
                     $out2 = fopen($decompressed, 'wb');
-                    while (!feof($bz)) {
+                    while (! feof($bz)) {
                         fwrite($out2, bzread($bz, 1 << 20));
                     }
                     bzclose($bz);
                     fclose($out2);
                 }
-                if (!$this->safeTarExtract($decompressed, $destDir)) {
+                if (! $this->safeTarExtract($decompressed, $destDir)) {
                     @unlink($decompressed);
                     @unlink($tmpTar);
+
                     return false;
                 }
                 @unlink($decompressed);
             } else {
                 // Plain tar.
-                if (!$this->safeTarExtract($tmpTar, $destDir)) {
+                if (! $this->safeTarExtract($tmpTar, $destDir)) {
                     @unlink($tmpTar);
+
                     return false;
                 }
             }
         } catch (\Throwable $e) {
             @unlink($tmpTar);
+
             return false;
         }
 
         @unlink($tmpTar);
+
         return true;
     }
 
@@ -975,10 +1068,10 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
      */
     protected function safeTarExtract(string $tarPath, string $destDir): bool
     {
-        if (!is_dir($destDir)) {
+        if (! is_dir($destDir)) {
             mkdir($destDir, 0755, true);
         }
-        if (!is_file($tarPath)) {
+        if (! is_file($tarPath)) {
             return false;
         }
 
@@ -990,19 +1083,19 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
                 $tarBin = 'C:\Windows\System32\tar.exe';
             } else {
                 exec('where tar 2>NUL', $out, $code);
-                if ($code === 0 && !empty($out[0])) {
+                if ($code === 0 && ! empty($out[0])) {
                     $tarBin = trim($out[0]);
                 }
             }
         } else {
             exec('command -v tar 2>/dev/null', $out, $code);
-            if ($code === 0 && !empty($out[0])) {
+            if ($code === 0 && ! empty($out[0])) {
                 $tarBin = trim($out[0]);
             }
         }
 
         if ($tarBin !== null) {
-            $cmd = '"' . $tarBin . '" -xf "' . $tarPath . '" -C "' . $destDir . '"';
+            $cmd = '"'.$tarBin.'" -xf "'.$tarPath.'" -C "'.$destDir.'"';
             if (PHP_OS_FAMILY === 'Windows') {
                 $cmd .= ' 2>NUL';
             } else {
@@ -1034,18 +1127,23 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
             $count = 0;
             foreach ($phar as $key => $file) {
                 $count++;
-                if ($key === '.' || $key === '..') continue;
+                if ($key === '.' || $key === '..') {
+                    continue;
+                }
                 // $file is a PharFileInfo (or DirectoryEntry). Use full path.
-                $relative = ltrim((string)$key, './');
-                if ($relative === '' || str_starts_with($relative, '..')) continue;
-                $target = rtrim($destDir, '/\\') . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relative);
+                $relative = ltrim((string) $key, './');
+                if ($relative === '' || str_starts_with($relative, '..')) {
+                    continue;
+                }
+                $target = rtrim($destDir, '/\\').DIRECTORY_SEPARATOR.str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relative);
                 if ($file->isDir()) {
                     @mkdir($target, 0755, true);
                 } else {
                     @mkdir(dirname($target), 0755, true);
-                    copy('phar://' . $tarPath . '/' . ltrim((string)$key, '/'), $target);
+                    copy('phar://'.$tarPath.'/'.ltrim((string) $key, '/'), $target);
                 }
             }
+
             return $this->dirHasAnyFile($destDir);
         } catch (\Throwable $e) {
             return false;
@@ -1057,16 +1155,21 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
      */
     protected function dirHasAnyFile(string $dir): bool
     {
-        if (!is_dir($dir)) return false;
+        if (! is_dir($dir)) {
+            return false;
+        }
         try {
             $rii = new \RecursiveIteratorIterator(
                 new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS)
             );
             foreach ($rii as $f) {
-                if ($f->isFile()) return true;
+                if ($f->isFile()) {
+                    return true;
+                }
             }
         } catch (\Throwable $e) {
         }
+
         return false;
     }
 
@@ -1095,7 +1198,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         // removes the input after decompression).
         if (PHP_OS_FAMILY === 'Windows') {
             exec('where xz 2>NUL', $xzWhere, $xzWhereCode);
-            if ($xzWhereCode === 0 && !empty($xzWhere[0])) {
+            if ($xzWhereCode === 0 && ! empty($xzWhere[0])) {
                 $xzBin = trim($xzWhere[0]);
                 $code = $this->runXzTo($xzBin, $xzPath, $outPath);
                 if ($code === 0 && is_file($outPath) && filesize($outPath) > 0) {
@@ -1103,7 +1206,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
                 }
             }
         } else {
-            $xzBin = trim((string)@shell_exec('command -v xz 2>/dev/null'));
+            $xzBin = trim((string) @shell_exec('command -v xz 2>/dev/null'));
             if ($xzBin !== '') {
                 $code = $this->runXzTo($xzBin, $xzPath, $outPath);
                 if ($code === 0 && is_file($outPath) && filesize($outPath) > 0) {
@@ -1124,12 +1227,14 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
             $dec = $data !== false ? xzdecrypt($data) : false;
             if ($dec !== false && $dec !== '') {
                 file_put_contents($outPath, $dec);
+
                 return 0;
             }
         }
 
         // Strategy 4: Python stdlib lzma — throws if Python missing; caller catches.
         $this->xzDecompressToFile($xzPath, $outPath);
+
         return (is_file($outPath) && filesize($outPath) > 0) ? 0 : 1;
     }
 
@@ -1139,17 +1244,18 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
      */
     protected function runXzTo(string $xzBin, string $inPath, string $outPath): int
     {
-        $cmd = '"' . $xzBin . '" -d -k -f -c "' . $inPath . '"';
+        $cmd = '"'.$xzBin.'" -d -k -f -c "'.$inPath.'"';
         $descriptors = [
             0 => ['file', 'nul', 'r'],
             1 => ['file', str_replace('/', DIRECTORY_SEPARATOR, $outPath), 'wb'],
             2 => ['file', 'nul', 'w'],
         ];
         $proc = @proc_open($cmd, $descriptors, $pipes);
-        if (!is_resource($proc)) {
+        if (! is_resource($proc)) {
             return 1;
         }
         proc_close($proc);
+
         return is_file($outPath) && filesize($outPath) > 0 ? 0 : 1;
     }
 
@@ -1175,7 +1281,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         ];
         foreach ($candidates as $candidate) {
             if (@is_file($candidate)) {
-                $cmd = '"' . $candidate . '" -d -k -f -c "' . $xzPath . '"';
+                $cmd = '"'.$candidate.'" -d -k -f -c "'.$xzPath.'"';
                 $descriptors = [
                     0 => ['file', 'nul', 'r'],
                     1 => ['file', $outPath, 'wb'],
@@ -1190,6 +1296,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
                 }
             }
         }
+
         return 1;
     }
 
@@ -1213,6 +1320,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
             $decompressed = xzdecrypt($data);
             if ($decompressed !== false && $decompressed !== '') {
                 file_put_contents($tarPath, $decompressed);
+
                 return;
             }
         }
@@ -1220,7 +1328,7 @@ http.createServer(app).listen(PORT, "127.0.0.1", () => console.log("MGS WA Gatew
         // Strategy 2: Python's stdlib `lzma` module — almost always present
         // on Windows 10+ (Microsoft Store Python) and Linux/macOS.
         $python = PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3';
-        $pyScript = <<<PY
+        $pyScript = <<<'PY'
 import lzma, sys
 with open(sys.argv[1], 'rb') as f_in:
     with lzma.LZMAFile(f_in) as xz:
@@ -1231,9 +1339,9 @@ with open(sys.argv[1], 'rb') as f_in:
                     break
                 f_out.write(chunk)
 PY;
-        $tmpPy = sys_get_temp_dir() . '/mgs_xz_decompress_' . bin2hex(random_bytes(4)) . '.py';
+        $tmpPy = sys_get_temp_dir().'/mgs_xz_decompress_'.bin2hex(random_bytes(4)).'.py';
         file_put_contents($tmpPy, $pyScript);
-        $cmd = escapeshellarg($python) . ' ' . escapeshellarg($tmpPy) . ' ' . escapeshellarg($xzPath) . ' ' . escapeshellarg($tarPath);
+        $cmd = escapeshellarg($python).' '.escapeshellarg($tmpPy).' '.escapeshellarg($xzPath).' '.escapeshellarg($tarPath);
         $descriptors = [
             0 => ['file', 'nul', 'r'],
             1 => ['file', 'nul', 'w'],
@@ -1251,10 +1359,10 @@ PY;
 
         // Strategy 3: give up with a helpful error.
         throw new \RuntimeException(
-            'xz decompression failed: could not find `xz` on PATH, in Git for ' .
-            'Windows, or via the Python `lzma` module. To fix this on Windows, ' .
-            'install Git for Windows (https://git-scm.com/win) which ships ' .
-            'xz.exe, or install Python (https://python.org) which provides ' .
+            'xz decompression failed: could not find `xz` on PATH, in Git for '.
+            'Windows, or via the Python `lzma` module. To fix this on Windows, '.
+            'install Git for Windows (https://git-scm.com/win) which ships '.
+            'xz.exe, or install Python (https://python.org) which provides '.
             'the `lzma` stdlib module. Then re-run the command.'
         );
     }
@@ -1266,7 +1374,9 @@ PY;
      */
     protected function findFileRecursive(string $dir, string $filename): ?string
     {
-        if (!is_dir($dir)) return null;
+        if (! is_dir($dir)) {
+            return null;
+        }
         $rii = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS)
         );
@@ -1275,6 +1385,7 @@ PY;
                 return $file->getPathname();
             }
         }
+
         return null;
     }
 
@@ -1294,6 +1405,7 @@ PY;
         if (is_file("{$nodeDir}/node.exe")) {
             return "{$nodeDir}/node.exe";
         }
+
         return null;
     }
 
@@ -1301,8 +1413,9 @@ PY;
     {
         $appDir = "{$this->runtimeDir}/app";
 
-        if (is_file("{$appDir}/package.json") && !$this->option('force')) {
+        if (is_file("{$appDir}/package.json") && ! $this->option('force')) {
             $this->components->twoColumnDetail('OpenWA app', 'already installed');
+
             return $appDir;
         }
 
@@ -1318,13 +1431,15 @@ PY;
     {
         $source = rtrim($source, '\\/');
 
-        if (!is_dir($source)) {
+        if (! is_dir($source)) {
             $this->error("Source path does not exist: {$source}");
+
             return null;
         }
 
-        if (!is_file("{$source}/package.json")) {
+        if (! is_file("{$source}/package.json")) {
             $this->error("No package.json found at {$source} — not a valid OpenWA installation");
+
             return null;
         }
 
@@ -1333,15 +1448,18 @@ PY;
                 $this->rrmdir($appDir);
             }
             $this->rcopy($source, $appDir);
+
             return true;
         });
 
-        if (!is_file("{$appDir}/package.json")) {
+        if (! is_file("{$appDir}/package.json")) {
             $this->error('Failed to copy OpenWA from local path');
+
             return null;
         }
 
         $this->components->twoColumnDetail('Copied from', $source);
+
         return $appDir;
     }
 
@@ -1350,7 +1468,7 @@ PY;
         $version = $this->option('openwa-version');
         $url = $version
             ? "https://github.com/rmyndharis/OpenWA/archive/refs/tags/{$version}.zip"
-            : "https://github.com/rmyndharis/OpenWA/archive/refs/heads/main.zip";
+            : 'https://github.com/rmyndharis/OpenWA/archive/refs/heads/main.zip';
 
         $archive = "{$this->runtimeDir}/downloads/openwa-source.zip";
 
@@ -1381,17 +1499,19 @@ PY;
                 }
             }
 
-            if (!$subDir) {
+            if (! $subDir) {
                 return false;
             }
 
             $this->rcopy($subDir, $appDir);
             $this->rrmdir($tmp);
+
             return true;
         });
 
-        if (!is_file("{$appDir}/package.json")) {
+        if (! is_file("{$appDir}/package.json")) {
             $this->error('OpenWA source extraction failed — package.json not found');
+
             return null;
         }
 
@@ -1404,6 +1524,7 @@ PY;
 
         if (is_dir("{$modulesDir}/node_modules") && count(scandir("{$modulesDir}/node_modules")) > 2) {
             $this->components->twoColumnDetail('npm dependencies', 'already installed from modules');
+
             return;
         }
 
@@ -1412,8 +1533,10 @@ PY;
         if (is_dir($appNm) && count(scandir($appNm)) > 2) {
             $this->components->task('Moving existing node_modules to modules/', function () use ($appNm, $modulesDir) {
                 $this->renameNodeModules($appNm, $modulesDir);
+
                 return true;
             });
+
             return;
         }
 
@@ -1437,6 +1560,7 @@ PY;
 
             if ($exitCode !== 0) {
                 Log::warning('OpenWA npm install failed', ['output' => implode("\n", $output)]);
+
                 return false;
             }
 
@@ -1452,6 +1576,7 @@ PY;
     {
         if (is_file("{$appDir}/dist/main.js")) {
             $this->components->twoColumnDetail('OpenWA build', 'dist/main.js already exists');
+
             return;
         }
 
@@ -1460,7 +1585,7 @@ PY;
             ? "{$appDir}/node_modules"
             : (is_dir($modulesDir) ? $modulesDir : null);
 
-        if ($nodeModules && !is_dir("{$appDir}/node_modules")) {
+        if ($nodeModules && ! is_dir("{$appDir}/node_modules")) {
             $this->linkNodeModules($appDir, $nodeModules);
         }
 
@@ -1474,15 +1599,17 @@ PY;
 
             if ($exitCode !== 0) {
                 Log::warning('OpenWA build failed', ['output' => implode("\n", array_slice($output, -30))]);
+
                 return false;
             }
 
             return is_file("{$appDir}/dist/main.js");
         });
 
-        if (!$built) {
+        if (! $built) {
             $this->error('OpenWA build failed — dist/main.js was not created.');
-            $this->warn('Try building manually: cd "' . $appDir . '" && npm install --ignore-scripts && npm run build');
+            $this->warn('Try building manually: cd "'.$appDir.'" && npm install --ignore-scripts && npm run build');
+
             return;
         }
 
@@ -1536,7 +1663,7 @@ PY;
 
     protected function generateApiKey(): string
     {
-        return 'mgs_' . bin2hex(random_bytes(24));
+        return 'mgs_'.bin2hex(random_bytes(24));
     }
 
     protected function writeEnvConfig(string $appDir, string $nodeBinary, string $apiKey): void
@@ -1559,7 +1686,7 @@ PY;
             // unquoted whitespace mid-value. Quotes are preserved only when
             // needed to keep backward compatibility with simple values.
             if (preg_match('/\s/', $escaped)) {
-                $escaped = '"' . str_replace('"', '\\"', $escaped) . '"';
+                $escaped = '"'.str_replace('"', '\\"', $escaped).'"';
             }
             if (preg_match("/^{$key}=.*/m", $envContent)) {
                 $envContent = preg_replace("/^{$key}=.*/m", "{$key}={$escaped}", $envContent);
@@ -1569,18 +1696,18 @@ PY;
         }
 
         file_put_contents($envPath, $envContent);
-        $this->components->twoColumnDetail('.env updated', count($replacements) . ' entries');
+        $this->components->twoColumnDetail('.env updated', count($replacements).' entries');
     }
 
     protected function download(string $url, string $dest): bool
     {
         $dir = dirname($dest);
-        if (!is_dir($dir)) {
+        if (! is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
 
         $fp = fopen($dest, 'w+');
-        if (!$fp) {
+        if (! $fp) {
             return false;
         }
 
@@ -1601,9 +1728,10 @@ PY;
         curl_close($ch);
         fclose($fp);
 
-        if (!$ok || $httpCode >= 400) {
+        if (! $ok || $httpCode >= 400) {
             @unlink($dest);
             Log::error('Download failed', ['url' => $url, 'http' => $httpCode, 'err' => $error]);
+
             return false;
         }
 
@@ -1613,14 +1741,16 @@ PY;
             Log::error('Downloaded file too small (likely an error page)', [
                 'url' => $url, 'size' => $fileSize,
             ]);
+
             return false;
         }
 
         if ($contentType && str_contains($contentType, 'text/html')) {
             $content = file_get_contents($dest);
-            if (str_contains((string)$content, '<html') || str_contains((string)$content, '<!DOCTYPE')) {
+            if (str_contains((string) $content, '<html') || str_contains((string) $content, '<!DOCTYPE')) {
                 @unlink($dest);
                 Log::error('Downloaded an HTML page instead of a binary', ['url' => $url]);
+
                 return false;
             }
         }
@@ -1633,7 +1763,9 @@ PY;
         $dir = opendir($src);
         @mkdir($dst, 0755, true);
         while (($file = readdir($dir)) !== false) {
-            if ($file === '.' || $file === '..' || $file === 'node_modules') continue;
+            if ($file === '.' || $file === '..' || $file === 'node_modules') {
+                continue;
+            }
             $srcPath = "{$src}/{$file}";
             $dstPath = "{$dst}/{$file}";
             if (is_dir($srcPath)) {
@@ -1647,7 +1779,9 @@ PY;
 
     protected function rrmdir(string $dir): void
     {
-        if (!is_dir($dir)) return;
+        if (! is_dir($dir)) {
+            return;
+        }
 
         // On Windows, RecursiveDirectoryIterator fails to descend into
         // junctions/symlinks (`node_modules` often has them) and unlink()
@@ -1655,8 +1789,10 @@ PY;
         // Shell out to `rd /s /q` which handles all of that natively.
         if (PHP_OS_FAMILY === 'Windows') {
             $normalized = str_replace('/', DIRECTORY_SEPARATOR, $dir);
-            exec('rd /s /q "' . $normalized . '" 2>NUL', $o, $code);
-            if (!is_dir($dir)) return;
+            exec('rd /s /q "'.$normalized.'" 2>NUL', $o, $code);
+            if (! is_dir($dir)) {
+                return;
+            }
             // Fall through to the manual walk if `rd` failed.
         }
 
@@ -1665,7 +1801,7 @@ PY;
             \RecursiveIteratorIterator::CHILD_FIRST
         );
         foreach ($items as $item) {
-            if ($item->isDir() && !is_link($item->getPathname())) {
+            if ($item->isDir() && ! is_link($item->getPathname())) {
                 @rmdir($item->getRealPath());
             } else {
                 @unlink($item->getRealPath());

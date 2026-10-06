@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\SQLiteConnection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -59,7 +60,7 @@ return new class extends Migration
         }
 
         // 3. Keep the autoincrement sequence in sync for SQLite.
-        if (DB::connection() instanceof \Illuminate\Database\SQLiteConnection) {
+        if (DB::connection() instanceof SQLiteConnection) {
             DB::statement("UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM orders_new) WHERE name = 'orders_new'");
         }
 
@@ -121,7 +122,7 @@ return new class extends Migration
             ]);
         }
 
-        if (DB::connection() instanceof \Illuminate\Database\SQLiteConnection) {
+        if (DB::connection() instanceof SQLiteConnection) {
             DB::statement("UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM orders_old) WHERE name = 'orders_old'");
         }
 

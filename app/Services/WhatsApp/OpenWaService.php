@@ -270,6 +270,93 @@ class OpenWaService
     }
 
     /**
+     * Send a document (printed invoice / purchase bill / cashbook statement)
+     * as a WhatsApp attachment.
+     *
+     * Like voice notes and images the bytes ride inside the JSON body as a
+     * data URL: the NativePHP WebView's fetch interceptor corrupts
+     * multipart/binary payloads, so JSON + base64 is the only reliable path.
+     * The gateway decodes it and Baileys uploads it as a real document.
+     *
+     * @return array{ok: bool, id: ?string}
+     */
+    public function sendDocument(string $phone, string $filePath, ?string $fileName = null, ?string $caption = null): array
+    {
+        if (! $this->isConfigured()) {
+            Log::info('OpenWA document skipped (not configured)', compact('phone', 'filePath'));
+
+            return ['ok' => false, 'id' => null];
+        }
+
+        if (! is_file($filePath)) {
+            Log::error('OpenWA document file missing', compact('filePath'));
+
+            return ['ok' => false, 'id' => null];
+        }
+
+        // The gateway's send-document endpoint takes no caption, so a caption
+        // travels as a short text message right before the file. Best effort:
+        // a failed caption must never stop the document itself.
+        if ($caption !== null && trim($caption) !== '') {
+            $this->sendText($phone, $caption);
+        }
+
+        $chatId = $this->toChatId($phone);
+        $fileName = $fileName ?: basename($filePath);
+        $mime = self::documentMimeType($fileName);
+
+        try {
+            $response = $this->client()->post(
+                "/api/sessions/{$this->session()}/messages/send-document",
+                [
+                    'chatId' => $chatId,
+                    'document' => 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($filePath)),
+                    'mimetype' => $mime,
+                    'fileName' => $fileName,
+                ]
+            );
+        } catch (ConnectionException $e) {
+            Log::error('OpenWA unreachable (document)', [
+                'chatId' => $chatId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['ok' => false, 'id' => null];
+        }
+
+        if ($response->successful()) {
+            return ['ok' => true, 'id' => data_get($response->json(), 'id')];
+        }
+
+        Log::error('OpenWA document send failed', [
+            'chatId' => $chatId,
+            'status' => $response->status(),
+            'response' => $response->body(),
+        ]);
+
+        return ['ok' => false, 'id' => null];
+    }
+
+    /**
+     * MIME type for an outgoing document, from its extension.
+     */
+    public static function documentMimeType(string $fileName): string
+    {
+        return match (strtolower(pathinfo($fileName, PATHINFO_EXTENSION))) {
+            'pdf' => 'application/pdf',
+            'csv' => 'text/csv',
+            'txt' => 'text/plain',
+            'json' => 'application/json',
+            'zip' => 'application/zip',
+            'doc' => 'application/msword',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls' => 'application/vnd.ms-excel',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            default => 'application/octet-stream',
+        };
+    }
+
+    /**
      * Best-effort MIME type for an audio file. Extension mapping wins over
      * content sniffing because finfo reports "video/webm" for WebM audio,
      * which WhatsApp refuses to play.
@@ -336,6 +423,43 @@ class OpenWaService
         }
 
         return $response->successful() ? $response->json() : null;
+    }
+
+    /**
+     * Poll inbound messages the gateway has buffered since the given
+     * sequence number (GET /api/sessions/:id/messages?since=).
+     *
+     * The cursor is persisted via cacheCursor()/cursor() so successive runs
+     * only see fresh messages; the sequence survives gateway restarts only
+     * within its in-memory buffer (a gateway restart resets it to 0, so the
+     * cursor is also reset whenever a lower-than-previous cursor arrives).
+     *
+     * @return array{messages: array<int, array>, cursor: int}|null
+     */
+    public function messages(int $since = 0): ?array
+    {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        try {
+            $response = $this->client()->get("/api/sessions/{$this->session()}/messages", [
+                'since' => $since,
+            ]);
+        } catch (ConnectionException $e) {
+            Log::warning('OpenWA unreachable (messages)', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        return [
+            'messages' => (array) data_get($response->json(), 'messages', []),
+            'cursor' => (int) data_get($response->json(), 'cursor', $since),
+        ];
     }
 
     /**

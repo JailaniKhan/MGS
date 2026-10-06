@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
     {{-- Header --}}
@@ -24,7 +24,7 @@
                     <x-icon name="document-text" class="w-4 h-4 text-accent-600 dark:text-accent-400" strokeWidth="1.8"/>
                 </div>
                 <div class="min-w-0">
-                    <div class="text-xs font-bold text-accent-800 dark:text-accent-300 uppercase tracking-wider mb-1">PDF</div>
+                    <div class="text-xs font-bold text-accent-800 dark:text-accent-300 uppercase tracking-wider mb-1">PDF + JSON</div>
                     <p class="text-[11px] leading-relaxed text-accent-700 dark:text-accent-300">
                         {{ __('messages.backup_pdf_note') }}
                     </p>
@@ -59,7 +59,19 @@
                 <label class="form-label">{{ __('messages.backup_name') }}</label>
                 <div class="relative" dir="ltr">
                     <x-icon name="document-text" class="w-5 h-5 text-ink-400 dark:text-ink-500 pointer-events-none absolute top-1/2 -translate-y-1/2 start-3"/>
-                    <input type="text" disabled value="backup_{{ date('Y_m_d_H_i_s') }}.pdf" class="form-input ps-10 bg-ink-50 dark:bg-white/[0.03] cursor-not-allowed" dir="ltr">
+                    <input type="text" disabled value="backup_{{ date('Y_m_d_H_i_s') }}" class="form-input ps-10 bg-ink-50 dark:bg-white/[0.03] cursor-not-allowed" dir="ltr">
+                </div>
+                {{-- A backup is two files sharing this name, so the shop knows
+                     what pressing the button produces: the PDF it reads, the
+                     JSON it later restores from. --}}
+                <div class="mt-2 space-y-1">
+                    @foreach (['.pdf', '.json'] as $extension)
+                        <div class="flex items-center gap-2 text-[11px] text-ink-500 dark:text-ink-400" dir="ltr">
+                            <x-icon name="document-text" class="w-3.5 h-3.5 flex-shrink-0" strokeWidth="1.8"/>
+                            <span class="truncate">backup_{{ date('Y_m_d_H_i_s') }}{{ $extension }}</span>
+                            <span class="badge {{ $extension === '.pdf' ? 'badge-danger' : 'badge-warning' }}">{{ strtoupper(ltrim($extension, '.')) }}</span>
+                        </div>
+                    @endforeach
                 </div>
             </div>
 

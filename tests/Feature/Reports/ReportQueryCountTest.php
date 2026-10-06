@@ -13,6 +13,7 @@ use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\PurchaseReturn;
 use App\Models\PurchaseReturnItem;
+use App\Models\Setting;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Database\Events\QueryExecuted;
@@ -142,6 +143,11 @@ class ReportQueryCountTest extends TestCase
             $queries[] = $query->sql;
         });
 
+        // Settings are read through a per-process memo: warm it before both
+        // measurements so run two isn't "faster" for reasons unrelated to
+        // product count.
+        Setting::flushMemo();
+
         $response = $this->get('/reports/balance-sheet?currency=AFN');
 
         $response->assertOk();
@@ -166,6 +172,8 @@ class ReportQueryCountTest extends TestCase
             $queries2[] = $query->sql;
         });
 
+        Setting::flushMemo();
+
         $response2 = $this->get('/reports/balance-sheet?currency=AFN');
         $response2->assertOk();
         $queryCount2 = count($queries2);
@@ -183,6 +191,8 @@ class ReportQueryCountTest extends TestCase
         DB::listen(function (QueryExecuted $query) use (&$queries) {
             $queries[] = $query->sql;
         });
+
+        Setting::flushMemo();
 
         $response = $this->get('/reports/stock?currency=AFN');
 
@@ -207,6 +217,8 @@ class ReportQueryCountTest extends TestCase
         DB::listen(function (QueryExecuted $query) use (&$queries2) {
             $queries2[] = $query->sql;
         });
+
+        Setting::flushMemo();
 
         $response2 = $this->get('/reports/stock?currency=AFN');
         $response2->assertOk();

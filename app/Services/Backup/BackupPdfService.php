@@ -3,6 +3,7 @@
 namespace App\Services\Backup;
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
 use Mpdf\Output\Destination;
 
@@ -27,13 +28,20 @@ class BackupPdfService
 
     public function generate(array $data): string
     {
+        // mPDF needs the temp dir to exist before it boots; on a fresh
+        // install (or after wiping private storage) it won't.
+        $tempDir = storage_path('app/private/mpdf');
+        if (! is_dir($tempDir)) {
+            Storage::disk('local')->makeDirectory('mpdf');
+        }
+
         $mpdf = new Mpdf([
-            'tempDir' => storage_path('app/private/mpdf'),
+            'tempDir' => $tempDir,
             'format' => 'A4',
             // Lateef covers the Arabic block incl. the Pashto letters (ګ ۍ څ ځ ږ)
             // plus Latin, so money/date spans don't even need a second font —
             // .ltr { font-family: dejavusans } stays for crisper Latin digits.
-            'fontDir' => [__DIR__.'/../../../vendor/mpdf/mpdf/ttfonts'],
+            'fontDir' => [base_path('resources/fonts')],
             'fontdata' => [
                 'lateef' => [
                     'R' => 'LateefRegOT.ttf',

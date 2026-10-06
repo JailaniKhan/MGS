@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AddsListBalances;
+use App\Http\Controllers\Concerns\DeliversDocuments;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Product;
@@ -12,6 +13,7 @@ use App\Models\Setting;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Services\Billing\BillService;
+use App\Services\Billing\InvoicePdfService;
 use App\Services\Billing\PartyBalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -21,6 +23,7 @@ use Illuminate\Validation\ValidationException;
 class OrderController extends Controller
 {
     use AddsListBalances;
+    use DeliversDocuments;
 
     public function index(Request $request)
     {
@@ -235,15 +238,94 @@ class OrderController extends Controller
 
     public function print(Order $order)
     {
-        $order->load('customer', 'orderItems.product.unit', 'payments');
+        ['company' => $company, 'number' => $invoiceNumber, 'pending' => $totalPending] = $this->invoiceContext($order);
+
+        // The preview is the artifact on every screen: the WebView cannot run
+        // window.print(), so the page itself offers view / save / WhatsApp
+        // actions (see the device gate inside the view).
+        return view('orders.print', compact('order', 'company', 'invoiceNumber', 'totalPending'));
+    }
+
+    /** Open the invoice PDF once in the phone's viewer. */
+    public function openPdf(Order $order)
+    {
+        ['binary' => $binary, 'number' => $number] = $this->renderInvoice($order);
+
+        return $this->openDocument(
+            $binary,
+            $number.'.pdf',
+            __('messages.invoice').' '.$number,
+            route('orders.print', $order),
+        );
+    }
+
+    /** Keep the invoice PDF in the phone's Downloads/MGS folder. */
+    public function savePdf(Order $order)
+    {
+        ['binary' => $binary, 'number' => $number] = $this->renderInvoice($order);
+
+        return $this->saveDocument(
+            $binary,
+            $number.'.pdf',
+            __('messages.invoice').' '.$number,
+            route('orders.print', $order),
+        );
+    }
+
+    /** Hand the invoice PDF to the share sheet (WhatsApp first). */
+    public function sharePdf(Order $order)
+    {
+        ['binary' => $binary, 'number' => $number] = $this->renderInvoice($order);
+
+        return $this->shareDocument(
+            $binary,
+            $number.'.pdf',
+            __('messages.invoice').' '.$number,
+            $this->invoiceCaption($order, $number),
+            route('orders.print', $order),
+        );
+    }
+
+    /** Send the invoice PDF to the party over the WhatsApp gateway. */
+    public function sendPdf(Order $order, BillService $bills)
+    {
+        ['binary' => $binary, 'number' => $number] = $this->renderInvoice($order);
+
+        $result = $bills->sendPdf(
+            $order->party,
+            (string) ($order->party?->phone ?? ''),
+            $binary,
+            $number.'.pdf',
+            $this->invoiceCaption($order, $number),
+            (float) $order->total_amount,
+            $order->currency,
+        );
+
+        return back()->with(
+            $result['ok'] ? 'success' : 'error',
+            $result['ok']
+                ? __('messages.pdf_sent', ['phone' => $order->party?->phone])
+                : $result['error'],
+        );
+    }
+
+    /**
+     * Everything the print page and the PDF renderer need about one order.
+     *
+     * @return array{company: array<string, string>, number: string, pending: float}
+     */
+    private function invoiceContext(Order $order): array
+    {
+        $order->load('customer', 'supplier', 'orderItems.product.unit', 'payments');
+
         $company = [
             'name' => Setting::get('company_name', 'My Business'),
             'address' => Setting::get('company_address', ''),
             'phone' => Setting::get('company_phone', ''),
             'email' => Setting::get('company_email', ''),
         ];
-        $invoicePrefix = Setting::get('invoice_prefix', 'INV-');
-        $invoiceNumber = $invoicePrefix.$order->id;
+
+        $invoiceNumber = Setting::get('invoice_prefix', 'INV-').$order->id;
 
         // Party-wide pending in the order's currency (mirrors the ledger).
         $totalPending = $order->person_type && $order->person_id
@@ -251,7 +333,29 @@ class OrderController extends Controller
                 ->pendingAmount($order->person_type, $order->person_id, $order->currency)
             : (float) $order->remaining_amount;
 
-        return view('orders.print', compact('order', 'company', 'invoiceNumber', 'totalPending'));
+        return ['company' => $company, 'number' => $invoiceNumber, 'pending' => $totalPending];
+    }
+
+    /**
+     * Rendered invoice bytes + its document number.
+     *
+     * @return array{binary: string, number: string}
+     */
+    private function renderInvoice(Order $order): array
+    {
+        ['company' => $company, 'number' => $number, 'pending' => $pending] = $this->invoiceContext($order);
+
+        return [
+            'binary' => app(InvoicePdfService::class)->forOrder($order, $company, $number, $pending),
+            'number' => $number,
+        ];
+    }
+
+    /** Short caption that rides along with the PDF into WhatsApp. */
+    private function invoiceCaption(Order $order, string $number): string
+    {
+        return __('messages.invoice').' '.$number.' — '.money_format($order->total_amount)
+            .' '.($order->currency === 'USD' ? '$' : __('messages.afn'));
     }
 
     public function sendWhatsApp(Order $order, BillService $bills)

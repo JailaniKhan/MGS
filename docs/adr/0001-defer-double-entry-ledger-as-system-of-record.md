@@ -1,7 +1,7 @@
 # ADR-0001: Defer promoting the double-entry ledger to system of record for money
 
 **Date:** 2026-08-10
-**Status:** Deferred (active decision to *not* change yet)
+**Status:** Deferred (active decision to _not_ change yet)
 **Tags:** accounting, ledger, returns, sales
 
 ## Context
@@ -65,7 +65,7 @@ Dashboard/Report controllers change; sync API implications).
   hack, and the stock-to-money-audit-trail gap are all **expected to remain**
   until the deferred decision is made and executed.
 - A future "Return lifecycle: pending→completed gates the stock move"
-  follow-up is compatible with this decision — it changes *when* the effect
+  follow-up is compatible with this decision — it changes _when_ the effect
   happens, not where it books.
 - A future damaged-goods / phantom-return workflow can add its own
   `movement_type` without conflicting with this.

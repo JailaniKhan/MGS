@@ -5,7 +5,9 @@
    (toggled by the theme control). OS preference is applied as the default
    via the no-FOUC script in layouts/app.blade.php. */
 @custom-variant dark (&:where(.dark, .dark *));
-html.dark { color-scheme: dark; }
+html.dark {
+    color-scheme: dark;
+}
 
 @source '../../resources/views/vendor/pagination/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -15,7 +17,8 @@ html.dark { color-scheme: dark; }
        TYPOGRAPHY — Premium editorial pairing
        Grotesk body. Medium tracking. Tabular figures for money.
        ============================================ */
-    --font-sans: 'Plus Jakarta Sans', 'Vazirmatn', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    --font-sans:
+        'Plus Jakarta Sans', 'Vazirmatn', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
     --font-display: 'Plus Jakarta Sans', 'Vazirmatn', ui-sans-serif, system-ui, sans-serif;
 
@@ -120,9 +123,11 @@ html.dark { color-scheme: dark; }
         /* Tabular figures for clean money alignment across the app */
         font-variant-numeric: tabular-nums;
     }
-    .dark body { background-color: var(--color-surface-dark); }
+    .dark body {
+        background-color: var(--color-surface-dark);
+    }
 
-    [dir="rtl"] body {
+    [dir='rtl'] body {
         /* Reset letter-spacing for Arabic/Persian scripts (letters must stay connected) */
         letter-spacing: 0;
         /* Vazirmatn-specific: better rendering hints for Persian/Pashto */
@@ -130,22 +135,24 @@ html.dark { color-scheme: dark; }
         text-rendering: auto;
     }
 
-    [dir="rtl"] .tracking-tight,
-    [dir="rtl"] .tracking-wide,
-    [dir="rtl"] .tracking-wider,
-    [dir="rtl"] .tracking-widest {
+    [dir='rtl'] .tracking-tight,
+    [dir='rtl'] .tracking-wide,
+    [dir='rtl'] .tracking-wider,
+    [dir='rtl'] .tracking-widest {
         letter-spacing: 0;
     }
 
     /* RTL line-height adjustment (Arabic needs a bit more breathing room) */
-    [dir="rtl"] .leading-tight {
+    [dir='rtl'] .leading-tight {
         line-height: 1.4;
     }
 
     /* Consistent, accessible focus ring */
     :focus-visible {
         outline: none;
-        box-shadow: 0 0 0 2px var(--color-surface, #fff), 0 0 0 4px var(--color-brand);
+        box-shadow:
+            0 0 0 2px var(--color-surface, #fff),
+            0 0 0 4px var(--color-brand);
         border-radius: 0.625rem;
     }
 
@@ -301,12 +308,12 @@ html.dark { color-scheme: dark; }
 
 /* Number inputs: drop the native up/down spin buttons (WebView + desktop).
    The inputs sit inside icon-affixed fields; spinners covered the icons. */
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
-input[type="number"] {
+input[type='number'] {
     -moz-appearance: textfield;
     appearance: textfield;
 }
@@ -342,6 +349,29 @@ input[type="number"] {
 }
 
 /* ============================================
+   QUICK-ACTION TILES (document actions)
+   Horizontal icon+label tiles for the cashbook
+   person action grid — labels wrap to two lines
+   instead of truncating; the whole tile is a
+   >=44px touch target.
+   ============================================ */
+
+@utility action-tile {
+    @apply flex items-center gap-3 p-3 rounded-2xl text-start min-h-[3.25rem]
+           bg-ink-50 dark:bg-white/[0.04] text-ink-700 dark:text-ink-200
+           border border-ink-100 dark:border-white/[0.06]
+           transition-all duration-200 active:scale-[0.97];
+}
+
+@utility action-tile-icon {
+    @apply w-10 h-10 rounded-[0.875rem] flex items-center justify-center flex-shrink-0;
+}
+
+@utility action-tile-label {
+    @apply text-xs font-bold leading-tight min-w-0;
+}
+
+/* ============================================
    BOTTOM NAVIGATION (floating capsule)
    ============================================ */
 
@@ -353,6 +383,14 @@ input[type="number"] {
 @utility bottom-nav-shell {
     @apply bg-white/92 dark:bg-[#16181c]/92 backdrop-blur-2xl border border-ink-100/90 dark:border-white/[0.06]
            rounded-[1.375rem] shadow-nav dark:shadow-nav-dark overflow-visible;
+}
+
+/* While a field is focused the on-screen keyboard owns the bottom of the
+   screen, and the floating capsule would sit right on top of it (covering
+   the field being typed into). ui.js toggles `keyboard-open` on <html> for
+   touch devices only; fixed positioning means hiding it reflows nothing. */
+html.keyboard-open .bottom-nav {
+    display: none;
 }
 
 @utility nav-item {
@@ -379,8 +417,12 @@ input[type="number"] {
     background: color-mix(in srgb, var(--color-brand) 16%, transparent);
 }
 
-.nav-item-icon { @apply w-[22px] h-[22px] relative transition-transform duration-200; }
-.nav-item-label { @apply relative leading-none truncate max-w-full px-1; }
+.nav-item-icon {
+    @apply w-[22px] h-[22px] relative transition-transform duration-200;
+}
+.nav-item-label {
+    @apply relative leading-none truncate max-w-full px-1;
+}
 
 @utility nav-item-active {
     @apply text-brand;
@@ -390,11 +432,19 @@ input[type="number"] {
     animation: navIconPop 0.4s var(--ease-smooth) both;
 }
 @keyframes navIconPop {
-    0% { transform: translateY(2px) scale(0.9); }
-    60% { transform: translateY(-2px) scale(1.12); }
-    100% { transform: translateY(-1px) scale(1.08); }
+    0% {
+        transform: translateY(2px) scale(0.9);
+    }
+    60% {
+        transform: translateY(-2px) scale(1.12);
+    }
+    100% {
+        transform: translateY(-1px) scale(1.08);
+    }
 }
-.nav-item-active .nav-item-label { @apply font-bold; }
+.nav-item-active .nav-item-label {
+    @apply font-bold;
+}
 
 /* Center elevated FAB inside the nav */
 @utility fab-anchor {
@@ -438,6 +488,38 @@ input[type="number"] {
 @keyframes slideDown {
     from {
         transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* ============================================
+   CONNECTION STATUS (internet + printer)
+   Offline snack-bar floating above the bottom
+   nav (toasts own the top of the screen). ui.js
+   toggles it from online/offline events and shows
+   the connection status as a brief toast.
+   ============================================ */
+
+@utility connectivity-banner {
+    @apply fixed z-40 left-4 right-4 mx-auto max-w-md
+           flex items-center gap-2.5 rounded-2xl px-4 py-3
+           bg-danger-500 text-white shadow-card;
+    bottom: calc(4.75rem + env(safe-area-inset-bottom));
+    animation: connBannerIn 0.35s var(--ease-smooth) both;
+}
+
+/* The utility's display:flex would beat the [hidden] attribute */
+.connectivity-banner[hidden] {
+    display: none;
+}
+
+@keyframes connBannerIn {
+    from {
+        transform: translateY(140%);
         opacity: 0;
     }
     to {
@@ -505,17 +587,20 @@ input[type="number"] {
 
 /* Mobile horizontal scroll for list rows */
 @media (max-width: 639px) {
-    .list-row, .swipe-row {
+    .list-row,
+    .swipe-row {
         flex-wrap: nowrap;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
         -ms-overflow-style: none;
     }
-    .list-row::-webkit-scrollbar, .swipe-row::-webkit-scrollbar {
+    .list-row::-webkit-scrollbar,
+    .swipe-row::-webkit-scrollbar {
         display: none;
     }
-    .list-row > *, .swipe-row > * {
+    .list-row > *,
+    .swipe-row > * {
         flex-shrink: 0;
     }
     /* Money/text list rows: let the leading block truncate instead of
@@ -625,9 +710,13 @@ textarea.form-input:has(+ .text-danger-500) {
     overflow: hidden;
 }
 .dark {
-    .skeleton-overlay { background: #0b0c0e; }
+    .skeleton-overlay {
+        background: #0b0c0e;
+    }
 }
-.skeleton-overlay[hidden] { display: none; }
+.skeleton-overlay[hidden] {
+    display: none;
+}
 .skeleton-block {
     background: #fff;
     border-radius: 1rem;
@@ -636,7 +725,10 @@ textarea.form-input:has(+ .text-danger-500) {
     box-shadow: var(--shadow-card);
 }
 .dark {
-    .skeleton-block { background: #16181c; border-color: rgba(255,255,255,0.06); }
+    .skeleton-block {
+        background: #16181c;
+        border-color: rgba(255, 255, 255, 0.06);
+    }
 }
 
 /* ---- Expandable FAB menu ---- */
@@ -648,9 +740,14 @@ textarea.form-input:has(+ .text-danger-500) {
     backdrop-filter: blur(3px);
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.3s var(--ease-smooth), visibility 0.3s var(--ease-smooth);
+    transition:
+        opacity 0.3s var(--ease-smooth),
+        visibility 0.3s var(--ease-smooth);
 }
-.fab-backdrop.open { opacity: 1; visibility: visible; }
+.fab-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+}
 .fab-menu {
     position: fixed;
     left: 0;
@@ -661,7 +758,10 @@ textarea.form-input:has(+ .text-danger-500) {
     visibility: hidden;
     pointer-events: none;
     transform: translateY(1.5rem);
-    transition: opacity 0.32s var(--ease-smooth), transform 0.32s var(--ease-smooth), visibility 0.32s var(--ease-smooth);
+    transition:
+        opacity 0.32s var(--ease-smooth),
+        transform 0.32s var(--ease-smooth),
+        visibility 0.32s var(--ease-smooth);
     z-index: 60;
 }
 .fab-menu.open {
@@ -693,7 +793,9 @@ textarea.form-input:has(+ .text-danger-500) {
 .fab-menu-item .fab-tile {
     @apply w-10 h-10 rounded-[0.875rem] flex items-center justify-center flex-shrink-0;
 }
-.fab-menu-item .fab-tile svg { @apply w-5 h-5; }
+.fab-menu-item .fab-tile svg {
+    @apply w-5 h-5;
+}
 .fab-menu-item > span:last-child {
     @apply text-[12px] font-bold leading-tight;
 }
@@ -702,18 +804,32 @@ textarea.form-input:has(+ .text-danger-500) {
     animation-delay: calc(0.05s + 0.05s * var(--i));
 }
 @keyframes fabItemPop {
-    from { opacity: 0; transform: translateY(0.75rem) scale(0.95); }
-    to { opacity: 1; transform: none; }
+    from {
+        opacity: 0;
+        transform: translateY(0.75rem) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
 }
-.fab-toggle { transition: transform 0.35s var(--ease-smooth); }
-.fab-toggle.open { transform: rotate(135deg); }
+.fab-toggle {
+    transition: transform 0.35s var(--ease-smooth);
+}
+.fab-toggle.open {
+    transform: rotate(135deg);
+}
 
 /* ---- Toast upgrade: icon + progress bar ---- */
 .toast-icon {
     @apply w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0;
 }
-.toast-icon-success { @apply bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400; }
-.toast-icon-error { @apply bg-danger-100 dark:bg-danger-900/50 text-danger-600 dark:text-danger-400; }
+.toast-icon-success {
+    @apply bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400;
+}
+.toast-icon-error {
+    @apply bg-danger-100 dark:bg-danger-900/50 text-danger-600 dark:text-danger-400;
+}
 .toast-progress {
     position: absolute;
     left: 0;
@@ -725,8 +841,12 @@ textarea.form-input:has(+ .text-danger-500) {
     animation: toastProgress linear forwards;
 }
 @keyframes toastProgress {
-    from { transform: scaleX(1); }
-    to { transform: scaleX(0); }
+    from {
+        transform: scaleX(1);
+    }
+    to {
+        transform: scaleX(0);
+    }
 }
 
 /* ---- Animated success checkmark ---- */
@@ -736,23 +856,37 @@ textarea.form-input:has(+ .text-danger-500) {
     animation: checkPop 0.5s var(--ease-smooth) 0.1s forwards;
 }
 @keyframes checkPop {
-    to { stroke-dashoffset: 0; }
+    to {
+        stroke-dashoffset: 0;
+    }
 }
 
 /* ---- Reusable sheet / modal base (wired in Phase B) ---- */
-.sheet-backdrop, .modal-backdrop {
+.sheet-backdrop,
+.modal-backdrop {
     position: fixed;
     inset: 0;
     z-index: 60;
     background: rgba(11, 12, 14, 0.5);
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.3s var(--ease-smooth), visibility 0.3s var(--ease-smooth);
+    transition:
+        opacity 0.3s var(--ease-smooth),
+        visibility 0.3s var(--ease-smooth);
 }
-.sheet-backdrop.open, .modal-backdrop.open { opacity: 1; visibility: visible; }
+.sheet-backdrop.open,
+.modal-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+}
 /* Reveal the card inside an open backdrop wrapper (e.g. the global confirm sheet) */
-.sheet-backdrop.open .bottom-sheet { transform: translateY(0); }
-.modal-backdrop.open .modal-card { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.sheet-backdrop.open .bottom-sheet {
+    transform: translateY(0);
+}
+.modal-backdrop.open .modal-card {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
 .bottom-sheet {
     position: absolute;
     left: 0;
@@ -769,9 +903,13 @@ textarea.form-input:has(+ .text-danger-500) {
     box-shadow: 0 -8px 30px -8px rgb(20 20 20 / 0.18);
 }
 .dark {
-    .bottom-sheet { background: #16181c; }
+    .bottom-sheet {
+        background: #16181c;
+    }
 }
-.bottom-sheet.open { transform: translateY(0); }
+.bottom-sheet.open {
+    transform: translateY(0);
+}
 .modal-card {
     position: absolute;
     left: 50%;
@@ -782,13 +920,20 @@ textarea.form-input:has(+ .text-danger-500) {
     background: #fff;
     border-radius: 1.25rem;
     padding: 1.25rem;
-    transition: opacity 0.25s var(--ease-smooth), transform 0.25s var(--ease-smooth);
+    transition:
+        opacity 0.25s var(--ease-smooth),
+        transform 0.25s var(--ease-smooth);
     box-shadow: 0 20px 50px -12px rgb(20 20 20 / 0.28);
 }
 .dark {
-    .modal-card { background: #1e2127; }
+    .modal-card {
+        background: #1e2127;
+    }
 }
-.modal-card.open { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.modal-card.open {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
 .sheet-handle {
     @apply w-10 h-1 rounded-full bg-ink-200 dark:bg-white/20 mx-auto my-2;
 }
@@ -807,25 +952,35 @@ textarea.form-input:has(+ .text-danger-500) {
 
 /* Tactile press feedback for tappable elements */
 .tap {
-    transition: transform 0.12s var(--ease-smooth), background-color 0.2s var(--ease-smooth);
+    transition:
+        transform 0.12s var(--ease-smooth),
+        background-color 0.2s var(--ease-smooth);
     -webkit-tap-highlight-color: transparent;
 }
-.tap:active { transform: scale(0.96); }
+.tap:active {
+    transform: scale(0.96);
+}
 
 /* Search / filter bar */
 .search-bar {
     @apply flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-ink-100 dark:bg-white/[0.05]
            border border-ink-200/70 dark:border-white/[0.06];
 }
-.search-bar svg { @apply w-4 h-4 text-ink-400 flex-shrink-0; }
+.search-bar svg {
+    @apply w-4 h-4 text-ink-400 flex-shrink-0;
+}
 .search-bar input {
     @apply bg-transparent border-0 outline-none w-full text-sm text-ink-800 dark:text-ink-100
            placeholder:text-ink-400;
 }
-.search-bar input:focus { @apply ring-0; }
+.search-bar input:focus {
+    @apply ring-0;
+}
 
 /* Segmented control polish (selected item lift) */
-.segmented-item-active { box-shadow: var(--shadow-card); }
+.segmented-item-active {
+    box-shadow: var(--shadow-card);
+}
 
 /* Count badge on segmented tab buttons (inventory tabs) */
 .tab-count {
@@ -845,9 +1000,13 @@ textarea.form-input:has(+ .text-danger-500) {
     display: flex;
     border-bottom: 1px solid var(--color-ink-200);
 }
-.swipe-row:last-child { border-bottom: 0; }
+.swipe-row:last-child {
+    border-bottom: 0;
+}
 .dark {
-    .swipe-row { border-bottom-color: rgb(255 255 255 / 0.05); }
+    .swipe-row {
+        border-bottom-color: rgb(255 255 255 / 0.05);
+    }
 }
 .swipe-content {
     @apply flex items-center gap-3 px-4 py-3.5 cursor-pointer
@@ -864,14 +1023,23 @@ textarea.form-input:has(+ .text-danger-500) {
     align-items: stretch;
     flex-shrink: 0;
 }
-.swipe-actions a, .swipe-actions button {
+.swipe-actions a,
+.swipe-actions button {
     @apply flex items-center justify-center w-12 text-ink-400 transition-colors;
     height: 100%;
 }
-.swipe-actions form { display: flex; }
-.swipe-actions .act-edit:hover { @apply text-secondary-500; }
-.swipe-actions .act-danger { @apply bg-danger-50 dark:bg-danger-900/30 text-danger-500; }
-.swipe-actions .act-danger:hover { @apply bg-danger-100 dark:bg-danger-900/50; }
+.swipe-actions form {
+    display: flex;
+}
+.swipe-actions .act-edit:hover {
+    @apply text-secondary-500;
+}
+.swipe-actions .act-danger {
+    @apply bg-danger-50 dark:bg-danger-900/30 text-danger-500;
+}
+.swipe-actions .act-danger:hover {
+    @apply bg-danger-100 dark:bg-danger-900/50;
+}
 
 html.touch .swipe-content {
     transition: transform 0.3s var(--ease-smooth);
@@ -885,21 +1053,27 @@ html.touch .swipe-actions {
     z-index: 1;
 }
 .dark {
-    .swipe-content { background: #16181c; }
+    .swipe-content {
+        background: #16181c;
+    }
 }
 
 /* ---- Confirm / action sheet footer buttons ---- */
 .confirm-actions {
     @apply flex gap-3 mt-5;
 }
-.confirm-actions .btn-danger, .confirm-actions .btn-ghost { @apply flex-1; }
+.confirm-actions .btn-danger,
+.confirm-actions .btn-ghost {
+    @apply flex-1;
+}
 
 /* ============================================
    PHASE C — ADVANCED STYLE REFINEMENTS
    ============================================ */
 
 /* ---- Glass backdrops for sheets / modals ---- */
-.sheet-backdrop, .modal-backdrop {
+.sheet-backdrop,
+.modal-backdrop {
     backdrop-filter: blur(4px) saturate(0.5);
     -webkit-backdrop-filter: blur(4px) saturate(0.5);
 }
@@ -907,7 +1081,9 @@ html.touch .swipe-actions {
 /* ---- Bottom sheet glass rim ---- */
 .bottom-sheet {
     border-top: 1px solid rgb(255 255 255 / 0.15);
-    box-shadow: 0 -8px 30px -8px rgb(20 20 20 / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.05);
+    box-shadow:
+        0 -8px 30px -8px rgb(20 20 20 / 0.18),
+        inset 0 1px 0 rgb(255 255 255 / 0.05);
 }
 .dark {
     .bottom-sheet {
@@ -917,26 +1093,34 @@ html.touch .swipe-actions {
 }
 
 /* ---- Selection colours ---- */
-::selection { background: rgb(16 174 100 / 0.18); color: inherit; }
-::-moz-selection { background: rgb(16 174 100 / 0.18); color: inherit; }
+::selection {
+    background: rgb(16 174 100 / 0.18);
+    color: inherit;
+}
+::-moz-selection {
+    background: rgb(16 174 100 / 0.18);
+    color: inherit;
+}
 
 /* ---- Custom scrollbar (Webkit / NativePHP webview) ---- */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
 ::-webkit-scrollbar-thumb {
     background: rgb(154 161 172 / 0.35);
     border-radius: 2px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgb(154 161 172 / 0.55); }
+::-webkit-scrollbar-thumb:hover {
+    background: rgb(154 161 172 / 0.55);
+}
 
 /* ---- Premium shimmer (overrides tw-shimmer's basic sweep) ---- */
 .shimmer-bg {
-    background: linear-gradient(
-        110deg,
-        rgb(244 245 247) 25%,
-        rgb(230 230 226) 37%,
-        rgb(244 245 247) 53%
-    ) !important;
+    background: linear-gradient(110deg, rgb(244 245 247) 25%, rgb(230 230 226) 37%, rgb(244 245 247) 53%) !important;
     background-size: 200% 100% !important;
     animation: shimmerSweep 2s var(--ease-smooth) infinite !important;
 }
@@ -951,8 +1135,12 @@ html.touch .swipe-actions {
     }
 }
 @keyframes shimmerSweep {
-    from { background-position: 200% 0; }
-    to { background-position: -200% 0; }
+    from {
+        background-position: 200% 0;
+    }
+    to {
+        background-position: -200% 0;
+    }
 }
 
 /* ---- Status dot pulse (for live / active indicators) ---- */
@@ -966,15 +1154,32 @@ html.touch .swipe-actions {
     border-radius: 50%;
     animation: pulseRing 2s var(--ease-smooth) infinite;
 }
-.status-dot-pulse-success { @apply bg-primary-500; }
-.status-dot-pulse-success::after { @apply bg-primary-500/30; }
-.status-dot-pulse-danger { @apply bg-danger-500; }
-.status-dot-pulse-danger::after { @apply bg-danger-500/30; }
-.status-dot-pulse-warning { @apply bg-accent-500; }
-.status-dot-pulse-warning::after { @apply bg-accent-500/30; }
+.status-dot-pulse-success {
+    @apply bg-primary-500;
+}
+.status-dot-pulse-success::after {
+    @apply bg-primary-500/30;
+}
+.status-dot-pulse-danger {
+    @apply bg-danger-500;
+}
+.status-dot-pulse-danger::after {
+    @apply bg-danger-500/30;
+}
+.status-dot-pulse-warning {
+    @apply bg-accent-500;
+}
+.status-dot-pulse-warning::after {
+    @apply bg-accent-500/30;
+}
 @keyframes pulseRing {
-    50% { transform: scale(2.2); opacity: 0; }
-    to { opacity: 0; }
+    50% {
+        transform: scale(2.2);
+        opacity: 0;
+    }
+    to {
+        opacity: 0;
+    }
 }
 
 /* ---- Input icon wrapper ---- */
@@ -984,7 +1189,9 @@ html.touch .swipe-actions {
 .input-icon svg {
     @apply absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400 pointer-events-none;
 }
-.input-icon input, .input-icon select, .input-icon textarea {
+.input-icon input,
+.input-icon select,
+.input-icon textarea {
     @apply pl-10;
 }
 
@@ -999,7 +1206,9 @@ html.touch .swipe-actions {
     background: linear-gradient(90deg, transparent, rgb(232 234 237), transparent);
 }
 .dark {
-    .divider-grad { background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.05), transparent); }
+    .divider-grad {
+        background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.05), transparent);
+    }
 }
 
 /* ---- Metric tile accent bar: one quiet, uniform brand edge ----
@@ -1017,7 +1226,7 @@ html.touch .swipe-actions {
     border-radius: 3px 0 0 3px;
     background: color-mix(in srgb, var(--color-brand) 35%, transparent);
 }
-[dir="rtl"] .metric-tile::before {
+[dir='rtl'] .metric-tile::before {
     inset-inline-start: auto;
     inset-inline-end: 0;
     border-radius: 0 3px 3px 0;
@@ -1037,7 +1246,9 @@ html.touch .swipe-actions {
     background: linear-gradient(135deg, rgb(16 174 100 / 0.03), transparent);
     pointer-events: none;
 }
-.action-card:hover::after { opacity: 1; }
+.action-card:hover::after {
+    opacity: 1;
+}
 
 /* ---- Feature tile (inside bottom sheet) ---- */
 .feature-tile {
@@ -1046,7 +1257,9 @@ html.touch .swipe-actions {
            text-[11px] font-semibold text-center leading-tight
            active:scale-95 transition-transform;
 }
-.feature-tile svg { @apply text-primary-600 dark:text-primary-400; }
+.feature-tile svg {
+    @apply text-primary-600 dark:text-primary-400;
+}
 
 /* ---- Hero enhancements (net-balance decorative overlay) ---- */
 /* Already uses inline decorative circles in dashboard.blade.php */
@@ -1061,7 +1274,9 @@ html.touch .swipe-actions {
         transform: translateY(8px) scale(0.98);
         opacity: 0;
     }
-    60% { opacity: 1; }
+    60% {
+        opacity: 1;
+    }
     to {
         transform: none;
         opacity: 1;
@@ -1075,13 +1290,19 @@ html.touch .swipe-actions {
 /* ---- Button primary shine (reserved) ---- */
 
 /* ---- Card list border refinement ---- */
-.swipe-row { border-bottom-color: var(--color-ink-200); }
+.swipe-row {
+    border-bottom-color: var(--color-ink-200);
+}
 .dark {
-    .swipe-row { border-bottom-color: rgb(255 255 255 / 0.04); }
+    .swipe-row {
+        border-bottom-color: rgb(255 255 255 / 0.04);
+    }
 }
 
 /* ---- Confirm-sheet: backdrop blur ---- */
-#confirm-sheet.sheet-backdrop { backdrop-filter: blur(6px) saturate(0.4); }
+#confirm-sheet.sheet-backdrop {
+    backdrop-filter: blur(6px) saturate(0.4);
+}
 
 /* ============================================================
    SIDEBAR DRAWER (slides in from left)
@@ -1093,11 +1314,16 @@ html.touch .swipe-actions {
     background: rgba(11, 12, 14, 0.5);
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.3s var(--ease-smooth), visibility 0.3s var(--ease-smooth);
+    transition:
+        opacity 0.3s var(--ease-smooth),
+        visibility 0.3s var(--ease-smooth);
     backdrop-filter: blur(4px) saturate(0.5);
     -webkit-backdrop-filter: blur(4px) saturate(0.5);
 }
-.sidebar-backdrop.open { opacity: 1; visibility: visible; }
+.sidebar-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+}
 
 .sidebar-drawer {
     position: fixed;
@@ -1113,17 +1339,24 @@ html.touch .swipe-actions {
     overflow-y: auto;
     overscroll-behavior: contain;
 }
-.sidebar-drawer.open { transform: translateX(0); }
+.sidebar-drawer.open {
+    transform: translateX(0);
+}
 
-[dir="rtl"] .sidebar-drawer {
+[dir='rtl'] .sidebar-drawer {
     left: auto;
     right: 0;
     transform: translateX(100%);
 }
-[dir="rtl"] .sidebar-drawer.open { transform: translateX(0); }
+[dir='rtl'] .sidebar-drawer.open {
+    transform: translateX(0);
+}
 
 .dark {
-    .sidebar-drawer { background: #16181c; box-shadow: 4px 0 24px -4px rgb(0 0 0 / 0.5); }
+    .sidebar-drawer {
+        background: #16181c;
+        box-shadow: 4px 0 24px -4px rgb(0 0 0 / 0.5);
+    }
 }
 
 .sidebar-header {
@@ -1134,7 +1367,9 @@ html.touch .swipe-actions {
     border-bottom: 1px solid var(--color-ink-200);
 }
 .dark {
-    .sidebar-header { border-bottom-color: rgb(255 255 255 / 0.05); }
+    .sidebar-header {
+        border-bottom-color: rgb(255 255 255 / 0.05);
+    }
 }
 
 .sidebar-nav {
@@ -1152,26 +1387,51 @@ html.touch .swipe-actions {
     font-size: 0.8125rem;
     font-weight: 600;
     color: var(--color-ink-600);
-    transition: background 0.15s, color 0.15s;
+    transition:
+        background 0.15s,
+        color 0.15s;
     text-decoration: none;
 }
-.sidebar-link:hover { background: var(--color-ink-100); color: var(--color-ink-900); }
-.sidebar-link:active { transform: scale(0.98); }
+.sidebar-link:hover {
+    background: var(--color-ink-100);
+    color: var(--color-ink-900);
+}
+.sidebar-link:active {
+    transform: scale(0.98);
+}
 
-.sidebar-link svg { flex-shrink: 0; opacity: 0.6; }
-.sidebar-link:hover svg { opacity: 1; }
+.sidebar-link svg {
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+.sidebar-link:hover svg {
+    opacity: 1;
+}
 
 .sidebar-link-active {
     background: rgb(16 174 100 / 0.08);
     color: var(--color-brand);
 }
-.sidebar-link-active svg { opacity: 1; color: var(--color-brand); }
+.sidebar-link-active svg {
+    opacity: 1;
+    color: var(--color-brand);
+}
 
 .dark {
-    .sidebar-link { color: var(--color-ink-400); }
-    .sidebar-link:hover { background: rgb(255 255 255 / 0.05); color: var(--color-ink-100); }
-    .sidebar-link-active { background: rgb(16 174 100 / 0.12); color: var(--color-primary-400); }
-    .sidebar-link-active svg { color: var(--color-primary-400); }
+    .sidebar-link {
+        color: var(--color-ink-400);
+    }
+    .sidebar-link:hover {
+        background: rgb(255 255 255 / 0.05);
+        color: var(--color-ink-100);
+    }
+    .sidebar-link-active {
+        background: rgb(16 174 100 / 0.12);
+        color: var(--color-primary-400);
+    }
+    .sidebar-link-active svg {
+        color: var(--color-primary-400);
+    }
 }
 
 .sidebar-divider {
@@ -1180,7 +1440,9 @@ html.touch .swipe-actions {
     background: var(--color-ink-200);
 }
 .dark {
-    .sidebar-divider { background: rgb(255 255 255 / 0.05); }
+    .sidebar-divider {
+        background: rgb(255 255 255 / 0.05);
+    }
 }
 
 /* ============================================
@@ -1225,7 +1487,13 @@ html.touch .swipe-actions {
 
 @layer base {
     /* Apply to all viewports so NativePHP webview behaves the same */
-    a, button, input, select, textarea, label, [role="button"] {
+    a,
+    button,
+    input,
+    select,
+    textarea,
+    label,
+    [role='button'] {
         touch-action: manipulation; /* kill double-tap zoom delay & accidental zoom */
     }
 }
@@ -1235,46 +1503,103 @@ html.touch .swipe-actions {
    Using JS-set class `os-android` (preferred) for exactness, with a safe min-height
    fallback on coarse pointers below. */
 @media (pointer: coarse) {
-    a, button, .btn-primary, .btn-secondary, .btn-danger, .btn-ghost,
-    .nav-item, .sidebar-link, .fab-menu-item, .swipe-actions a, .swipe-actions button,
-    .segmented-item, .feature-tile, .action-card, .list-row,
-    input[type="checkbox"], input[type="radio"], input[type="range"] {
-        min-height: 48px;   /* 48dp Android minimum */
+    a,
+    button,
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    .btn-ghost,
+    .nav-item,
+    .sidebar-link,
+    .fab-menu-item,
+    .swipe-actions a,
+    .swipe-actions button,
+    .segmented-item,
+    .feature-tile,
+    .action-card,
+    .list-row,
+    input[type='checkbox'],
+    input[type='radio'],
+    input[type='range'] {
+        min-height: 48px; /* 48dp Android minimum */
         min-width: 44px;
     }
     /* Android inputs: large enough to avoid Chrome auto-zoom on some devices */
-    .form-input, .form-select, .search-bar input, input, select, textarea {
+    .form-input,
+    .form-select,
+    .search-bar input,
+    input,
+    select,
+    textarea {
         font-size: 16px;
     }
 }
 
 /* Explicit Android-only bump via JS-set class (more reliable than UA sniffing) */
-html.os-android a, html.os-android button, html.os-android .btn-primary,
-html.os-android .btn-secondary, html.os-android .btn-danger, html.os-android .btn-ghost,
-html.os-android .nav-item, html.os-android .sidebar-link, html.os-android .fab-menu-item,
-html.os-android .segmented-item, html.os-android .list-row, html.os-android .action-card {
+html.os-android a,
+html.os-android button,
+html.os-android .btn-primary,
+html.os-android .btn-secondary,
+html.os-android .btn-danger,
+html.os-android .btn-ghost,
+html.os-android .nav-item,
+html.os-android .sidebar-link,
+html.os-android .fab-menu-item,
+html.os-android .segmented-item,
+html.os-android .list-row,
+html.os-android .action-card {
     min-height: 48px;
 }
 
+/* Switch toggles & checkboxes keep their compact design size — every
+   min-height/min-width touch floor above would otherwise blow them up to
+   48px. The touch target stays on the wrapping label/row instead. */
+button.switch-toggle,
+input[type='checkbox'],
+input[type='radio'] {
+    min-height: 0 !important;
+    min-width: 0 !important;
+}
+
 /* ---------------- iOS (iPhone / iPad Safari + NativePHP WKWebView) ---------------- */
-html.os-ios .form-input, html.os-ios .form-select, html.os-ios .search-bar input,
-html.os-ios input:not([type="checkbox"]):not([type="radio"]),
-html.os-ios select, html.os-ios textarea {
+html.os-ios .form-input,
+html.os-ios .form-select,
+html.os-ios .search-bar input,
+html.os-ios input:not([type='checkbox']):not([type='radio']),
+html.os-ios select,
+html.os-ios textarea {
     font-size: 16px !important; /* absolute guard: any <16px triggers auto-zoom */
 }
 
 /* iOS: keep 44pt minimum (Apple HIG) */
-html.os-ios a, html.os-ios button, html.os-ios .btn-primary,
-html.os-ios .btn-secondary, html.os-ios .btn-danger, html.os-ios .btn-ghost,
-html.os-ios .nav-item, html.os-ios .sidebar-link, html.os-ios .fab-menu-item,
-html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
+html.os-ios a,
+html.os-ios button,
+html.os-ios .btn-primary,
+html.os-ios .btn-secondary,
+html.os-ios .btn-danger,
+html.os-ios .btn-ghost,
+html.os-ios .nav-item,
+html.os-ios .sidebar-link,
+html.os-ios .fab-menu-item,
+html.os-ios .segmented-item,
+html.os-ios .list-row,
+html.os-ios .action-card {
     min-height: 44px;
 }
 
 /* ---------------- Generic mobile refinement (all phones, ≤767px) ---------------- */
 @media (max-width: 767px) {
-    a, button, .btn-primary, .btn-secondary, .btn-danger, .btn-ghost,
-    .nav-item, .sidebar-link, .fab-menu-item, .list-row, .swipe-row {
+    a,
+    button,
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    .btn-ghost,
+    .nav-item,
+    .sidebar-link,
+    .fab-menu-item,
+    .list-row,
+    .swipe-row {
         min-height: 48px;
     }
 
@@ -1288,92 +1613,162 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
        so it stays zero-specificity: without it, the (0,3,1) :not() chain would
        outrank the .form-input.ps-N / .pe-N affix gutters and push text over
        the leading/trailing icons. */
-    .form-input, .form-select,
-    :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"])),
-    select, textarea {
+    .form-input,
+    .form-select,
+    :where(input:not([type='checkbox']):not([type='radio']):not([type='range'])),
+    select,
+    textarea {
         font-size: 16px; /* Prevents zoom on iOS + Android Chrome */
         padding: 0.875rem 1rem;
         min-height: 48px;
     }
 
     /* Search-bar should not zoom either */
-    .search-bar input { font-size: 16px; }
+    .search-bar input {
+        font-size: 16px;
+    }
 
     /* Checkbox/radio hit areas */
-    input[type="checkbox"], input[type="radio"] {
+    input[type='checkbox'],
+    input[type='radio'] {
         width: 20px;
         height: 20px;
         accent-color: var(--color-brand);
     }
-    label:has(input[type="checkbox"]), label:has(input[type="radio"]) {
+    label:has(input[type='checkbox']),
+    label:has(input[type='radio']) {
         min-height: 44px;
         display: flex;
         align-items: center;
     }
-    
+
     /* Card padding on mobile */
-    .card { @apply p-4; }
-    .card > * + * { @apply mt-3; }
-    
+    .card {
+        @apply p-4;
+    }
+    .card > * + * {
+        @apply mt-3;
+    }
+
     /* Modal/sheet full width on mobile */
-    .modal-card, .bottom-sheet {
+    .modal-card,
+    .bottom-sheet {
         width: calc(100vw - 1rem) !important;
         max-width: none !important;
         border-radius: 1rem 1rem 0 0 !important;
     }
-    .modal-card { border-radius: 1rem !important; }
-    
+    .modal-card {
+        border-radius: 1rem !important;
+    }
+
     /* Chart height on mobile */
-    .chart-container { @apply min-h-[200px]; }
-    .chart-container canvas { height: 200px !important; }
-    
+    .chart-container {
+        @apply min-h-[200px];
+    }
+    .chart-container canvas {
+        height: 200px !important;
+    }
+
     /* List row improvements */
-    .list-row { @apply gap-3; }
-    .list-row > div:last-child { @apply w-auto min-w-[120px]; }
-    
+    .list-row {
+        @apply gap-3;
+    }
+    .list-row > div:last-child {
+        @apply w-auto min-w-[120px];
+    }
+
     /* Bottom nav improvements */
-    .nav-item { @apply py-2; }
-    .nav-item-label { @apply text-[11px]; }
-    
+    .nav-item {
+        @apply py-2;
+    }
+    .nav-item-label {
+        @apply text-[11px];
+    }
+
     /* Header title smaller on mobile */
-    header h1 { @apply text-base; }
-    
+    header h1 {
+        @apply text-base;
+    }
+
     /* Section titles smaller on mobile */
-    .section-title { @apply text-xs; }
-    
+    .section-title {
+        @apply text-xs;
+    }
+
     /* Empty state smaller on mobile */
-    .empty-state { @apply py-8 px-4; }
-    .empty-state svg { @apply w-10 h-10; }
-    
+    .empty-state {
+        @apply py-8 px-4;
+    }
+    .empty-state svg {
+        @apply w-10 h-10;
+    }
+
     /* Toast smaller on mobile */
-    .toast .flex { @apply px-3 py-2.5; }
-    .toast p { @apply text-xs; }
-    
+    .toast .flex {
+        @apply px-3 py-2.5;
+    }
+    .toast p {
+        @apply text-xs;
+    }
+
     /* Confirm sheet buttons full width */
-    .confirm-actions { @apply flex-col gap-2; }
-    .confirm-actions button { @apply w-full; }
-    
+    .confirm-actions {
+        @apply flex-col gap-2;
+    }
+    .confirm-actions button {
+        @apply w-full;
+    }
+
     /* Pagination smaller on mobile */
-    .pagination { @apply gap-1; }
-    .pagination a, .pagination span { @apply px-2 py-1.5 text-xs; }
+    .pagination {
+        @apply gap-1;
+    }
+    .pagination a,
+    .pagination span {
+        @apply px-2 py-1.5 text-xs;
+    }
 }
 
 /* ---- Small phones (iPhone SE, budget Androids) ---- */
 @media (max-width: 374px) {
-    main { @apply px-3; }
-    .page-header { @apply mb-4; }
-    body { font-size: 0.9375rem; }
-    .card { @apply p-3.5; }
-    .metric-tile { @apply p-3; gap: 1rem; }
-    .hero-aurora .text-3xl { font-size: 1.5rem !important; }
-    .grid-responsive-3 { gap: 0.625rem; }
-    .bottom-sheet { width: calc(100vw - 0.5rem); left: 0.25rem; right: 0.25rem; }
-    header .px-4 { padding-left: 0.75rem; padding-right: 0.75rem; }
+    main {
+        @apply px-3;
+    }
+    .page-header {
+        @apply mb-4;
+    }
+    body {
+        font-size: 0.9375rem;
+    }
+    .card {
+        @apply p-3.5;
+    }
+    .metric-tile {
+        @apply p-3;
+        gap: 1rem;
+    }
+    .hero-aurora .text-3xl {
+        font-size: 1.5rem !important;
+    }
+    .grid-responsive-3 {
+        gap: 0.625rem;
+    }
+    .bottom-sheet {
+        width: calc(100vw - 0.5rem);
+        left: 0.25rem;
+        right: 0.25rem;
+    }
+    header .px-4 {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
 }
 
 /* ---- Standard phones (375-479px) ---- */
 @media (min-width: 375px) and (max-width: 479px) {
-    main { @apply px-4; }
+    main {
+        @apply px-4;
+    }
 }
 
 /* ---- Tablet / large-screen (768px+) ---- */
@@ -1386,56 +1781,128 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
         padding-left: 2rem;
         padding-right: 2rem;
     }
-    .page-header { @apply mb-6; }
+    .page-header {
+        @apply mb-6;
+    }
     /* Bottom nav expands into a floating capsule constrained to content */
-    nav { padding-left: 1rem; padding-right: 1rem; }
-    .bottom-nav-shell { max-width: 34rem; margin-left: auto; margin-right: auto; }
-    .fab-menu { padding-inline: 1.5rem; }
-    .fab-menu-card { max-width: 26rem; }
-    .metric-tile { @apply p-5; }
-    .metric-value { font-size: 1.375rem; }
-    .chart-container { min-height: 220px; }
-    .chart-container canvas { height: 220px !important; }
-    .card { border-radius: 1.5rem; }
-    .grid-responsive-2 { grid-template-columns: repeat(4, 1fr); }
-    .action-card { @apply p-6; }
+    nav {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    .bottom-nav-shell {
+        max-width: 34rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .fab-menu {
+        padding-inline: 1.5rem;
+    }
+    .fab-menu-card {
+        max-width: 26rem;
+    }
+    .metric-tile {
+        @apply p-5;
+    }
+    .metric-value {
+        font-size: 1.375rem;
+    }
+    .chart-container {
+        min-height: 220px;
+    }
+    .chart-container canvas {
+        height: 220px !important;
+    }
+    .card {
+        border-radius: 1.5rem;
+    }
+    .grid-responsive-2 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    .action-card {
+        @apply p-6;
+    }
 }
 
 @media (min-width: 1024px) {
-    main { max-width: 64rem; }
-    .grid-responsive-2 { grid-template-columns: repeat(4, 1fr); }
-    .grid-responsive-3 { grid-template-columns: repeat(3, 1fr); }
+    main {
+        max-width: 64rem;
+    }
+    .grid-responsive-2 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    .grid-responsive-3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
     /* Wider modal + sheet on desktop */
-    .modal-card { width: min(28rem, calc(100vw - 4rem)); }
-    .bottom-sheet { max-width: 40rem; margin-left: auto; margin-right: auto; }
+    .modal-card {
+        width: min(28rem, calc(100vw - 4rem));
+    }
+    .bottom-sheet {
+        max-width: 40rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
     /* Sidebar drawer stays, but content has room */
-    header .px-4 { padding-left: 1.5rem; padding-right: 1.5rem; }
+    header .px-4 {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }
 }
 
 /* Large desktop / landscape native window */
 @media (min-width: 1280px) {
-    main { max-width: 72rem; }
+    main {
+        max-width: 72rem;
+    }
 }
 
 /* ---- Landscape phones: reclaim vertical space ---- */
 @media (max-height: 500px) and (orientation: landscape) {
-    .hero-aurora { @apply p-4 mb-4; }
-    .hero-aurora .text-3xl { font-size: 1.375rem !important; }
-    .chart-container { min-height: 160px; }
-    .chart-container canvas { height: 160px !important; }
-    .bottom-sheet { max-height: 92vh; }
+    .hero-aurora {
+        @apply p-4 mb-4;
+    }
+    .hero-aurora .text-3xl {
+        font-size: 1.375rem !important;
+    }
+    .chart-container {
+        min-height: 160px;
+    }
+    .chart-container canvas {
+        height: 160px !important;
+    }
+    .bottom-sheet {
+        max-height: 92vh;
+    }
 }
 
 /* Tablet improvements */
 @media (min-width: 640px) and (max-width: 1023px) {
-    .grid-responsive-3 { grid-template-columns: repeat(2, 1fr); }
+    .grid-responsive-3 {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 /* Print: hide chrome (nav, fab, sidebar, toasts) for ledger/order printing */
 @media print {
-    nav, header, #fab-btn, .fab-menu, .fab-backdrop, .sidebar-drawer, .sidebar-backdrop, .toast-stack, #page-skeleton { display: none !important; }
-    main { padding: 0 !important; max-width: none !important; }
-    .card { box-shadow: none; border: 1px solid #ddd; }
+    nav,
+    header,
+    #fab-btn,
+    .fab-menu,
+    .fab-backdrop,
+    .sidebar-drawer,
+    .sidebar-backdrop,
+    .toast-stack,
+    #page-skeleton {
+        display: none !important;
+    }
+    main {
+        padding: 0 !important;
+        max-width: none !important;
+    }
+    .card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
 }
 
 /* ============================================
@@ -1452,7 +1919,9 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
     mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-.dark .grain-overlay { opacity: 0.05; }
+.dark .grain-overlay {
+    opacity: 0.05;
+}
 
 /* ---- Auth ambient backdrop: two soft brand blooms, no clichéd mesh ----
    Decorative only; sits behind the auth card, never intercepts touches. */
@@ -1464,12 +1933,12 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
     overflow: hidden;
     background-image:
         radial-gradient(52rem 34rem at 82% -12%, rgb(16 174 100 / 0.14), transparent 62%),
-        radial-gradient(44rem 30rem at 0% 112%, rgb(16 174 100 / 0.10), transparent 60%);
+        radial-gradient(44rem 30rem at 0% 112%, rgb(16 174 100 / 0.1), transparent 60%);
 }
 .dark .auth-ambient {
     background-image:
-        radial-gradient(52rem 34rem at 82% -12%, rgb(16 174 100 / 0.20), transparent 62%),
-        radial-gradient(44rem 30rem at 0% 112%, rgb(70 191 124 / 0.10), transparent 60%);
+        radial-gradient(52rem 34rem at 82% -12%, rgb(16 174 100 / 0.2), transparent 62%),
+        radial-gradient(44rem 30rem at 0% 112%, rgb(70 191 124 / 0.1), transparent 60%);
 }
 
 /* ---- Aurora hero surface (brand gradient + atmospheric bloom + grain) ---- */
@@ -1507,26 +1976,24 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: radial-gradient(
-        180px circle at var(--mx, 50%) var(--my, 50%),
-        rgb(16 174 100 / 0.55),
-        transparent 65%
-    );
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    background: radial-gradient(180px circle at var(--mx, 50%) var(--my, 50%), rgb(16 174 100 / 0.55), transparent 65%);
+    -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
-            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            mask-composite: exclude;
+    mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    mask-composite: exclude;
     opacity: 0;
     transition: opacity 0.35s var(--ease-smooth);
     pointer-events: none;
 }
-.card-spot:hover::after { opacity: 1; }
+.card-spot:hover::after {
+    opacity: 1;
+}
 .dark .card-spot::after {
-    background: radial-gradient(
-        180px circle at var(--mx, 50%) var(--my, 50%),
-        rgb(70 212 146 / 0.5),
-        transparent 65%
-    );
+    background: radial-gradient(180px circle at var(--mx, 50%) var(--my, 50%), rgb(70 212 146 / 0.5), transparent 65%);
 }
 
 /* ---- Spotlight wash on action cards (interior glow under cursor) ---- */
@@ -1535,49 +2002,86 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: radial-gradient(
-        140px circle at var(--mx, 50%) var(--my, 50%),
-        rgb(16 174 100 / 0.1),
-        transparent 70%
-    );
+    background: radial-gradient(140px circle at var(--mx, 50%) var(--my, 50%), rgb(16 174 100 / 0.1), transparent 70%);
     opacity: 0;
     transition: opacity 0.3s var(--ease-smooth);
     pointer-events: none;
 }
 .action-card:hover .spot-wash,
-.spot-wash-parent:hover .spot-wash { opacity: 1; }
+.spot-wash-parent:hover .spot-wash {
+    opacity: 1;
+}
 
 /* ---- Staggered entrance (cascade; GPU-safe) ---- */
 @keyframes riseIn {
-    from { opacity: 0; transform: translateY(14px); filter: blur(4px); }
-    60%  { opacity: 1; }
-    to   { opacity: 1; transform: none; filter: blur(0); }
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+        filter: blur(4px);
+    }
+    60% {
+        opacity: 1;
+    }
+    to {
+        opacity: 1;
+        transform: none;
+        filter: blur(0);
+    }
 }
 .stagger > * {
     animation: riseIn 0.5s var(--ease-smooth) both;
 }
-.stagger > *:nth-child(1) { animation-delay: 0.04s; }
-.stagger > *:nth-child(2) { animation-delay: 0.09s; }
-.stagger > *:nth-child(3) { animation-delay: 0.14s; }
-.stagger > *:nth-child(4) { animation-delay: 0.19s; }
-.stagger > *:nth-child(5) { animation-delay: 0.24s; }
-.stagger > *:nth-child(6) { animation-delay: 0.29s; }
-.stagger > *:nth-child(7) { animation-delay: 0.34s; }
-.stagger > *:nth-child(n+8) { animation-delay: 0.38s; }
+.stagger > *:nth-child(1) {
+    animation-delay: 0.04s;
+}
+.stagger > *:nth-child(2) {
+    animation-delay: 0.09s;
+}
+.stagger > *:nth-child(3) {
+    animation-delay: 0.14s;
+}
+.stagger > *:nth-child(4) {
+    animation-delay: 0.19s;
+}
+.stagger > *:nth-child(5) {
+    animation-delay: 0.24s;
+}
+.stagger > *:nth-child(6) {
+    animation-delay: 0.29s;
+}
+.stagger > *:nth-child(7) {
+    animation-delay: 0.34s;
+}
+.stagger > *:nth-child(n + 8) {
+    animation-delay: 0.38s;
+}
 
 /* ---- Magnetic floating FAB (idle breathing, on-brand) ---- */
 @keyframes fabBreathe {
-    0%, 100% { box-shadow: 0 6px 20px -4px rgb(12 140 83 / 0.35); }
-    50%      { box-shadow: 0 10px 28px -4px rgb(12 140 83 / 0.5); }
+    0%,
+    100% {
+        box-shadow: 0 6px 20px -4px rgb(12 140 83 / 0.35);
+    }
+    50% {
+        box-shadow: 0 10px 28px -4px rgb(12 140 83 / 0.5);
+    }
 }
-.fab-breathe { animation: fabBreathe 3.2s var(--ease-smooth) infinite; }
+.fab-breathe {
+    animation: fabBreathe 3.2s var(--ease-smooth) infinite;
+}
 
 /* ---- Springy press for interactive controls ---- */
-.spring-press { transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.spring-press:active { transform: scale(0.94); }
+.spring-press {
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.spring-press:active {
+    transform: scale(0.94);
+}
 
 /* ---- Shimmering numeric value accent (used on hero figure) ---- */
-.text-glow-soft { text-shadow: 0 0 24px rgb(255 255 255 / 0.25); }
+.text-glow-soft {
+    text-shadow: 0 0 24px rgb(255 255 255 / 0.25);
+}
 
 /* ---- Elevated section eyebrow label ---- */
 @utility eyebrow {
@@ -1599,14 +2103,27 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
     scroll-snap-type: x mandatory;
     padding-bottom: 2px;
 }
-.rail::-webkit-scrollbar { display: none; }
-.rail > * { scroll-snap-align: start; flex-shrink: 0; }
+.rail::-webkit-scrollbar {
+    display: none;
+}
+.rail > * {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+}
 
 /* ---- Count-up respects reduced motion (handled in JS too) ---- */
 @media (prefers-reduced-motion: reduce) {
-    .stagger > * { animation: none; opacity: 1; }
-    .fab-breathe { animation: none; }
-    .grain-overlay, .hero-aurora::before { opacity: 0.02; }
+    .stagger > * {
+        animation: none;
+        opacity: 1;
+    }
+    .fab-breathe {
+        animation: none;
+    }
+    .grain-overlay,
+    .hero-aurora::before {
+        opacity: 0.02;
+    }
 }
 
 /* ============================================
@@ -1619,93 +2136,96 @@ html.os-ios .segmented-item, html.os-ios .list-row, html.os-ios .action-card {
 /* FAB menu is a centered fixed sheet — symmetric in both directions */
 
 /* Bottom-sheet handle should be in the same place */
-[dir="rtl"] .bottom-sheet {
+[dir='rtl'] .bottom-sheet {
     left: 1rem;
     right: 1rem;
 }
 
 /* Modal-card alignment */
-[dir="rtl"] .modal-card {
+[dir='rtl'] .modal-card {
     left: auto;
     right: 50%;
     transform: translate(50%, -46%) scale(0.97);
 }
-[dir="rtl"] .modal-card.open {
+[dir='rtl'] .modal-card.open {
     transform: translate(50%, -50%) scale(1);
 }
 
 /* Skeleton overlay */
-[dir="rtl"] .skeleton-overlay { left: 0; right: 0; }
+[dir='rtl'] .skeleton-overlay {
+    left: 0;
+    right: 0;
+}
 
 /* Toast: RTL-friendly */
-[dir="rtl"] .toast-progress {
+[dir='rtl'] .toast-progress {
     left: auto;
     right: 0;
     transform-origin: right;
 }
 
 /* Input-icon: icon is on the right side in RTL */
-[dir="rtl"] .input-icon svg {
+[dir='rtl'] .input-icon svg {
     left: auto;
     right: 3.5rem;
     transform: translate(50%, -50%);
 }
-[dir="rtl"] .input-icon input,
-[dir="rtl"] .input-icon select,
-[dir="rtl"] .input-icon textarea {
+[dir='rtl'] .input-icon input,
+[dir='rtl'] .input-icon select,
+[dir='rtl'] .input-icon textarea {
     padding-left: 1rem;
     padding-right: 2.5rem;
 }
 
 /* Card list left-border decorations */
-[dir="rtl"] .section-header .w-1.h-4 {
+[dir='rtl'] .section-header .w-1.h-4 {
     order: -1;
 }
 
 /* FAB plus-menu animation */
-[dir="rtl"] .fab-toggle.open {
+[dir='rtl'] .fab-toggle.open {
     transform: rotate(-135deg);
 }
 
 /* Swipe row — flip direction in RTL for LTR containers */
-[dir="rtl"] .swipe-row .swipe-content {
+[dir='rtl'] .swipe-row .swipe-content {
     transform: translateX(0);
 }
-[dir="rtl"] .swipe-row .swipe-actions {
+[dir='rtl'] .swipe-row .swipe-actions {
     left: auto;
     right: 0;
     flex-direction: row-reverse;
 }
-html.touch[dir="rtl"] .swipe-content {
+html.touch[dir='rtl'] .swipe-content {
     transform: translateX(0);
 }
 
 /* Search bar */
-[dir="rtl"] .search-bar {
+[dir='rtl'] .search-bar {
     flex-direction: row-reverse;
 }
 
 /* Page header chevrons (flip all back/forward) */
-[dir="rtl"] .page-header > a svg,
-[dir="rtl"] .page-header .back-chevron,
-[dir="rtl"] a:has(.back-chevron) svg,
-[dir="rtl"] .list-row svg:last-child {
+[dir='rtl'] .page-header > a svg,
+[dir='rtl'] .page-header .back-chevron,
+[dir='rtl'] a:has(.back-chevron) svg,
+[dir='rtl'] .list-row svg:last-child {
     transform: scaleX(-1);
 }
 
 /* Tabs: icon position in RTL is after text */
-[dir="rtl"] .sidebar-link {
+[dir='rtl'] .sidebar-link {
     flex-direction: row-reverse;
     gap: 0.75rem;
     text-align: right;
 }
-[dir="rtl"] a.sidebar-link svg:last-child {
+[dir='rtl'] a.sidebar-link svg:last-child {
     margin-left: 0;
     margin-right: auto;
 }
 
 /* Card.action-card right-place in grids */
-[dir="rtl"] .action-card {
+[dir='rtl'] .action-card {
     text-align: right;
     direction: rtl;
 }
@@ -1713,41 +2233,45 @@ html.touch[dir="rtl"] .swipe-content {
 /* FAB menu items use flex gap + text-start, which adapt to RTL automatically */
 
 /* Bottom-sheet */
-[dir="rtl"] .bottom-sheet .sheet-handle {
+[dir='rtl'] .bottom-sheet .sheet-handle {
     margin-left: auto;
     margin-right: auto;
 }
 
 /* Toast / flash */
-[dir="rtl"] .toast-icon {
+[dir='rtl'] .toast-icon {
     order: -1;
 }
 
 /* Confirm sheet */
-[dir="rtl"] .confirm-actions {
+[dir='rtl'] .confirm-actions {
     flex-direction: row-reverse;
 }
 
 /* Local numbering stays LTR in RTL content */
-[dir="rtl"] .ltr {
+[dir='rtl'] .ltr {
     direction: ltr;
     unicode-bidi: isolate;
 }
 /* Isolate numeric runs from surrounding RTL text WITHOUT forcing LTR base
    direction — mixed word+number lines (labels, totals) keep natural order. */
-[dir="rtl"] .tabular-nums {
+[dir='rtl'] .tabular-nums {
     unicode-bidi: isolate;
 }
 
 /* Chart.js tooltip RTL */
-[dir="rtl"] .chart-container canvas {
+[dir='rtl'] .chart-container canvas {
     direction: ltr;
 }
 
 /* Safe area insets for notched devices */
 @supports (padding: max(0px)) {
-    .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
-    .pt-safe { padding-top: max(1rem, env(safe-area-inset-top)); }
+    .pb-safe {
+        padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+    .pt-safe {
+        padding-top: max(1rem, env(safe-area-inset-top));
+    }
 }
 
 /* Icon-affixed inputs: the mobile refinement resets .form-input padding,
@@ -1777,8 +2301,8 @@ html.touch[dir="rtl"] .swipe-content {
 }
 
 /* Search inputs use a custom clear button — drop the native one */
-input[type="search"]::-webkit-search-cancel-button,
-input[type="search"]::-webkit-search-decoration {
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
     -webkit-appearance: none;
     appearance: none;
 }

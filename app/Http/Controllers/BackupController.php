@@ -28,16 +28,23 @@ use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\Backup\BackupPdfService;
+use App\Services\Backup\BackupRestoreService;
+use App\Support\NativeDocument;
+use App\Support\NativePicker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use RuntimeException;
 
 class BackupController extends Controller
 {
     /**
      * Backups live in a per-user folder so shops never see each other's archives.
-     * The canonical machine-readable copy stays JSON (future restore support);
-     * the downloadable artifact is a rendered PDF, which is what users share.
+     * One backup is a pair of files sharing a name: a rendered PDF, which is
+     * what the shop reads and shares, and the machine-readable JSON copy a
+     * restore reads back. Both are written on every creation and both are
+     * saved to the phone on device.
      */
     public function index()
     {
@@ -57,15 +64,30 @@ class BackupController extends Controller
                 }
                 $base = $this->stripExtension($filename);
                 $hasPdf = $disk->exists("{$userDir}/{$base}.pdf");
+                $hasJson = $disk->exists("{$userDir}/{$base}.json");
                 $download = $hasPdf ? "{$base}.pdf" : "{$base}.json";
 
                 $backups[$base] = [
                     'filename' => $filename,
                     'download' => $download,
+                    // The restorable twin, offered as its own action on the
+                    // phone: the JSON never leaves the app otherwise.
+                    'json' => $base.'.json',
+                    // Every new backup writes both artifacts, so the row can
+                    // show the shop the real pair it owns rather than implying
+                    // the PDF is the only file.
+                    'has_json' => $hasJson,
                     // Newer backups always have a PDF twin; migrated legacy
                     // archives may be JSON-only but stay downloadable.
                     'is_json_only' => ! $hasPdf,
-                    'size' => $this->humanSize($disk->size("{$userDir}/{$download}")),
+                    // The row stands for the whole archive, so add up every
+                    // half that exists — reporting only the PDF would understate
+                    // a new backup by the size of the file it can be restored
+                    // from.
+                    'size' => $this->humanSize(
+                        ($hasPdf ? $disk->size("{$userDir}/{$base}.pdf") : 0)
+                        + ($hasJson ? $disk->size("{$userDir}/{$base}.json") : 0)
+                    ),
                     'date' => date('Y/m/d H:i', $disk->lastModified($file)),
                 ];
             }
@@ -131,7 +153,14 @@ class BackupController extends Controller
         // Render first: if the PDF blows up (bad data, font issue), no
         // half-written archive is left on disk. Only when both artifacts
         // are built in memory do we write them to storage.
-        $pdfBinary = $pdfService->generate($backupData);
+        try {
+            $pdfBinary = $pdfService->generate($backupData);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()->route('backup.index')
+                ->with('error', __('messages.backup_failed'));
+        }
 
         $filename = 'backup_'.date('Y_m_d_H_i_s');
         $jsonContent = json_encode(
@@ -143,8 +172,61 @@ class BackupController extends Controller
         Storage::disk('local')->put("{$dir}/{$filename}.json", $jsonContent);
         Storage::disk('local')->put("{$dir}/{$filename}.pdf", $pdfBinary);
 
+        // On device the WebView can't download; hand the fresh archive to
+        // the system viewer / share sheet so the user can save it out.
+        if (NativeDocument::available()) {
+            // Keep a real copy of BOTH artifacts in Downloads/MGS, so one tap
+            // at creation is enough: the PDF is what the shop reads, and the
+            // JSON twin is what a restore reads back — the phone's file picker
+            // cannot see the app's private storage, where the JSON otherwise
+            // stays. The index rows are the retry path when a save is refused.
+            $saved = [
+                NativeDocument::save($pdfBinary, $filename.'.pdf', 'application/pdf')['ok'],
+                NativeDocument::save($jsonContent, $filename.'.json', 'application/json')['ok'],
+            ];
+
+            if (in_array(false, $saved, true)) {
+                // Storage permission on Android 9 and older: the other artifact
+                // still works, and the index has a per-row export to retry with.
+                session()->flash('error', __('messages.backup_export_failed'));
+            }
+
+            NativeDocument::open($pdfBinary, $filename.'.pdf', 'application/pdf', $filename);
+        }
+
         return redirect()->route('backup.index')
-            ->with('success', __('messages.backup_created').' '.__('messages.file_name').': '.$filename.'.pdf');
+            ->with('success', __('messages.backup_created').' '.__('messages.backup_created_files', [
+                'pdf' => $filename.'.pdf',
+                'json' => $filename.'.json',
+            ]));
+    }
+
+    /**
+     * Device path for getting an existing archive out of the app: push the
+     * stored PDF through the bridge to the system viewer / share sheet
+     * (the WebView can't render PDFs or handle attachment responses).
+     * The browser keeps the plain attachment download.
+     */
+    public function share($filename)
+    {
+        if (! $this->safeFilename($filename) || ! str_ends_with($filename, '.pdf')) {
+            return redirect()->route('backup.index')->with('error', __('messages.backup_file_name'));
+        }
+
+        $disk = Storage::disk('local');
+        $path = $this->userDir().'/'.$filename;
+
+        if (! $disk->exists($path)) {
+            return redirect()->route('backup.index')->with('error', __('messages.backup_file_name'));
+        }
+
+        $binary = $disk->get($path);
+
+        if (! NativeDocument::open($binary, $filename, 'application/pdf', $filename)) {
+            return redirect()->route('backup.index')->with('error', __('messages.backup_file_name'));
+        }
+
+        return back();
     }
 
     public function download($filename)
@@ -186,6 +268,262 @@ class BackupController extends Controller
         }
 
         return redirect()->route('backup.index')->with('error', __('messages.backup_file_name'));
+    }
+
+    /**
+     * Restore entry point. On the phone the archive is picked with the system
+     * document picker (the WebView cannot upload a file — see NativePicker);
+     * in the browser it is a plain file input.
+     */
+    public function restore()
+    {
+        return view('backup.restore', [
+            'isDevice' => NativeDocument::available(),
+        ]);
+    }
+
+    /**
+     * Phone path: ask the native shell for a file off the phone's storage and
+     * stage it for the confirmation step.
+     */
+    public function restoreFromDevice()
+    {
+        if (! NativeDocument::available()) {
+            return redirect()->route('backup.restore')->with('error', __('messages.restore_device_only'));
+        }
+
+        $picked = NativePicker::pick('application/json');
+
+        // Backing out of the picker is not a failure: the page just stays as it
+        // was (the layout only renders success/error banners, and neither fits).
+        if ($picked['cancelled']) {
+            return redirect()->route('backup.restore');
+        }
+
+        if (! $picked['ok'] || ! is_string($picked['data'])) {
+            return redirect()->route('backup.restore')->with('error', $this->pickerError($picked['error']));
+        }
+
+        return $this->stageArchive(
+            (string) base64_decode($picked['data'], true),
+            (string) ($picked['filename'] ?: 'backup.json'),
+        );
+    }
+
+    /**
+     * Browser path: a normal multipart upload. The APK never reaches this
+     * route — its request bodies arrive as strings, so $_FILES stays empty.
+     */
+    public function restoreUpload(Request $request)
+    {
+        $request->validate([
+            // Sized in kilobytes: 32768 KB === NativePicker::MAX_BYTES.
+            'archive' => ['required', 'file', 'max:32768'],
+        ]);
+
+        $file = $request->file('archive');
+
+        return $this->stageArchive(
+            (string) file_get_contents($file->getRealPath()),
+            (string) $file->getClientOriginalName(),
+        );
+    }
+
+    /**
+     * Device path for turning an archive that is already listed into a file
+     * the shop owns: the JSON twin is what a restore reads, and it normally
+     * never leaves the app's private storage. The browser keeps the plain
+     * attachment download.
+     */
+    public function saveJson($filename)
+    {
+        if (! $this->safeFilename($filename) || ! str_ends_with($filename, '.json')) {
+            return redirect()->route('backup.index')->with('error', __('messages.backup_file_name'));
+        }
+
+        $disk = Storage::disk('local');
+        $path = $this->userDir().'/'.$filename;
+
+        if (! $disk->exists($path)) {
+            return redirect()->route('backup.index')->with('error', __('messages.backup_file_name'));
+        }
+
+        if (! NativeDocument::available()) {
+            return $this->download($filename);
+        }
+
+        if (! NativeDocument::save($disk->get($path), $filename, 'application/json')['ok']) {
+            return redirect()->route('backup.index')->with('error', __('messages.backup_export_failed'));
+        }
+
+        return back()->with('success', __('messages.backup_exported'));
+    }
+
+    /**
+     * A validated archive is staged, not imported: a restore can wipe a shop,
+     * so the shop gets to see what the file holds first. The staged copy is
+     * deleted as soon as it has been applied (or replaced by the next pick).
+     */
+    protected function stageArchive(string $contents, string $filename)
+    {
+        if ($contents === '' || strlen($contents) > NativePicker::MAX_BYTES) {
+            return redirect()->route('backup.restore')->with('error', __('messages.restore_invalid'));
+        }
+
+        try {
+            app(BackupRestoreService::class)->inspect($contents);
+        } catch (RuntimeException $e) {
+            return redirect()->route('backup.restore')->with('error', $this->restoreError($e->getMessage()));
+        }
+
+        $this->forgetStaleArchives();
+
+        $token = Str::random(40);
+        Storage::disk('local')->put($this->pendingPath($token), $contents);
+
+        // The token travels in the URL rather than in the session: the flow then
+        // survives a WebView that drops cookies mid-journey, and a token cannot
+        // be guessed (40 random characters) or used on someone else's file.
+        return redirect()->route('backup.restore.preview', [
+            'token' => $token,
+            // Caption only, clipped to a sane length.
+            'name' => mb_substr(basename($filename), 0, 100),
+        ]);
+    }
+
+    /**
+     * The confirmation screen: what the staged archive holds, and how to apply
+     * it. Reached by redirect, so a refresh cannot re-upload the file.
+     */
+    public function restorePreview(Request $request)
+    {
+        $path = $this->stagedArchivePath((string) $request->query('token', ''));
+
+        if ($path === null) {
+            return redirect()->route('backup.restore')->with('error', __('messages.restore_no_file'));
+        }
+
+        try {
+            $preview = app(BackupRestoreService::class)->inspect(Storage::disk('local')->get($path));
+        } catch (RuntimeException $e) {
+            Storage::disk('local')->delete($path);
+
+            return redirect()->route('backup.restore')->with('error', $this->restoreError($e->getMessage()));
+        }
+
+        return view('backup.restore-preview', [
+            'token' => (string) $request->query('token', ''),
+            'filename' => (string) ($request->query('name') ?: 'backup.json'),
+            'preview' => $preview,
+        ]);
+    }
+
+    /**
+     * Apply the staged archive. Replace is the default because that is what
+     * "restore" means: the shop goes back to the state in the file.
+     */
+    public function applyRestore(Request $request)
+    {
+        $validated = $request->validate([
+            'token' => ['required', 'string', 'regex:/^[A-Za-z0-9]{40}$/'],
+            'mode' => ['required', 'in:'.BackupRestoreService::MODE_REPLACE.','.BackupRestoreService::MODE_MERGE],
+        ]);
+
+        $path = $this->stagedArchivePath($validated['token']);
+
+        if ($path === null) {
+            return redirect()->route('backup.restore')->with('error', __('messages.restore_no_file'));
+        }
+
+        $contents = Storage::disk('local')->get($path);
+
+        try {
+            $result = app(BackupRestoreService::class)->apply($contents, (int) Auth::id(), (string) $validated['mode']);
+        } catch (RuntimeException $e) {
+            // The import runs in one transaction, so the shop is exactly as it
+            // was before this request.
+            return redirect()->route('backup.restore')->with('error', $this->restoreError($e->getMessage()));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()->route('backup.restore')->with('error', __('messages.restore_failed'));
+        }
+
+        Storage::disk('local')->delete($path);
+
+        return redirect()->route('backup.index')
+            ->with('success', __('messages.restore_done', ['count' => number_format($result['total'])]));
+    }
+
+    /**
+     * Path of the archive waiting for confirmation, or null when the token is
+     * not one of ours or its file is already gone.
+     */
+    protected function stagedArchivePath(string $token): ?string
+    {
+        $path = $this->pendingPath($token);
+
+        if ($path === '' || ! Storage::disk('local')->exists($path)) {
+            return null;
+        }
+
+        return $path;
+    }
+
+    /**
+     * Drop staged archives nobody confirmed. A restore that was picked but
+     * never applied would otherwise sit in private storage forever; a day is
+     * far longer than the walk from the picker to the confirm button.
+     */
+    protected function forgetStaleArchives(): void
+    {
+        $disk = Storage::disk('local');
+
+        if (! $disk->directoryExists('backups/restore')) {
+            return;
+        }
+
+        $cutoff = now()->subDay()->getTimestamp();
+
+        foreach ($disk->files('backups/restore') as $file) {
+            if ($disk->lastModified($file) < $cutoff) {
+                $disk->delete($file);
+            }
+        }
+    }
+
+    /**
+     * Where a picked-but-unconfirmed archive waits. Tokens are minted in
+     * stageArchive(), so anything that is not one of ours is refused outright
+     * rather than pasted into a path.
+     */
+    protected function pendingPath(string $token): string
+    {
+        if (! preg_match('/^[A-Za-z0-9]{40}$/', $token)) {
+            return '';
+        }
+
+        return 'backups/restore/'.$token.'.json';
+    }
+
+    /** Map the picker's error codes onto something a shopkeeper can act on. */
+    protected function pickerError(?string $error): string
+    {
+        return match ($error) {
+            'file_too_large' => __('messages.restore_too_large'),
+            'picker_timeout', 'no_activity', 'unreadable_file' => __('messages.restore_pick_failed'),
+            default => __('messages.restore_pick_failed'),
+        };
+    }
+
+    /** Map the restore service's refusal codes onto messages. */
+    protected function restoreError(string $code): string
+    {
+        return match ($code) {
+            'backup_unreadable', 'backup_not_recognised' => __('messages.restore_invalid'),
+            'backup_empty' => __('messages.restore_empty'),
+            default => __('messages.restore_failed'),
+        };
     }
 
     protected function userDir(): string

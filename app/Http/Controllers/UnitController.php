@@ -57,6 +57,7 @@ class UnitController extends Controller
             return redirect()->route('inventory.index')->with('error', __('messages.unit_has_products'));
         }
         $unit->delete();
+
         return redirect()->route('inventory.index')->with('success', __('messages.unit_deleted'));
     }
 }

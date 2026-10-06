@@ -17,6 +17,8 @@
 
 <div id="wa-chat"
      data-send-url="{{ $sendUrl }}"
+     data-poll-url="{{ route('whatsapp.chats.messages', ['type' => $type, 'id' => $id]) }}"
+     data-poll-interval="5000"
      data-mic-unsupported="{{ __('messages.wa_mic_unsupported') }}"
      data-mic-denied="{{ __('messages.wa_mic_denied') }}"
      data-audio-invalid="{{ __('messages.wa_audio_invalid') }}"
@@ -56,7 +58,7 @@
     </div>
 
     {{-- Message canvas --}}
-    <div class="wa-canvas flex-1 overflow-y-auto px-2 pt-4 pb-2 space-y-2 min-h-0" id="wa-messages">
+    <div class="wa-canvas flex-1 overflow-y-auto px-2 pt-4 pb-2 space-y-2 min-h-0" id="wa-messages" data-last-id="{{ $messages->last()->id ?? 0 }}">
         @forelse ($messages as $reminder)
             @include('whatsapp.partials.bubble', ['reminder' => $reminder, 'dateLabel' => $dateLabel])
         @empty
@@ -553,6 +555,35 @@
     document.getElementById('wa-rec-stop').addEventListener('click', function () {
         if (recording && recording.state !== 'inactive') recording.stop();
     });
+
+    // ---------- inbound poller ----------
+    // Received replies are folded into the reminders table by the scheduled
+    // whatsapp:sync-inbound command; this renders them live without a
+    // reload. The endpoint is idempotent per message id, so a poll that
+    // races a manual refresh simply returns nothing new.
+    var lastId = parseInt(canvas.dataset.lastId || '0', 10);
+    var pollUrl = root.dataset.pollUrl;
+
+    if (pollUrl) {
+        setInterval(function () {
+            var sep = pollUrl.indexOf('?') === -1 ? '?' : '&';
+            fetch(pollUrl + sep + 'after=' + lastId, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (!data || !data.html) return;
+                    var atBottom = canvas.scrollHeight - canvas.scrollTop - canvas.clientHeight < 80;
+                    var tpl = document.createElement('template');
+                    tpl.innerHTML = data.html;
+                    canvas.appendChild(tpl.content);
+                    wirePlayer(canvas);
+                    lastId = parseInt(data.lastId, 10) || lastId;
+                    if (atBottom) canvas.scrollTop = canvas.scrollHeight;
+                })
+                .catch(function () { /* transient network error — the next tick retries */ });
+        }, parseInt(root.dataset.pollInterval, 10) || 5000);
+    }
 })();
 </script>
 

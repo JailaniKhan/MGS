@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Account;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\PartyPayment;
@@ -85,6 +84,7 @@ class MigrateToDoubleEntry extends Command
             // Skip tables that don't have a user_id column yet
             if (! $this->columnExists($table, 'user_id')) {
                 $this->warn("Skipping {$table} — user_id column not found.");
+
                 continue;
             }
 
@@ -107,6 +107,7 @@ class MigrateToDoubleEntry extends Command
         }
 
         $cache[$key] = DB::getSchemaBuilder()->hasColumn($table, $column);
+
         return $cache[$key];
     }
 

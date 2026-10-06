@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Services\WhatsApp\OpenWaService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -38,20 +37,20 @@ class OpenWaIntegrationTest extends TestCase
 
     public function test_is_configured_returns_true_with_api_key(): void
     {
-        $service = new OpenWaService();
+        $service = new OpenWaService;
         $this->assertTrue($service->isConfigured());
     }
 
     public function test_is_not_configured_without_api_key(): void
     {
         config(['services.openwa.api_key' => null]);
-        $service = new OpenWaService();
+        $service = new OpenWaService;
         $this->assertFalse($service->isConfigured());
     }
 
     public function test_to_chat_id_formats_afghan_numbers(): void
     {
-        $service = new OpenWaService();
+        $service = new OpenWaService;
 
         // +93 300 123 4567 -> country 93 + local 3001234567
         $this->assertSame('933001234567@c.us', $service->toChatId('+93 300 123 4567'));
@@ -70,7 +69,7 @@ class OpenWaIntegrationTest extends TestCase
             ], 200),
         ]);
 
-        $service = new OpenWaService();
+        $service = new OpenWaService;
         $result = $service->send('03001234567', 'Hello from MGS');
 
         $this->assertTrue($result);
@@ -89,7 +88,7 @@ class OpenWaIntegrationTest extends TestCase
             'openwa.test/api/sessions/default/messages/send-text' => Http::response(['error' => 'boom'], 500),
         ]);
 
-        $service = new OpenWaService();
+        $service = new OpenWaService;
         $this->assertFalse($service->send('03001234567', 'test'));
     }
 
@@ -98,7 +97,7 @@ class OpenWaIntegrationTest extends TestCase
         config(['services.openwa.api_key' => null]);
 
         Http::fake();
-        $service = new OpenWaService();
+        $service = new OpenWaService;
         $this->assertFalse($service->send('03001234567', 'test'));
 
         Http::assertNothingSent();
@@ -110,7 +109,7 @@ class OpenWaIntegrationTest extends TestCase
             'openwa.test/api/sessions/default/webhooks' => Http::response(['id' => 'wh_1'], 200),
         ]);
 
-        $service = new OpenWaService();
+        $service = new OpenWaService;
         $ok = $service->registerWebhook(
             'https://mgs.test/api/webhooks/openwa',
             ['message.received'],
@@ -140,7 +139,7 @@ class OpenWaIntegrationTest extends TestCase
 
         $payload = ['event' => 'message.received', 'data' => ['body' => 'hi']];
         $body = json_encode($payload);
-        $signature = 'sha256=' . hash_hmac('sha256', $body, 'hmac-secret');
+        $signature = 'sha256='.hash_hmac('sha256', $body, 'hmac-secret');
 
         $this->withHeader('X-OpenWA-Signature', $signature)
             ->postJson('/api/webhooks/openwa', $payload)
@@ -181,16 +180,16 @@ class OpenWaIntegrationTest extends TestCase
         }
 
         // Hit a real health/session endpoint to confirm reachability.
-        $service = new OpenWaService();
+        $service = new OpenWaService;
 
         try {
             $status = $service->sessionStatus();
         } catch (\Throwable $e) {
-            $this->markTestSkipped('OpenWA gateway not reachable: ' . $e->getMessage());
+            $this->markTestSkipped('OpenWA gateway not reachable: '.$e->getMessage());
         }
 
         if ($status === null) {
-            $this->markTestSkipped('OpenWA gateway not reachable at ' . config('services.openwa.base_url'));
+            $this->markTestSkipped('OpenWA gateway not reachable at '.config('services.openwa.base_url'));
         }
 
         return $service;
@@ -209,7 +208,7 @@ class OpenWaIntegrationTest extends TestCase
         // Send to the connected number itself for a true end-to-end delivery check.
         // Override via OPENWA_TEST_CHAT_ID to target a different opted-in recipient.
         $recipient = config('services.openwa.test_chat_id') ?: '93700268836';
-        $message = 'OpenWA live test from MGS @ ' . now()->toIso8601String();
+        $message = 'OpenWA live test from MGS @ '.now()->toIso8601String();
 
         $this->assertTrue(
             $service->send($recipient, $message),

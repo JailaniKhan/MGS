@@ -319,9 +319,12 @@ class DashboardController extends Controller
     {
         $cacheKey = sprintf('dashboard_v3_%s_%s', auth()->id(), now()->format('Ymd'));
 
-        // Only scalar aggregates are cached; collections (recentOrders,
-        // recentPurchases, topDebtors, recentReminders) are always fresh
-        // so the view receives live Eloquent models with ->created_at etc.
+        // Scalar aggregates AND the debtor list live in the cache — the
+        // debtors are plain arrays (serializable) and every table they read
+        // is wired to the bust-on-write invalidation, so a payment made
+        // seconds ago can never show a stale debtor total.
+        // recentOrders/recentPurchases/recentReminders stay fresh per
+        // request so the view receives live Eloquent models with dates.
         $aggregates = Cache::remember($cacheKey, self::DASHBOARD_TTL, function () {
             $totals = $this->cashFlowTotals();
             $lowStockThreshold = (int) Setting::get('min_stock_threshold', 10);
@@ -351,20 +354,35 @@ class DashboardController extends Controller
                 // Chart series — primitives only (labels[], data[], data_afn[], data_usd[])
                 'weeklyRevenue' => $this->pluckChartSeries($this->weeklyRevenue()),
                 'weeklyExpenses' => $this->pluckChartSeries($this->weeklyExpenses()),
+                // The file cache unserializes with allowed_classes:false
+                // (config cache.serializable_classes) — a Collection or
+                // stdClass payload comes back as __PHP_Incomplete_Class and
+                // crashes the view. Store the debtors as plain arrays; they
+                // are the only non-primitive thing in this payload.
+                'topDebtors' => $this->topDebtors()->map(fn ($d) => (array) $d)->values(),
             ];
         });
+
+        // Restore the value objects the view reads with ->pending_afn etc.
+        // An old payload that was cached as objects (or anything that did
+        // not survive the store) is recomputed fresh instead of crashing.
+        if (! is_array($aggregates['topDebtors'] ?? null)) {
+            $aggregates['topDebtors'] = $this->topDebtors();
+        } else {
+            $aggregates['topDebtors'] = collect($aggregates['topDebtors'])
+                ->map(fn ($d) => (object) $d)
+                ->values();
+        }
 
         // Data fetched fresh per request (must be live Eloquent collections)
         $recentOrders = Order::with('customer')->orderBy('created_at', 'desc')->take(5)->get();
         $recentPurchases = Purchase::with('supplier')->orderBy('created_at', 'desc')->take(5)->get();
         $recentReminders = Reminder::with('remindable')->orderBy('created_at', 'desc')->take(3)->get();
-        $topDebtors = $this->topDebtors();
 
         $data = array_merge($aggregates, [
             'recentOrders' => $recentOrders,
             'recentPurchases' => $recentPurchases,
             'recentReminders' => $recentReminders,
-            'topDebtors' => $topDebtors,
         ]);
 
         return view('dashboard', $data);

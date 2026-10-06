@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Purchase;
-use Illuminate\Http\Request;
 
 class TransactionsController extends Controller
 {

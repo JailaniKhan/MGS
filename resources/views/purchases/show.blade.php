@@ -80,11 +80,19 @@
             @endif
         </div>
 
-        <div class="relative flex gap-2 pt-3 border-t border-ink-100 dark:border-ink-700/30">
-            <a href="{{ route('purchases.print', $purchase) }}" target="_blank" class="btn-ghost btn-sm flex-1 justify-center"><x-icon name="printer" class="w-3.5 h-3.5" strokeWidth="2"/>{{ __('messages.print') }}</a>
-            <form action="{{ route('purchases.send-whatsapp', $purchase) }}" method="POST" class="flex-1">
+        <div class="relative grid grid-cols-2 gap-2 pt-3 border-t border-ink-100 dark:border-ink-700/30">
+            <a href="{{ route('purchases.print', $purchase) }}" class="btn-ghost btn-sm justify-center"><x-icon name="printer" class="w-3.5 h-3.5" strokeWidth="2"/>{{ __('messages.print') }}</a>
+            <form action="{{ route('purchases.pdf.save', $purchase) }}" method="POST">
+                @csrf
+                <button type="submit" class="btn-ghost btn-sm w-full justify-center"><x-icon name="arrow-down-tray" class="w-3.5 h-3.5" strokeWidth="2"/>{{ __('messages.save_pdf') }}</button>
+            </form>
+            <form action="{{ route('purchases.send-whatsapp', $purchase) }}" method="POST">
                 @csrf
                 <button type="submit" class="btn-primary btn-sm w-full justify-center"><x-icon name="chat-bubble-left-right" class="w-3.5 h-3.5" strokeWidth="2"/>{{ __('messages.send_via_whatsapp') }}</button>
+            </form>
+            <form action="{{ route('purchases.pdf.whatsapp', $purchase) }}" method="POST">
+                @csrf
+                <button type="submit" class="btn-primary btn-sm w-full justify-center"><x-icon name="paper-airplane" class="w-3.5 h-3.5" strokeWidth="2"/>{{ __('messages.send_pdf_whatsapp') }}</button>
             </form>
         </div>
     </div>

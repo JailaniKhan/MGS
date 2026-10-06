@@ -105,6 +105,41 @@ class BackupStoreTest extends TestCase
         $this->assertStringNotContainsString('&lt;span', $binary);
     }
 
+    public function test_backup_is_a_pdf_and_json_pair_named_in_the_success_message(): void
+    {
+        Storage::fake('local');
+
+        $user = User::create(['name' => 'B6', 'email' => 'bs6@test.dev', 'password' => bcrypt('x')]);
+        $this->actingAs($user);
+        Customer::create(['name' => 'Zarghuna', 'phone' => '0700000009']);
+
+        $this->post('/backup')->assertRedirect(route('backup.index'));
+
+        $disk = Storage::disk('local');
+        $files = collect($disk->files('backups/user_'.$user->id));
+
+        $pdf = $files->first(fn ($f) => str_ends_with($f, '.pdf'));
+        $json = $files->first(fn ($f) => str_ends_with($f, '.json'));
+
+        $this->assertNotNull($pdf, 'PDF artifact missing');
+        $this->assertNotNull($json, 'JSON artifact missing');
+
+        // A backup is a *pair*: the two files must share a name and differ
+        // only by extension, otherwise the shop ends up with a PDF it cannot
+        // restore from (or a restore file it cannot read).
+        $this->assertSame(
+            preg_replace('/\.pdf$/', '', $pdf),
+            preg_replace('/\.json$/', '', $json)
+        );
+
+        // The shop is told about both files. Before this the success message
+        // named backup_….pdf alone, which is why a new backup read as
+        // "only the PDF was created".
+        $message = (string) session('success');
+        $this->assertStringContainsString(basename($pdf), $message);
+        $this->assertStringContainsString(basename($json), $message);
+    }
+
     public function test_identifier_columns_keep_phone_digits_ungrouped(): void
     {
         // Phones live in the PDF's FlateDecode-compressed content streams

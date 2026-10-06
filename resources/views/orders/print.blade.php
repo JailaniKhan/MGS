@@ -63,7 +63,7 @@
         </div>
 
         <table>
-            <th scope="col"ead>
+            <thead>
                 <tr>
                     <th scope="col" style="width:40%;">{{ __('messages.items') }}</th>
                     <th scope="col" class="qty" style="width:15%;">كمیت</th>
@@ -74,7 +74,7 @@
             <tbody>
                 @foreach($order->orderItems as $item)
                 <tr>
-                    <td>{{ $item->product->name }}@if($item->lot_number) <br><span style="font-size:11px;color:#0c8c53;">{{ __('messages.lot_number') }}: {{ $item->lot_number }}</span>@endif</td>
+                    <td>{{ $item->product->name }}@if($item->lot_number) <br><span class="lot">{{ __('messages.lot_number') }}: {{ $item->lot_number }}</span>@endif</td>
                     <td class="qty">{{ $item->quantity }} {{ $item->product->unit->short_name ?? $item->product->unit->name ?? '' }}</td>
                     <td class="price">{{ money_format($item->unit_price) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</td>
                     <td class="subtotal">{{ money_format($item->subtotal) }} {{ $order->currency === 'USD' ? '$' : __('messages.afn') }}</td>
@@ -114,8 +114,12 @@
         </div>
     </div>
 
-    <div class="actions">
-        <button class="btn-print" onclick="window.print()">{{ __('messages.print') }}</button>
-    </div>
+    <x-print-flash/>
+    <x-document-actions
+        :open="route('orders.pdf.open', $order)"
+        :save="route('orders.pdf.save', $order)"
+        :share="route('orders.pdf.share', $order)"
+        :whatsapp="route('orders.pdf.whatsapp', $order)"
+    />
 </body>
 </html>

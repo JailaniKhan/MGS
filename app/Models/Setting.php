@@ -10,6 +10,17 @@ class Setting extends Model
 {
     protected $fillable = ['key', 'value'];
 
+    /**
+     * Per-process read memo. Settings are read on EVERY request (locale,
+     * app-lock, dashboard rate, company header) — on the phone's persistent
+     * runtime that meant 4-8 identical SQLite queries per page. Every writer
+     * flushes: set() drops its key, bulk writers (backup restore) and tests
+     * call flushMemo(). Keyed by user so the global scope's isolation holds.
+     *
+     * @var array<string, mixed>
+     */
+    protected static array $memo = [];
+
     protected static function booted(): void
     {
         // Settings belong to the signed-in shop owner. Unauthenticated
@@ -39,13 +50,28 @@ class Setting extends Model
 
     public static function get(string $key, mixed $default = null): mixed
     {
-        $setting = static::where('key', $key)->first();
+        $memoKey = (Auth::id() ?? 0).'|'.$key;
 
-        return $setting?->value ?? $default;
+        if (! array_key_exists($memoKey, static::$memo)) {
+            // Memoize the ROW value (null = missing), never the default:
+            // a later call may pass a different default and must still
+            // see it applied — the middleware reads ('pin_lock_enabled', '0')
+            // while a test asserts the same key with no default.
+            static::$memo[$memoKey] = static::where('key', $key)->first()?->value;
+        }
+
+        return static::$memo[$memoKey] ?? $default;
     }
 
     public static function set(string $key, mixed $value): void
     {
         static::updateOrCreate(['key' => $key], ['value' => $value]);
+        unset(static::$memo[(Auth::id() ?? 0).'|'.$key]);
+    }
+
+    /** Drop the read memo — after bulk writers (backup restore) and between tests. */
+    public static function flushMemo(): void
+    {
+        static::$memo = [];
     }
 }

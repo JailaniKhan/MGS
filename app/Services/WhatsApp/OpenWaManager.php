@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Log;
 class OpenWaManager
 {
     protected ?int $pid = null;
+
     private const PORT = 2785;
 
     /**
@@ -20,6 +21,7 @@ class OpenWaManager
      * instead of re-attempting the whole launch dance.
      */
     private static ?float $lastLaunchAttemptAt = null;
+
     private static bool $lastLaunchSucceeded = false;
 
     /**
@@ -51,6 +53,7 @@ class OpenWaManager
         if (getenv('NATIVEPHP_PLATFORM') === 'android') {
             return true;
         }
+
         // Last-resort probe: real Android always has /system/build.prop.
         // We only check this on Linux (Windows can't have that path).
         return PHP_OS_FAMILY === 'Linux' && @is_file('/system/build.prop');
@@ -65,6 +68,7 @@ class OpenWaManager
         if (self::$lastLaunchAttemptAt === null || self::$lastLaunchSucceeded) {
             return false;
         }
+
         return (microtime(true) - self::$lastLaunchAttemptAt) < self::LAUNCH_COOLDOWN_SECONDS;
     }
 
@@ -84,8 +88,8 @@ class OpenWaManager
     protected function recordError(string $message, ?string $logFile = null): void
     {
         $tail = $logFile ? $this->logTail($logFile) : '';
-        self::$lastError = $message . ($tail !== '' ? "\n\n--- openwa_app.log tail ---\n" . $tail : '');
-        Log::error('OpenWaManager: ' . $message . ($tail !== '' ? "\n" . $tail : ''));
+        self::$lastError = $message.($tail !== '' ? "\n\n--- openwa_app.log tail ---\n".$tail : '');
+        Log::error('OpenWaManager: '.$message.($tail !== '' ? "\n".$tail : ''));
     }
 
     /**
@@ -95,7 +99,7 @@ class OpenWaManager
      */
     protected function logTail(string $file, int $maxLines = 40): string
     {
-        if (!is_file($file)) {
+        if (! is_file($file)) {
             return '';
         }
         $size = @filesize($file);
@@ -116,14 +120,16 @@ class OpenWaManager
             return '';
         }
         $lines = array_values(array_filter(preg_split('/\r?\n/', $content), fn ($l) => trim((string) $l) !== ''));
+
         return trim(implode("\n", array_slice($lines, -$maxLines)));
     }
 
     public function ensureStarted(): bool
     {
         try {
-            if (!$this->isAvailable()) {
+            if (! $this->isAvailable()) {
                 Log::debug('OpenWaManager: gateway not available, skipping');
+
                 return false;
             }
 
@@ -133,6 +139,7 @@ class OpenWaManager
             // near-instant.
             if ($this->launchInCooldown()) {
                 Log::debug('OpenWaManager: gateway launch in cooldown, skipping');
+
                 return false;
             }
 
@@ -145,6 +152,7 @@ class OpenWaManager
                 // first checks the current state and only POSTs /start when
                 // the session is missing/inactive.
                 $this->startSession();
+
                 return true;
             }
 
@@ -158,6 +166,7 @@ class OpenWaManager
                 usleep(2_000_000);
                 if ($this->gatewayResponds()) {
                     $this->startSession();
+
                     return true;
                 }
                 $this->killTree($livePid);
@@ -168,7 +177,8 @@ class OpenWaManager
 
             return $this->launch();
         } catch (\Throwable $e) {
-            $this->recordError('error during startup: ' . $e->getMessage());
+            $this->recordError('error during startup: '.$e->getMessage());
+
             return false;
         }
     }
@@ -180,8 +190,13 @@ class OpenWaManager
 
     protected function isAvailable(): bool
     {
-        if (!$this->resolveAppDir()) return false;
-        if (!$this->resolveNodeBinary()) return false;
+        if (! $this->resolveAppDir()) {
+            return false;
+        }
+        if (! $this->resolveNodeBinary()) {
+            return false;
+        }
+
         return true;
     }
 
@@ -199,7 +214,7 @@ class OpenWaManager
      */
     protected function ensureBundleDeployed(): void
     {
-        if (!$this->isAndroid()) {
+        if (! $this->isAndroid()) {
             return;
         }
 
@@ -221,11 +236,12 @@ class OpenWaManager
             return;
         }
 
-        if (!is_dir($bootstrapDir)) {
+        if (! is_dir($bootstrapDir)) {
             Log::warning('OpenWaManager: bootstrap/openwa not found — cannot deploy bundle', [
                 'bootstrap' => $bootstrapDir,
                 'runtime' => $runtimeDir,
             ]);
+
             return;
         }
 
@@ -234,7 +250,7 @@ class OpenWaManager
             'to' => $runtimeDir,
         ]);
 
-        if (!is_dir($runtimeDir)) {
+        if (! is_dir($runtimeDir)) {
             @mkdir($runtimeDir, 0755, true);
         }
         @mkdir("{$runtimeDir}/app", 0755, true);
@@ -245,7 +261,7 @@ class OpenWaManager
         foreach (['app', 'node', 'modules'] as $sub) {
             $src = "{$bootstrapDir}/{$sub}";
             $dst = "{$runtimeDir}/{$sub}";
-            if (!is_dir($src)) {
+            if (! is_dir($src)) {
                 continue;
             }
             $this->rcopyDir($src, $dst);
@@ -276,10 +292,10 @@ class OpenWaManager
      */
     protected function rcopyDir(string $src, string $dst): void
     {
-        if (!is_dir($src)) {
+        if (! is_dir($src)) {
             return;
         }
-        if (!is_dir($dst)) {
+        if (! is_dir($dst)) {
             @mkdir($dst, 0755, true);
         }
         $dir = opendir($src);
@@ -304,7 +320,7 @@ class OpenWaManager
         // dev-machine absolute path baked into the APK's embedded .env — it
         // can never exist on-device. Ignore it entirely and always use the
         // app-private runtime copy deployed from the bundled bootstrap/.
-        if (!$this->isAndroid()) {
+        if (! $this->isAndroid()) {
             $dir = config('services.openwa.binary_dir');
             if ($dir && is_dir($dir)) {
                 return $dir;
@@ -324,41 +340,45 @@ class OpenWaManager
     protected function launch(): bool
     {
         $appDir = $this->resolveAppDir();
-        if (!$appDir) {
+        if (! $appDir) {
             Log::info('OpenWaManager: binary_dir not available, skipping local start', ['dir' => config('services.openwa.binary_dir')]);
             $this->markLaunchAttempt(false);
+
             return false;
         }
 
         $mainJs = "{$appDir}/server.js";
-        if (!file_exists($mainJs)) {
+        if (! file_exists($mainJs)) {
             $mainJs = "{$appDir}/dist/main.js";
         }
-        if (!file_exists($mainJs)) {
+        if (! file_exists($mainJs)) {
             $mainJs = "{$appDir}/main.js";
         }
-        if (!file_exists($mainJs)) {
+        if (! file_exists($mainJs)) {
             Log::info('OpenWaManager: no entry point found (tried server.js, dist/main.js, main.js), skipping', ['dir' => $appDir]);
             $this->markLaunchAttempt(false);
+
             return false;
         }
 
-        $modulesDir = dirname($appDir) . '/modules';
+        $modulesDir = dirname($appDir).'/modules';
         $logFile = "{$appDir}/openwa_app.log";
         $pidFile = $this->pidFilePath();
 
         $nodeBin = $this->resolveNodeBinary();
-        if ($nodeBin && is_file($nodeBin) && !is_executable($nodeBin)) {
+        if ($nodeBin && is_file($nodeBin) && ! is_executable($nodeBin)) {
             @chmod($nodeBin, 0755);
         }
-        if (!$nodeBin) {
+        if (! $nodeBin) {
             $this->recordError('no node binary found (resolveNodeBinary returned null)');
             $this->markLaunchAttempt(false);
+
             return false;
         }
-        if (is_file($nodeBin) && !is_executable($nodeBin)) {
+        if (is_file($nodeBin) && ! is_executable($nodeBin)) {
             $this->recordError("node binary exists but is not executable: {$nodeBin}", $logFile);
             $this->markLaunchAttempt(false);
+
             return false;
         }
 
@@ -402,17 +422,18 @@ class OpenWaManager
             }
             $fullCmd = "{$envVars} \"{$nodeBin}\" \"{$mainJs}\"";
             $proc = @proc_open($fullCmd, $descriptors, $pipes, $appDir, $envArray);
-            if (!is_resource($proc)) {
+            if (! is_resource($proc)) {
                 $err = error_get_last();
                 $this->recordError(
-                    'proc_open failed on Android: ' . ($err['message'] ?? 'unknown error'),
+                    'proc_open failed on Android: '.($err['message'] ?? 'unknown error'),
                     $logFile
                 );
+
                 return false;
             }
             $status = proc_get_status($proc);
             if (isset($status['pid']) && $status['pid'] > 0) {
-                $this->pid = (int)$status['pid'];
+                $this->pid = (int) $status['pid'];
                 file_put_contents($pidFile, $this->pid);
             }
             // Mark as long-running; proc_close would block — just release the
@@ -432,10 +453,10 @@ class OpenWaManager
                 $logFile
             );
             exec($cmd, $output, $exitCode);
-            if ($exitCode === 0 && !empty($output)) {
+            if ($exitCode === 0 && ! empty($output)) {
                 $last = trim((string) end($output));
                 if ($last && is_numeric($last)) {
-                    $this->pid = (int)$last;
+                    $this->pid = (int) $last;
                     file_put_contents($pidFile, $this->pid);
                 }
             }
@@ -444,17 +465,18 @@ class OpenWaManager
         if ($exitCode !== 0) {
             Log::error('OpenWaManager: exec failed to launch', ['exitCode' => $exitCode]);
             $this->markLaunchAttempt(false);
+
             return false;
         }
 
-        if (!$this->isWindows()) {
+        if (! $this->isWindows()) {
             usleep(500_000);
         }
 
         $started = $this->waitForPort(self::PORT, 5);
 
         if ($started) {
-            if ($this->isWindows() || !$this->pid) {
+            if ($this->isWindows() || ! $this->pid) {
                 $this->pid = $this->findPidByPort(self::PORT);
             }
             if ($this->pid) {
@@ -465,16 +487,18 @@ class OpenWaManager
             usleep(2_000_000);
 
             $sessionStarted = $this->startSession();
-            if (!$sessionStarted) {
+            if (! $sessionStarted) {
                 Log::error('OpenWaManager: gateway started but session start failed');
             }
             $this->markLaunchAttempt(true);
+
             return $sessionStarted;
         }
 
         Log::error('OpenWaManager: started but port never came up', ['port' => self::PORT]);
-        $this->recordError('started but port ' . self::PORT . ' never came up (node may have crashed on launch)', $logFile);
+        $this->recordError('started but port '.self::PORT.' never came up (node may have crashed on launch)', $logFile);
         $this->markLaunchAttempt(false);
+
         return false;
     }
 
@@ -483,7 +507,7 @@ class OpenWaManager
         $pidFile = $this->pidFilePath();
         $targetPid = $this->readOwnPid();
 
-        if (!$targetPid) {
+        if (! $targetPid) {
             $targetPid = $this->findPidByPort(self::PORT);
         }
 
@@ -505,6 +529,7 @@ class OpenWaManager
         if ($this->launchInCooldown()) {
             return false;
         }
+
         return $this->checkPort(self::PORT, 2) && $this->gatewayResponds();
     }
 
@@ -539,7 +564,7 @@ class OpenWaManager
         $vars = [
             'NODE_OPTIONS' => '--max-old-space-size=2048 --preserve-symlinks',
             'API_KEY' => config('services.openwa.api_key') ?? '',
-            'PORT' => (string)self::PORT,
+            'PORT' => (string) self::PORT,
             'SESSION_DATA_PATH' => './data/sessions',
             'AUTO_START_SESSIONS' => 'true',
         ];
@@ -548,7 +573,7 @@ class OpenWaManager
         // at the bundled Termux shared libs (libssl.so.3, libcrypto.so.3,
         // libicu*.so, libsqlite, c-ares, libc++). Without it exec() fails
         // with ENOENT because the dynamic linker can't resolve the .so deps.
-        $libDir = dirname($this->resolveNodeBinary() ?? '') . '/lib';
+        $libDir = dirname($this->resolveNodeBinary() ?? '').'/lib';
         if ($this->isAndroid() && is_dir($libDir)) {
             $existing = getenv('LD_LIBRARY_PATH');
             $vars['LD_LIBRARY_PATH'] = $existing ? "{$libDir}:{$existing}" : $libDir;
@@ -569,13 +594,19 @@ class OpenWaManager
     protected function ensureSymlinks(): void
     {
         $appDir = $this->resolveAppDir();
-        if (!$appDir) return;
+        if (! $appDir) {
+            return;
+        }
 
         $nodeModules = "{$appDir}/node_modules";
-        $modulesDir = dirname($appDir) . '/modules';
+        $modulesDir = dirname($appDir).'/modules';
 
-        if (!is_dir($modulesDir)) return;
-        if (is_link($nodeModules) || is_dir($nodeModules)) return;
+        if (! is_dir($modulesDir)) {
+            return;
+        }
+        if (is_link($nodeModules) || is_dir($nodeModules)) {
+            return;
+        }
 
         if ($this->isWindows()) {
             exec(sprintf('mklink /J "%s" "%s" 2>NUL', $nodeModules, $modulesDir), $out, $code);
@@ -588,6 +619,7 @@ class OpenWaManager
     {
         $this->stop();
         usleep(1_000_000);
+
         return $this->launch();
     }
 
@@ -595,7 +627,7 @@ class OpenWaManager
     {
         $sessionId = config('services.openwa.session');
         $apiKey = config('services.openwa.api_key');
-        if (!$sessionId || !$apiKey) {
+        if (! $sessionId || ! $apiKey) {
             return false;
         }
 
@@ -612,6 +644,7 @@ class OpenWaManager
                     'session' => $sessionId,
                     'status' => $currentStatus,
                 ]);
+
                 return true;
             }
         }
@@ -625,6 +658,7 @@ class OpenWaManager
                     'session' => $sessionId,
                     'attempt' => $attempt,
                 ]);
+
                 return true;
             }
 
@@ -654,7 +688,7 @@ class OpenWaManager
             return $configured;
         }
 
-        if ($configured && file_exists($configured) && !$windows) {
+        if ($configured && file_exists($configured) && ! $windows) {
             @chmod($configured, 0755);
             if (is_executable($configured)) {
                 return $configured;
@@ -663,7 +697,7 @@ class OpenWaManager
 
         // On Android the bundle lives under bootstrap/openwa/ until the
         // first-launch migration copies it to the runtime storage dir.
-        if (!$windows) {
+        if (! $windows) {
             $this->ensureBundleDeployed();
         }
 
@@ -676,9 +710,10 @@ class OpenWaManager
             ? storage_path('app/openwa/node/node.exe')
             : storage_path('app/openwa/node/node');
         if (file_exists($storageNode)) {
-            if (!$windows) {
+            if (! $windows) {
                 @chmod($storageNode, 0755);
             }
+
             return $storageNode;
         }
 
@@ -694,15 +729,16 @@ class OpenWaManager
                     "{$appDir}/../node/node.exe",
                     "{$appDir}/node",
                     "{$appDir}/node.exe",
-                    dirname($appDir) . '/node/node',
-                    dirname($appDir) . '/node/node.exe',
+                    dirname($appDir).'/node/node',
+                    dirname($appDir).'/node/node.exe',
                 ];
             foreach ($candidates as $candidate) {
                 $normalized = realpath($candidate) ?: $candidate;
                 if (file_exists($normalized)) {
-                    if (!$windows && !is_executable($normalized)) {
+                    if (! $windows && ! is_executable($normalized)) {
                         @chmod($normalized, 0755);
                     }
+
                     return $normalized;
                 }
             }
@@ -710,7 +746,7 @@ class OpenWaManager
 
         $which = $this->isWindows() ? 'where node 2>NUL' : 'command -v node 2>/dev/null';
         exec($which, $pathOut, $code);
-        if ($code === 0 && !empty($pathOut[0])) {
+        if ($code === 0 && ! empty($pathOut[0])) {
             return trim($pathOut[0]);
         }
 
@@ -723,10 +759,12 @@ class OpenWaManager
             $c = @fsockopen('127.0.0.1', $port, $errno, $errstr, $timeout);
             if ($c) {
                 fclose($c);
+
                 return true;
             }
         } catch (\Throwable $e) {
         }
+
         return false;
     }
 
@@ -738,6 +776,7 @@ class OpenWaManager
             }
             usleep(1_000_000);
         }
+
         return false;
     }
 
@@ -746,6 +785,7 @@ class OpenWaManager
         if ($this->isWindows()) {
             return $this->findPidByPortWindows($port);
         }
+
         return $this->findPidByPortUnix($port);
     }
 
@@ -764,10 +804,12 @@ class OpenWaManager
 
         foreach ($output as $line) {
             $line = trim($line);
-            if (stripos($line, 'LISTENING') === false) continue;
+            if (stripos($line, 'LISTENING') === false) {
+                continue;
+            }
             foreach ($patterns as $p) {
                 if (preg_match($p, $line) && preg_match('/\\s+(\\d+)\\s*$/', $line, $m)) {
-                    return (int)$m[1];
+                    return (int) $m[1];
                 }
             }
         }
@@ -775,10 +817,11 @@ class OpenWaManager
             $line = trim($line);
             foreach ($patterns as $p) {
                 if (preg_match($p, $line) && preg_match('/\\s+(\\d+)\\s*$/', $line, $m)) {
-                    return (int)$m[1];
+                    return (int) $m[1];
                 }
             }
         }
+
         return null;
     }
 
@@ -786,8 +829,8 @@ class OpenWaManager
     {
         $output = [];
         exec("lsof -ti :{$port} 2>/dev/null", $output, $code);
-        if ($code === 0 && !empty($output)) {
-            return (int)trim($output[0]);
+        if ($code === 0 && ! empty($output)) {
+            return (int) trim($output[0]);
         }
 
         $output = [];
@@ -795,17 +838,17 @@ class OpenWaManager
         if ($code === 0) {
             foreach ($output as $line) {
                 if (preg_match('/pid=(\d+)/', $line, $m)) {
-                    return (int)$m[1];
+                    return (int) $m[1];
                 }
             }
         }
 
         $output = [];
         @exec("fuser {$port}/tcp 2>/dev/null", $output, $code);
-        if ($code === 0 && !empty($output)) {
+        if ($code === 0 && ! empty($output)) {
             $parts = preg_split('/\s+/', trim($output[0]));
-            if (!empty($parts)) {
-                return (int)end($parts);
+            if (! empty($parts)) {
+                return (int) end($parts);
             }
         }
 
@@ -839,31 +882,45 @@ class OpenWaManager
         $portHex = str_pad(dechex($port), 4, '0', STR_PAD_LEFT);
         // The local_address field uses big-endian port but we'll match
         // both formats to be safe across kernels.
-        $sought = ['0100007F:' . $portHex, '00000000:' . $portHex];
+        $sought = ['0100007F:'.$portHex, '00000000:'.$portHex];
 
         foreach (['/proc/net/tcp', '/proc/net/tcp6'] as $procFile) {
-            if (!@is_readable($procFile)) continue;
+            if (! @is_readable($procFile)) {
+                continue;
+            }
             $lines = @file($procFile);
-            if (!$lines) continue;
+            if (! $lines) {
+                continue;
+            }
             // Skip header row.
             for ($i = 1; $i < count($lines); $i++) {
                 $parts = preg_split('/\s+/', trim($lines[$i]));
-                if (count($parts) < 10) continue;
+                if (count($parts) < 10) {
+                    continue;
+                }
                 $local = $parts[1];
                 $state = $parts[3];
                 $inode = $parts[9] ?? null;
-                if ($state !== $listenState) continue;
+                if ($state !== $listenState) {
+                    continue;
+                }
                 // Match either 127.0.0.1 or 0.0.0.0 binding, both little and big endian.
                 $matches = false;
                 foreach ($sought as $s) {
-                    if (stripos($local, $s) !== false) { $matches = true; break; }
+                    if (stripos($local, $s) !== false) {
+                        $matches = true;
+                        break;
+                    }
                 }
-                if (!$matches) continue;
+                if (! $matches) {
+                    continue;
+                }
                 if ($inode && is_numeric($inode)) {
-                    return (int)$inode;
+                    return (int) $inode;
                 }
             }
         }
+
         return null;
     }
 
@@ -874,34 +931,50 @@ class OpenWaManager
      */
     protected function findPidBySocketInode(int $inode): ?int
     {
-        if ($inode <= 0 || !is_dir('/proc')) return null;
+        if ($inode <= 0 || ! is_dir('/proc')) {
+            return null;
+        }
         $target = "socket:[{$inode}]";
         foreach (scandir('/proc') as $entry) {
-            if (!ctype_digit($entry)) continue;
+            if (! ctype_digit($entry)) {
+                continue;
+            }
             $fdDir = "/proc/{$entry}/fd";
-            if (!is_dir($fdDir)) continue;
+            if (! is_dir($fdDir)) {
+                continue;
+            }
             $fds = @scandir($fdDir);
-            if (!$fds) continue;
+            if (! $fds) {
+                continue;
+            }
             foreach ($fds as $fd) {
-                if ($fd === '.' || $fd === '..') continue;
+                if ($fd === '.' || $fd === '..') {
+                    continue;
+                }
                 $link = @readlink("{$fdDir}/{$fd}");
                 if ($link === $target) {
-                    return (int)$entry;
+                    return (int) $entry;
                 }
             }
         }
+
         return null;
     }
 
     protected function processAlive(int $pid): bool
     {
-        if ($pid <= 0) return false;
+        if ($pid <= 0) {
+            return false;
+        }
 
         if ($this->isWindows()) {
             exec("tasklist /FI \"PID eq {$pid}\" /NH 2>NUL", $out, $code);
-            foreach ((array)$out as $line) {
-                if (stripos($line, (string)$pid) !== false) return true;
+            foreach ((array) $out as $line) {
+                if (stripos($line, (string) $pid) !== false) {
+                    return true;
+                }
             }
+
             return false;
         }
 
@@ -910,6 +983,7 @@ class OpenWaManager
         }
 
         exec("kill -0 {$pid} 2>/dev/null", $out, $code);
+
         return $code === 0;
     }
 
@@ -917,6 +991,7 @@ class OpenWaManager
     {
         if ($this->isWindows()) {
             exec("taskkill /PID {$pid} /T /F 2>NUL", $o, $code);
+
             return;
         }
 
@@ -932,7 +1007,7 @@ class OpenWaManager
             $children = $this->findChildPidsViaProc($pid);
         }
         foreach ($children as $child) {
-            $child = (int)trim((string)$child);
+            $child = (int) trim((string) $child);
             if ($child > 0) {
                 $this->killTree($child);
             }
@@ -957,29 +1032,40 @@ class OpenWaManager
      */
     protected function findChildPidsViaProc(int $ppid): array
     {
-        if ($ppid <= 0 || !is_dir('/proc')) return [];
+        if ($ppid <= 0 || ! is_dir('/proc')) {
+            return [];
+        }
         $children = [];
         foreach (scandir('/proc') as $entry) {
-            if (!ctype_digit($entry)) continue;
+            if (! ctype_digit($entry)) {
+                continue;
+            }
             $statPath = "/proc/{$entry}/stat";
-            if (!is_readable($statPath)) continue;
+            if (! is_readable($statPath)) {
+                continue;
+            }
             $stat = @file_get_contents($statPath);
-            if ($stat === false) continue;
+            if ($stat === false) {
+                continue;
+            }
             // stat fields are space-separated, but the comm (field 2) may
             // contain spaces inside parens, e.g. `(node)` or `(bash)`.
             // Pop everything after the last ')' to skip comm safely.
             $close = strrpos($stat, ')');
-            if ($close === false) continue;
+            if ($close === false) {
+                continue;
+            }
             $rest = substr($stat, $close + 2);
             $fields = explode(' ', $rest);
             // After comm, fields are state (1), ppid (2)... but $rest starts
             // at the field right after `)`+space which is state. So ppid is
             // $fields[1].
             $parentPid = $fields[1] ?? '';
-            if ((int)$parentPid === $ppid) {
-                $children[] = (int)$entry;
+            if ((int) $parentPid === $ppid) {
+                $children[] = (int) $entry;
             }
         }
+
         return $children;
     }
 
@@ -991,8 +1077,11 @@ class OpenWaManager
     protected function readOwnPid(): ?int
     {
         $pidFile = $this->pidFilePath();
-        if (!file_exists($pidFile)) return null;
-        $pid = (int)trim((string)file_get_contents($pidFile));
+        if (! file_exists($pidFile)) {
+            return null;
+        }
+        $pid = (int) trim((string) file_get_contents($pidFile));
+
         return $pid > 0 ? $pid : null;
     }
 
@@ -1012,22 +1101,29 @@ class OpenWaManager
         if ($resp && in_array($resp['status'], [200, 401, 403, 404], true)) {
             return true;
         }
+
         return false;
     }
 
     protected function http(string $method, string $path, int $timeoutSec = 3): ?array
     {
-        $base = 'http://127.0.0.1:' . self::PORT;
-        $url = $base . $path;
+        $base = 'http://127.0.0.1:'.self::PORT;
+        $url = $base.$path;
         $apiKey = config('services.openwa.api_key');
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST  => strtoupper($method),
-            CURLOPT_TIMEOUT_MS     => $timeoutSec * 1000,
-            CURLOPT_CONNECTTIMEOUT_MS => 2000,
-            CURLOPT_HTTPHEADER     => ['X-API-Key: ' . $apiKey, 'Accept: application/json'],
+            CURLOPT_CUSTOMREQUEST => strtoupper($method),
+            CURLOPT_TIMEOUT_MS => $timeoutSec * 1000,
+            // Connect timeout must stay SHORT: Windows connects to a closed
+            // localhost port time out rather than fail fast, so 2000ms here
+            // burned 2 full seconds on every down-gateway probe (curl logged
+            // "Connection timed out after 2002 ms" per attempt). A local
+            // socket that is up answers in single-digit ms. The RESPONSE
+            // timeout above (3s for a busy Baileys event loop) is untouched.
+            CURLOPT_CONNECTTIMEOUT_MS => 750,
+            CURLOPT_HTTPHEADER => ['X-API-Key: '.$apiKey, 'Accept: application/json'],
             CURLOPT_SSL_VERIFYPEER => false,
         ]);
 
@@ -1038,10 +1134,11 @@ class OpenWaManager
 
         if ($err || $body === false) {
             Log::debug('OpenWaManager http: curl error', ['url' => $url, 'err' => $err]);
+
             return null;
         }
 
-        return ['status' => (int)$status, 'body' => $body, 'json' => json_decode($body, true)];
+        return ['status' => (int) $status, 'body' => $body, 'json' => json_decode($body, true)];
     }
 
     protected function isWindows(): bool

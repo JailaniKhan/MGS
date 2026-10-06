@@ -55,6 +55,7 @@ class CategoryController extends Controller
             return redirect()->route('inventory.index')->with('error', __('messages.category_has_products'));
         }
         $category->delete();
+
         return redirect()->route('inventory.index')->with('success', __('messages.category_deleted'));
     }
 }

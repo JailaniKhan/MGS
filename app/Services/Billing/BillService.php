@@ -13,6 +13,8 @@ use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class BillService
 {
@@ -238,6 +240,100 @@ class BillService
             ]);
 
             return ['ok' => false, 'error' => __('messages.bill_send_failed')];
+        }
+    }
+
+    /**
+     * Send a rendered PDF (invoice / purchase bill / cashbook statement) to
+     * the party over WhatsApp and log it in the chat history exactly like the
+     * plain-text bills: one Reminder row per document, with the stored copy
+     * linked as media so the chat bubble can open it again.
+     *
+     * @return array{ok: bool, error: ?string}
+     */
+    public function sendPdf(
+        ?Model $party,
+        string $phone,
+        string $binary,
+        string $filename,
+        string $caption = '',
+        ?float $amount = null,
+        string $currency = 'AFN',
+    ): array {
+        if (empty(trim($phone))) {
+            return ['ok' => false, 'error' => __('messages.no_phone_to_send')];
+        }
+
+        // Keep the exact bytes that went out — the chat history should be able
+        // to reopen the document without re-rendering it.
+        $relative = 'whatsapp-outbox/'.Str::uuid().'.pdf';
+        Storage::disk('local')->put($relative, $binary);
+
+        $reminder = Reminder::create([
+            'user_id' => auth()->id(),
+            'remindable_type' => $party?->getMorphClass(),
+            'remindable_id' => $party?->id,
+            'amount' => $amount,
+            'currency' => $currency ?: 'AFN',
+            'channel' => 'whatsapp',
+            'message' => $caption,
+            'media_path' => $relative,
+            'media_type' => 'application/pdf',
+            'status' => 'pending',
+        ]);
+
+        try {
+            // Documents are gateway-only: the Meta Cloud fallback the text
+            // bills use has no media upload path wired up.
+            if (! $this->openWaService || ! $this->openWaService->isConfigured()) {
+                $reminder->update([
+                    'status' => 'failed',
+                    'error_message' => __('messages.openwa_unreachable'),
+                ]);
+
+                return ['ok' => false, 'error' => __('messages.pdf_send_failed')];
+            }
+
+            $sessionState = $this->openWaService->sessionStatus()['status'] ?? null;
+
+            if ($sessionState !== 'ready' && $sessionState !== 'connected') {
+                $reminder->update([
+                    'status' => 'failed',
+                    'error_message' => "WhatsApp session not connected (state: {$sessionState}). Link the device in Settings → WhatsApp Gateway.",
+                ]);
+
+                return ['ok' => false, 'error' => __('messages.pdf_send_failed')];
+            }
+
+            $sent = $this->openWaService->sendDocument(
+                $phone,
+                Storage::disk('local')->path($relative),
+                $filename,
+                $caption,
+            );
+
+            $reminder->update([
+                'status' => $sent['ok'] ? 'sent' : 'failed',
+                'sent_at' => $sent['ok'] ? now() : null,
+                'provider_message_id' => $sent['id'],
+                'error_message' => $sent['ok'] ? null : 'WhatsApp gateway rejected the document.',
+            ]);
+
+            return $sent['ok']
+                ? ['ok' => true, 'error' => null]
+                : ['ok' => false, 'error' => __('messages.pdf_send_failed')];
+        } catch (\Exception $e) {
+            Log::error('WhatsApp document send failed', [
+                'reminder_id' => $reminder->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $reminder->update([
+                'status' => 'failed',
+                'error_message' => $e->getMessage(),
+            ]);
+
+            return ['ok' => false, 'error' => __('messages.pdf_send_failed')];
         }
     }
 

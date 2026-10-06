@@ -24,7 +24,7 @@ class SalaryController extends Controller
             number_format((float) $validated['amount'], 2, '.', ''),
             $validated['currency'],
             [
-                'description' => __('messages.salary_dash') . $employee->name,
+                'description' => __('messages.salary_dash').$employee->name,
                 'transaction_date' => now()->toDateString(),
                 'notes' => $validated['notes'] ?? null,
             ]

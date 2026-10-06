@@ -3,14 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AddsListBalances;
+use App\Http\Controllers\Concerns\DeliversDocuments;
 use App\Models\Customer;
 use App\Models\JournalEntry;
 use App\Models\Order;
 use App\Models\Purchase;
+use App\Models\Setting;
 use App\Models\Supplier;
 use App\Services\Accounting\CashFlowService;
 use App\Services\Accounting\TransactionService;
 use App\Services\Billing\BillService;
+use App\Services\Billing\InvoicePdfService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +22,7 @@ use Illuminate\Validation\ValidationException;
 class CashbookController extends Controller
 {
     use AddsListBalances;
+    use DeliversDocuments;
 
     public function index(CashFlowService $cashFlow)
     {
@@ -249,6 +253,129 @@ class CashbookController extends Controller
     public function person(Request $request, $type, $id)
     {
         return view('cashbook.person', $this->personData($type, $id, $request->get('currency')));
+    }
+
+    /**
+     * Printed statement preview — the same page a browser prints, but on the
+     * phone it carries view / save / WhatsApp actions of its own.
+     */
+    public function printStatement(Request $request, $type, $id)
+    {
+        return view('cashbook.print', $this->statementContext($type, $id, $request->get('currency')));
+    }
+
+    /** Open the statement PDF once in the phone's viewer. */
+    public function openStatementPdf(Request $request, $type, $id)
+    {
+        ['binary' => $binary, 'number' => $number, 'person' => $person] = $this->renderStatement($type, $id, $request->get('currency'));
+
+        return $this->openDocument(
+            $binary,
+            $number.'.pdf',
+            __('messages.statement').' — '.$person->name,
+            route('cashbook.print', [$type, $id, 'currency' => $request->get('currency')]),
+        );
+    }
+
+    /** Keep the statement PDF in the phone's Downloads/MGS folder. */
+    public function saveStatementPdf(Request $request, $type, $id)
+    {
+        ['binary' => $binary, 'number' => $number, 'person' => $person] = $this->renderStatement($type, $id, $request->get('currency'));
+
+        return $this->saveDocument(
+            $binary,
+            $number.'.pdf',
+            __('messages.statement').' — '.$person->name,
+            route('cashbook.print', [$type, $id, 'currency' => $request->get('currency')]),
+        );
+    }
+
+    /** Hand the statement PDF to the share sheet (WhatsApp first). */
+    public function shareStatementPdf(Request $request, $type, $id)
+    {
+        ['binary' => $binary, 'number' => $number, 'person' => $person] = $this->renderStatement($type, $id, $request->get('currency'));
+
+        return $this->shareDocument(
+            $binary,
+            $number.'.pdf',
+            __('messages.statement').' — '.$person->name,
+            $this->statementCaption($person),
+            route('cashbook.print', [$type, $id, 'currency' => $request->get('currency')]),
+        );
+    }
+
+    /** Send the statement PDF to the person over the WhatsApp gateway. */
+    public function sendStatementPdf(Request $request, $type, $id, BillService $bills)
+    {
+        ['binary' => $binary, 'number' => $number, 'person' => $person] = $this->renderStatement($type, $id, $request->get('currency'));
+
+        $result = $bills->sendPdf(
+            $person,
+            (string) ($person->phone ?? ''),
+            $binary,
+            $number.'.pdf',
+            $this->statementCaption($person),
+        );
+
+        return back()->with(
+            $result['ok'] ? 'success' : 'error',
+            $result['ok']
+                ? __('messages.pdf_sent', ['phone' => $person->phone])
+                : $result['error'],
+        );
+    }
+
+    /**
+     * Everything the statement preview and the PDF renderer need: the same
+     * data the screen shows plus the company banner and a document number.
+     *
+     * @return array<string, mixed>
+     */
+    private function statementContext($type, $id, ?string $currency = null): array
+    {
+        $data = $this->personData($type, $id, $currency);
+
+        $data['company'] = [
+            'name' => Setting::get('company_name', 'My Business'),
+            'address' => Setting::get('company_address', ''),
+            'phone' => Setting::get('company_phone', ''),
+            'email' => Setting::get('company_email', ''),
+        ];
+
+        $data['statementNumber'] = 'ST-'.strtoupper(substr($data['personType'], 0, 3)).'-'.$data['person']->id;
+
+        return $data;
+    }
+
+    /**
+     * Rendered statement bytes + its document number.
+     *
+     * @return array{binary: string, number: string, person: Customer|Supplier}
+     */
+    private function renderStatement($type, $id, ?string $currency = null): array
+    {
+        $data = $this->statementContext($type, $id, $currency);
+
+        return [
+            'binary' => app(InvoicePdfService::class)->forStatement(
+                $data['person'],
+                $data['personType'],
+                $data['selectedCurrency'],
+                $data['totals'],
+                $data['transactions'],
+                (float) ($data['closingBalances'][$data['selectedCurrency']] ?? 0),
+                $data['company'],
+                $data['statementNumber'],
+            ),
+            'number' => $data['statementNumber'],
+            'person' => $data['person'],
+        ];
+    }
+
+    /** Short caption that rides along with the PDF into WhatsApp. */
+    private function statementCaption($person): string
+    {
+        return __('messages.statement').' — '.$person->name;
     }
 
     private function personData($type, $id, ?string $currency = null)

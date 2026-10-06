@@ -4,7 +4,20 @@ namespace App\Providers;
 
 use App\Console\Commands\OpenWaBundle;
 use App\Console\Commands\OpenWaInstall;
+use App\Models\CashbookEntry;
 use App\Models\Customer;
+use App\Models\Expense;
+use App\Models\JournalEntry;
+use App\Models\Order;
+use App\Models\OrderReturn;
+use App\Models\PartyPayment;
+use App\Models\Payment;
+use App\Models\Product;
+use App\Models\Purchase;
+use App\Models\PurchasePayment;
+use App\Models\PurchaseReturn;
+use App\Models\Reminder;
+use App\Models\SalaryPayment;
 use App\Models\Supplier;
 use App\Services\WhatsApp\OpenWaManager;
 use App\Services\WhatsApp\OpenWaService;
@@ -18,7 +31,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(OpenWaService::class);
-        $this->app->singleton(WhatsAppService::class, fn($app) => new WhatsAppService($app->make(OpenWaService::class)));
+        $this->app->singleton(WhatsAppService::class, fn ($app) => new WhatsAppService($app->make(OpenWaService::class)));
         $this->app->singleton(OpenWaManager::class);
     }
 
@@ -30,11 +43,11 @@ class AppServiceProvider extends ServiceProvider
         ]);
 
         Customer::resolveRelationUsing('reminders', function ($model) {
-            return $model->morphMany(\App\Models\Reminder::class, 'remindable');
+            return $model->morphMany(Reminder::class, 'remindable');
         });
 
         Supplier::resolveRelationUsing('reminders', function ($model) {
-            return $model->morphMany(\App\Models\Reminder::class, 'remindable');
+            return $model->morphMany(Reminder::class, 'remindable');
         });
 
         // Bust dashboard cache whenever any transaction-ish model is written.
@@ -66,21 +79,28 @@ class AppServiceProvider extends ServiceProvider
     protected function registerDashboardCacheInvalidation(): void
     {
         $watched = [
-            \App\Models\Order::class,
-            \App\Models\Purchase::class,
-            \App\Models\Payment::class,
-            \App\Models\PurchasePayment::class,
-            \App\Models\PartyPayment::class,
-            \App\Models\Expense::class,
-            \App\Models\SalaryPayment::class,
-            \App\Models\OrderReturn::class,
-            \App\Models\PurchaseReturn::class,
-            \App\Models\Reminder::class,
-            \App\Models\Product::class,
+            Order::class,
+            Purchase::class,
+            Payment::class,
+            PurchasePayment::class,
+            PartyPayment::class,
+            Expense::class,
+            SalaryPayment::class,
+            OrderReturn::class,
+            PurchaseReturn::class,
+            Reminder::class,
+            Product::class,
+            // Cashbook writes move both cash-flow tiles and the debtor list
+            // (person-tagged entries); without these a cashbook_in/out sat
+            // in the dashboard cache until the TTL expired.
+            JournalEntry::class,
+            CashbookEntry::class,
         ];
 
         $bust = function ($model) {
-            if (! $userId = ($model->user_id ?? auth()->id())) return;
+            if (! $userId = ($model->user_id ?? auth()->id())) {
+                return;
+            }
             foreach ([now()->format('Ymd'), now()->subDay()->format('Ymd')] as $day) {
                 Cache::forget("dashboard_v3_{$userId}_{$day}");
             }
@@ -118,7 +138,22 @@ class AppServiceProvider extends ServiceProvider
         // probes (and possible relaunch). On web the gateway is started
         // on demand by SettingsController::openwa() instead.
         if ($isMobile) {
-            $manager->ensureStarted();
+            // DEFERRED, never inline: the gateway launch dance (health probes,
+            // node spawn, port waits, session POSTs) used to run right HERE in
+            // boot() — every cold app start blocked its first page behind it.
+            // Today's logs showed the dance taking 90s+ (and hitting PHP's
+            // max_execution_time), all before the splash cleared. boot() stays
+            // cheap: the app renders immediately and the dance runs once, right
+            // after the first response flushes. The once-guard keeps the
+            // persistent runtime from re-probing the gateway on every page.
+            $ensured = false;
+            $this->app->terminating(function () use (&$ensured, $manager) {
+                if ($ensured) {
+                    return;
+                }
+                $ensured = true;
+                $manager->ensureStarted();
+            });
 
             // Mobile (NativePHP persistent runtime): the PHP process lives for
             // the entire app session. Register a shutdown handler so the gateway

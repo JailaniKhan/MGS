@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\Reminder;
 use App\Models\Supplier;
+use Illuminate\Http\Request;
 
 /**
  * WhatsApp-style view of the reminders that were actually delivered (or
@@ -119,5 +120,53 @@ class WhatsAppChatController extends Controller
             ->get();
 
         return view('whatsapp.show', compact('messages', 'type', 'id', 'contact'));
+    }
+
+    /**
+     * Poll endpoint for the chat page: everything newer than the given
+     * reminder id, rendered as the same bubble partial the page uses so the
+     * JS poller can just insert the fragment. Incoming messages are folded
+     * into the reminders table by InboundMessageService; without this poll
+     * they would only appear after a full page reload.
+     */
+    public function messages(string $type, int $id, Request $request)
+    {
+        if (! in_array($type, self::CHAT_TYPES, true)) {
+            abort(404);
+        }
+
+        $contactClass = $type === 'customer' ? Customer::class : Supplier::class;
+        if (! $contactClass::find($id)) {
+            abort(404);
+        }
+
+        $after = (int) $request->query('after', 0);
+
+        $newer = Reminder::query()
+            ->where('channel', 'whatsapp')
+            ->where('remindable_type', $type)
+            ->where('remindable_id', $id)
+            ->where('id', '>', $after)
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        $dateLabel = fn ($time) => $time->isToday()
+            ? __('messages.today')
+            : ($time->isYesterday() ? __('messages.yesterday') : $time->format('d/m/Y'));
+
+        $html = $newer->map(fn ($reminder) => view('whatsapp.partials.bubble', [
+            'reminder' => $reminder,
+            'dateLabel' => $dateLabel,
+            // The partial's day-chip logic reads the previous bubble out of
+            // this collection; a single-item collection means "always chip",
+            // which is correct for the first message of a poll batch.
+            'messages' => $newer,
+        ])->render())->implode('');
+
+        return response()->json([
+            'html' => $html,
+            'lastId' => (int) ($newer->last()->id ?? $after),
+        ]);
     }
 }

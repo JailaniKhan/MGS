@@ -33,16 +33,48 @@
                 @endif
             </div>
         </div>
+        {{-- Quick actions: icon tiles whose labels wrap instead of
+             truncating, every tile a full >=44px touch target. --}}
         <div class="grid grid-cols-2 gap-2 mt-4">
-            <form action="{{ route('cashbook.send-statement', [$personType, $person->id]) }}" method="POST" class="{{ $person->phone ? '' : 'col-span-2' }}">
+            <a href="{{ route('cashbook.print', [$personType, $person->id, 'currency' => $selectedCurrency]) }}" class="action-tile">
+                <span class="action-tile-icon bg-brand/10 dark:bg-brand/20 text-brand">
+                    <x-icon name="printer" class="w-5 h-5" strokeWidth="1.8"/>
+                </span>
+                <span class="action-tile-label">{{ __('messages.print') }}</span>
+            </a>
+            <form action="{{ route('cashbook.pdf.save', [$personType, $person->id, 'currency' => $selectedCurrency]) }}" method="POST" class="contents">
                 @csrf
-                <button type="submit" class="btn-primary w-full">
-                    <x-icon name="paper-airplane" class="w-4 h-4"/>{{ __('messages.send_statement') }}
+                <button type="submit" class="action-tile w-full h-full">
+                    <span class="action-tile-icon bg-secondary-500/10 dark:bg-secondary-500/15 text-secondary-600 dark:text-secondary-400">
+                        <x-icon name="arrow-down-tray" class="w-5 h-5" strokeWidth="1.8"/>
+                    </span>
+                    <span class="action-tile-label">{{ __('messages.save_pdf') }}</span>
+                </button>
+            </form>
+            <form action="{{ route('cashbook.send-statement', [$personType, $person->id]) }}" method="POST" class="contents">
+                @csrf
+                <button type="submit" class="action-tile w-full h-full">
+                    <span class="action-tile-icon bg-accent-500/10 dark:bg-accent-500/15 text-accent-600 dark:text-accent-400">
+                        <x-icon name="paper-airplane" class="w-5 h-5" strokeWidth="1.8"/>
+                    </span>
+                    <span class="action-tile-label">{{ __('messages.send_statement') }}</span>
+                </button>
+            </form>
+            <form action="{{ route('cashbook.pdf.whatsapp', [$personType, $person->id, 'currency' => $selectedCurrency]) }}" method="POST" class="contents">
+                @csrf
+                <button type="submit" class="action-tile w-full h-full">
+                    <span class="action-tile-icon bg-brand/10 dark:bg-brand/20 text-brand">
+                        <x-icon name="document-arrow-down" class="w-5 h-5" strokeWidth="1.8"/>
+                    </span>
+                    <span class="action-tile-label">{{ __('messages.send_pdf_whatsapp') }}</span>
                 </button>
             </form>
             @if($person->phone)
-                <a href="tel:{{ $person->phone }}" class="btn-secondary w-full">
-                    <x-icon name="phone" class="w-4 h-4"/>{{ __('messages.call') }}
+                <a href="tel:{{ $person->phone }}" class="action-tile col-span-2">
+                    <span class="action-tile-icon bg-ink-100 dark:bg-ink-800 text-ink-600 dark:text-ink-300">
+                        <x-icon name="phone" class="w-5 h-5" strokeWidth="1.8"/>
+                    </span>
+                    <span class="action-tile-label">{{ __('messages.call') }}</span>
                 </a>
             @endif
         </div>
@@ -145,7 +177,7 @@
                                         <x-icon name="{{ $icon }}" class="w-4 h-4 text-white"/>
                                     </div>
                                     <div class="min-w-0">
-                                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100 truncate">{{ $tx->label }}</div>
+                                        <div class="text-sm font-bold text-ink-900 dark:text-ink-100 break-words leading-snug">{{ $tx->label }}</div>
                                         <div class="text-[11px] text-ink-500 dark:text-ink-400">
                                             {{ $tx->date->format('H:i') }}
                                             @if($tx->notes)
@@ -154,22 +186,22 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-2.5 flex-shrink-0 ms-3">
-                                    <div class="text-end">
-                                        <div class="text-sm font-bold {{ $tx->direction === 'in' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}" dir="ltr">
-                                            {{ $tx->direction === 'in' ? '+' : '-' }}{{ number_format((float) $tx->amount, 2) }}
-                                        </div>
-                                        <div class="text-[10px] text-ink-400">{{ $tx->currency }}</div>
+                                {{-- Amount + running balance stacked in one narrow column so the
+                                     label keeps enough width to show whole on the phone. All
+                                     visible rows share the page's selected currency, so the
+                                     per-row currency line is redundant here. --}}
+                                <div class="flex flex-col items-end gap-1 flex-shrink-0 ms-3">
+                                    <div class="text-sm font-bold {{ $tx->direction === 'in' ? 'text-primary-600 dark:text-primary-400' : 'text-danger-600 dark:text-danger-400' }}" dir="ltr">
+                                        {{ $tx->direction === 'in' ? '+' : '-' }}{{ number_format((float) $tx->amount, 2) }}
                                     </div>
-                                    {{-- Running balance: this line's cumulative result --}}
-                                    <div class="text-end min-w-[4.5rem] ps-2.5 border-s border-ink-100 dark:border-ink-700/30">
-                                        <div class="text-[9px] font-semibold uppercase tracking-wide text-ink-400 dark:text-ink-500">{{ __('messages.balance') }}</div>
-                                        <div class="text-xs font-extrabold tabular-nums text-ink-700 dark:text-ink-200" dir="ltr">{{ number_format((float) $balance, 2) }}</div>
+                                    <div class="flex items-center gap-1 text-[9px] font-semibold text-ink-500 dark:text-ink-400 bg-ink-100 dark:bg-ink-800 rounded-full px-2 py-0.5 whitespace-nowrap">
+                                        <span>{{ __('messages.balance') }}</span>
+                                        <span class="tabular-nums" dir="ltr">{{ number_format((float) $balance, 2) }}</span>
                                     </div>
-                                    @if($isLink)
-                                        <x-icon name="chevron-right" class="w-3.5 h-3.5 text-ink-300 group-hover:text-primary-500 transition-colors"/>
-                                    @endif
                                 </div>
+                                @if($isLink)
+                                    <x-icon name="chevron-right" class="w-3.5 h-3.5 text-ink-300 group-hover:text-primary-500 transition-colors flex-shrink-0"/>
+                                @endif
                         @if($isLink)
                             </a>
                         @else

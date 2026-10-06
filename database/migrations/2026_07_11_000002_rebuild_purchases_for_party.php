@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\SQLiteConnection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -55,7 +56,7 @@ return new class extends Migration
             ]);
         }
 
-        if (DB::connection() instanceof \Illuminate\Database\SQLiteConnection) {
+        if (DB::connection() instanceof SQLiteConnection) {
             DB::statement("UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM purchases_new) WHERE name = 'purchases_new'");
         }
 
@@ -117,7 +118,7 @@ return new class extends Migration
             ]);
         }
 
-        if (DB::connection() instanceof \Illuminate\Database\SQLiteConnection) {
+        if (DB::connection() instanceof SQLiteConnection) {
             DB::statement("UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM purchase_returns_new) WHERE name = 'purchase_returns_new'");
         }
 
@@ -161,7 +162,7 @@ return new class extends Migration
             ]);
         }
 
-        if (DB::connection() instanceof \Illuminate\Database\SQLiteConnection) {
+        if (DB::connection() instanceof SQLiteConnection) {
             DB::statement("UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM purchases_old) WHERE name = 'purchases_old'");
         }
 
@@ -219,7 +220,7 @@ return new class extends Migration
             ]);
         }
 
-        if (DB::connection() instanceof \Illuminate\Database\SQLiteConnection) {
+        if (DB::connection() instanceof SQLiteConnection) {
             DB::statement("UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM purchase_returns_old) WHERE name = 'purchase_returns_old'");
         }
 

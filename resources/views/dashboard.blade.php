@@ -437,3 +437,35 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 @endpush
+
+@push('scripts')
+    <script>
+        // "Synchronized" feel: when the app returns to the foreground and the
+        // page has been idle for a while, pull fresh data instead of showing
+        // the stale snapshot. Never reloads while the user is filling a form
+        // or typing, and never during the first minute of viewing.
+        (function () {
+            var lastActivity = Date.now();
+
+            function busy() {
+                var el = document.activeElement;
+                return !!el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+            }
+
+            document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState !== 'visible') {
+                    return;
+                }
+                if (Date.now() - lastActivity > 60000 && !busy()) {
+                    window.location.reload();
+                }
+            });
+
+            ['click', 'touchstart', 'keydown', 'submit'].forEach(function (name) {
+                document.addEventListener(name, function () {
+                    lastActivity = Date.now();
+                }, { passive: true });
+            });
+        })();
+    </script>
+@endpush

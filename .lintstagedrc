@@ -1,0 +1,4 @@
+{
+    "**/*.{js,mjs,cjs,json,css,md,yml,yaml}": "prettier --ignore-unknown --write",
+    "**/*.php": "php vendor/bin/pint"
+}

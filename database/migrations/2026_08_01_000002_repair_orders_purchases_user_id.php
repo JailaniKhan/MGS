@@ -25,10 +25,10 @@ return new class extends Migration
         // had a journal_entry_id added by 2026_06_19_000200 that the rebuild
         // dropped; restore it here too.
         $tables = [
-            'orders'     => ['user_id', 'uuid', 'journal_entry_id'],
-            'purchases'  => ['user_id', 'uuid', 'journal_entry_id'],
-            'payments'   => ['user_id', 'uuid'],
-            'units'      => ['user_id', 'uuid'],
+            'orders' => ['user_id', 'uuid', 'journal_entry_id'],
+            'purchases' => ['user_id', 'uuid', 'journal_entry_id'],
+            'payments' => ['user_id', 'uuid'],
+            'units' => ['user_id', 'uuid'],
             'cashbook_entries' => ['user_id', 'uuid'],
         ];
 

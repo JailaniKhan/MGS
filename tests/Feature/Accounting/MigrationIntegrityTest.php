@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Accounting;
 
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Accounting\BalanceService;
-use App\Services\Accounting\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,7 +19,7 @@ class MigrationIntegrityTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
-        $customer = \App\Models\Customer::create(['name' => 'Ali', 'phone' => '0700000000']);
+        $customer = Customer::create(['name' => 'Ali', 'phone' => '0700000000']);
         $order = Order::create([
             'customer_id' => $customer->id,
             'status' => 'completed',
