@@ -67,7 +67,7 @@
             <div class="flex items-center gap-2 mb-3">
                 <div class="w-1 h-5 rounded-full bg-primary-500"></div>
                 <h3 class="text-xs font-bold text-ink-800 dark:text-ink-200">{{ __('messages.weekly_revenue') }}</h3>
-                <div class="ml-auto flex p-0.5 rounded-lg bg-ink-100 dark:bg-white/[0.05] border border-ink-200/70 dark:border-white/[0.06]" data-chart-toggle>
+                <div class="ml-auto flex p-0.5 rounded-lg bg-ink-100 dark:bg-white/[0.05] border border-ink-200/70 dark:border-white/[0.06]" data-chart-toggle="weeklyRevenueChart">
                     <button type="button" class="px-2.5 py-1 rounded-md text-[10px] font-bold bg-white dark:bg-white/10 text-ink-900 dark:text-white shadow-sm" data-currency="afn">{{ __('messages.afn') }}</button>
                     <button type="button" class="px-2.5 py-1 rounded-md text-[10px] font-bold text-ink-500 dark:text-ink-400" data-currency="usd">{{ __('messages.usd') }}</button>
                 </div>
@@ -80,7 +80,7 @@
             <div class="flex items-center gap-2 mb-3">
                 <div class="w-1 h-5 rounded-full bg-danger-400"></div>
                 <h3 class="text-xs font-bold text-ink-800 dark:text-ink-200">{{ __('messages.weekly_expenses') }}</h3>
-                <div class="ml-auto flex p-0.5 rounded-lg bg-ink-100 dark:bg-white/[0.05] border border-ink-200/70 dark:border-white/[0.06]" data-chart-toggle>
+                <div class="ml-auto flex p-0.5 rounded-lg bg-ink-100 dark:bg-white/[0.05] border border-ink-200/70 dark:border-white/[0.06]" data-chart-toggle="weeklyExpenseChart">
                     <button type="button" class="px-2.5 py-1 rounded-md text-[10px] font-bold bg-white dark:bg-white/10 text-ink-900 dark:text-white shadow-sm" data-currency="afn">{{ __('messages.afn') }}</button>
                     <button type="button" class="px-2.5 py-1 rounded-md text-[10px] font-bold text-ink-500 dark:text-ink-400" data-currency="usd">{{ __('messages.usd') }}</button>
                 </div>
@@ -302,6 +302,33 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const commonOptions = MGSCharts.baseOptions();
 
+        function makeChartOptions() {
+            return {
+                ...commonOptions,
+                plugins: {
+                    ...commonOptions.plugins,
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            boxWidth: 8,
+                            boxHeight: 8,
+                            usePointStyle: true,
+                            font: { size: 10 }
+                        }
+                    },
+                    tooltip: {
+                        ...commonOptions.plugins.tooltip,
+                        callbacks: {
+                            label: function (context) {
+                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
         const revenueCtx = document.getElementById('weeklyRevenueChart').getContext('2d');
         const revenueGradient = revenueCtx.createLinearGradient(0, 0, 0, 160);
         revenueGradient.addColorStop(0, MGSCharts.alpha(C.brand, 0.22));
@@ -311,7 +338,7 @@ document.addEventListener('DOMContentLoaded', function () {
         usdGradient.addColorStop(0, MGSCharts.alpha(C.secondary, 0.18));
         usdGradient.addColorStop(1, MGSCharts.alpha(C.secondary, 0));
 
-        new Chart(revenueCtx, {
+        const revenueChart = new Chart(revenueCtx, {
             type: 'line',
             data: {
                 labels: @json($weeklyRevenue['labels']),
@@ -349,36 +376,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 ]
             },
-            options: {
-                ...commonOptions,
-                plugins: {
-                    ...commonOptions.plugins,
-                        legend: {
-                            display: true,
-                            position: 'top',
-                            labels: {
-                                boxWidth: 8,
-                                boxHeight: 8,
-                                usePointStyle: true,
-                                font: { size: 10 }
-                            }
-                        },
-                        tooltip: {
-                            ...commonOptions.plugins.tooltip,
-                            callbacks: {
-                                label: function(context) {
-                                    return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            options: makeChartOptions()
         });
 
         const expenseCtx = document.getElementById('weeklyExpenseChart').getContext('2d');
 
-        new Chart(expenseCtx, {
+        const expenseChart = new Chart(expenseCtx, {
             type: 'bar',
             data: {
                 labels: @json($weeklyExpenses['labels']),
@@ -404,51 +407,33 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 ]
             },
-            options: {
-                ...commonOptions,
-                plugins: {
-                    ...commonOptions.plugins,
-                        legend: {
-                            display: true,
-                            position: 'top',
-                            labels: {
-                                boxWidth: 8,
-                                boxHeight: 8,
-                                usePointStyle: true,
-                                font: { size: 10 }
-                            }
-                        },
-                        tooltip: {
-                            ...commonOptions.plugins.tooltip,
-                            callbacks: {
-                                label: function(context) {
-                                    return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            options: makeChartOptions()
         });
 
         // Currency toggle — AFN and USD differ by ~70x, so both
         // series on one axis flattens the smaller one. Each
         // chart shows a single currency at a time.
+        var chartMap = {
+            weeklyRevenueChart: revenueChart,
+            weeklyExpenseChart: expenseChart,
+        };
         document.querySelectorAll('[data-chart-toggle]').forEach(function (group) {
-            var canvas = group.closest('.chart-container').querySelector('canvas');
-            group.querySelectorAll('button').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    group.querySelectorAll('button').forEach(function (b) {
-                        b.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold text-ink-500 dark:text-ink-400';
-                    });
-                    btn.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold bg-white dark:bg-white/10 text-ink-900 dark:text-white shadow-sm';
-                    var chart = window.Chart && Chart.getChart ? Chart.getChart(canvas) : null;
-                    if (!chart) return;
-                    chart.data.datasets.forEach(function (ds) {
-                        if (ds.currency) ds.hidden = ds.currency !== btn.dataset.currency;
-                    });
-                    chart.update();
+            var chart = chartMap[group.dataset.chartToggle];
+            if (!chart) return;
+            var buttons = group.querySelectorAll('[data-currency]');
+            group.addEventListener('click', function (e) {
+                var btn = e.target.closest('[data-currency]');
+                if (!btn) return;
+                buttons.forEach(function (b) {
+                    b.className = b === btn
+                        ? 'px-2.5 py-1 rounded-md text-[10px] font-bold bg-white dark:bg-white/10 text-ink-900 dark:text-white shadow-sm'
+                        : 'px-2.5 py-1 rounded-md text-[10px] font-bold text-ink-500 dark:text-ink-400';
                 });
+                var currency = btn.dataset.currency;
+                chart.data.datasets.forEach(function (ds, i) {
+                    if (ds.currency) chart.setDatasetVisibility(i, ds.currency === currency);
+                });
+                chart.update();
             });
         });
     });
