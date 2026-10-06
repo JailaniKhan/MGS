@@ -28,7 +28,7 @@ use App\Models\Setting;
     <div class="min-h-screen flex flex-col pb-24">
 
         <!-- HEADER -->
-        <header class="bg-white/90 dark:bg-[#18191a]/90 backdrop-blur-xl border-b border-ink-100 dark:border-white/[0.05] sticky top-0 z-40">
+        <header class="app-header bg-white/90 dark:bg-[#18191a]/90 backdrop-blur-xl border-b border-ink-100 dark:border-white/[0.05] sticky top-0 z-40">
             <div class="px-4 py-3 flex items-center justify-between">
                 <div class="flex items-center gap-2.5">
                     <button type="button" id="sidebar-toggle" aria-label="{{ __('messages.features') }}"
@@ -155,48 +155,58 @@ use App\Models\Setting;
             </nav>
         </aside>
 
-        <!-- FLASH MESSAGES -->
-        @if (session('success'))
-            <div class="toast" role="alert">
-                <div class="flex items-center gap-2.5 bg-white dark:bg-[#1e2127] border border-primary-200 dark:border-primary-800/50 rounded-2xl px-4 py-3 shadow-card">
-                    <div class="toast-icon toast-icon-success">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path class="check-pop" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
-                        </svg>
+        {{-- FLASH MESSAGES — rendered straight into the fixed toast
+             stack, so app.js never has to relocate them (no
+             in-flow layout shift on page load) --}}
+        <div class="toast-stack">
+            @if (session('success'))
+                <div class="toast" role="alert">
+                    <div class="flex items-center gap-2.5 bg-white dark:bg-[#1e2127] border border-primary-200 dark:border-primary-800/50 rounded-2xl px-4 py-3 shadow-card">
+                        <div class="toast-icon toast-icon-success">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path class="check-pop" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                            </svg>
+                        </div>
+                        <p class="text-sm font-medium text-ink-800 dark:text-ink-200 flex-1">{{ session('success') }}</p>
+                        <button onclick="this.closest('.toast').remove()" class="text-ink-400 hover:text-ink-600 dark:hover:text-ink-300 transition-colors p-1">
+                            <x-icon name="x-mark" class="w-3.5 h-3.5" strokeWidth="2"/>
+                        </button>
                     </div>
-                    <p class="text-sm font-medium text-ink-800 dark:text-ink-200 flex-1">{{ session('success') }}</p>
-                    <button onclick="this.closest('.toast').remove()" class="text-ink-400 hover:text-ink-600 dark:hover:text-ink-300 transition-colors p-1">
-                        <x-icon name="x-mark" class="w-3.5 h-3.5" strokeWidth="2"/>
-                    </button>
+                    <div class="toast-progress" style="animation-duration:4500ms"></div>
                 </div>
-                <div class="toast-progress" style="animation-duration:4500ms"></div>
-            </div>
-        @endif
-        @if (session('error'))
-            <div class="toast" role="alert">
-                <div class="flex items-center gap-2.5 bg-white dark:bg-[#1e2127] border border-danger-200 dark:border-danger-800/50 rounded-2xl px-4 py-3 shadow-card">
-                    <div class="toast-icon toast-icon-error">
-                        <x-icon name="x-mark" class="w-3.5 h-3.5" strokeWidth="2.5"/>
+            @endif
+            @if (session('error'))
+                <div class="toast" role="alert">
+                    <div class="flex items-center gap-2.5 bg-white dark:bg-[#1e2127] border border-danger-200 dark:border-danger-800/50 rounded-2xl px-4 py-3 shadow-card">
+                        <div class="toast-icon toast-icon-error">
+                            <x-icon name="x-mark" class="w-3.5 h-3.5" strokeWidth="2.5"/>
+                        </div>
+                        <p class="text-sm font-medium text-ink-800 dark:text-ink-200 flex-1">{{ session('error') }}</p>
+                        <button onclick="this.closest('.toast').remove()" class="text-ink-400 hover:text-ink-600 dark:hover:text-ink-300 transition-colors p-1">
+                            <x-icon name="x-mark" class="w-3.5 h-3.5" strokeWidth="2"/>
+                        </button>
                     </div>
-                    <p class="text-sm font-medium text-ink-800 dark:text-ink-200 flex-1">{{ session('error') }}</p>
-                    <button onclick="this.closest('.toast').remove()" class="text-ink-400 hover:text-ink-600 dark:hover:text-ink-300 transition-colors p-1">
-                        <x-icon name="x-mark" class="w-3.5 h-3.5" strokeWidth="2"/>
-                    </button>
+                    <div class="toast-progress" style="animation-duration:4500ms"></div>
                 </div>
-                <div class="toast-progress" style="animation-duration:4500ms"></div>
-            </div>
-        @endif
+            @endif
+        </div>
 
         <!-- CONNECTION STATUS: offline snack-bar (internet) -->
-        <script>
-            window.MGS_I18N = @json([
+        @php
+            // The array is built here and passed to @json as a variable:
+            // the @json directive splits its expression on commas, so a
+            // comma-separated array literal breaks the compile.
+            $mgsI18n = [
                 'internet_online' => __('messages.internet_online'),
                 'internet_offline' => __('messages.internet_offline'),
                 'status_online' => __('messages.connected'),
                 'status_offline' => __('messages.disconnected'),
                 'printer_ready' => __('messages.printer_ready'),
                 'status_template' => __('messages.connection_status'),
-            ]);
+            ];
+        @endphp
+        <script>
+            window.MGS_I18N = @json($mgsI18n);
         </script>
         <div id="connectivity-banner" class="connectivity-banner" role="status" hidden>
             <x-icon name="wifi" class="w-4 h-4 flex-shrink-0" strokeWidth="2"/>
@@ -319,6 +329,7 @@ use App\Models\Setting;
         </div>
     </div>
 
+    <script>window.MGS_STRINGS = { swipeHint: @json(__('messages.swipe_hint')) };</script>
     @stack('scripts')
 </body>
 </html>
