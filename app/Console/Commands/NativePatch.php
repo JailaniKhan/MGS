@@ -36,6 +36,10 @@ class NativePatch extends Command
         // Adaptive launcher icon background must match the MGS brand green
         // (stock stub ships white, which peeks out behind the icon mask).
         'app/src/main/res/drawable/ic_launcher_background.xml',
+        // Splash screen resources the patched MainActivity.kt references:
+        // the overlay background color and the wallet logo glyph.
+        'app/src/main/res/values/colors.xml',
+        'app/src/main/res/drawable/ic_splash_logo.xml',
     ];
 
     public function handle(): int
