@@ -78,6 +78,24 @@ jobs:
                   [IO.File]::WriteAllBytes("$PWD/ios-profile.mobileprovision", [Convert]::FromBase64String($pb64))
                   Write-Host "Certificate + provisioning profile decoded"
 
+            - name: Decode App Store Connect API key (TestFlight upload)
+              shell: pwsh
+              env:
+                  API_KEY_B64: ${{ secrets.APP_STORE_API_KEY_P8_BASE64 }}
+              run: |
+                  # Optional: with the .p8 key, key id and issuer id set, the
+                  # build is uploaded straight to TestFlight. Without them the
+                  # workflow still builds and ships the IPA as an artifact.
+                  if ([string]::IsNullOrWhiteSpace($env:API_KEY_B64)) {
+                    Write-Host "APP_STORE_API_KEY_P8_BASE64 not set - TestFlight upload disabled"
+                    "upload=false" >> $env:GITHUB_ENV
+                    exit 0
+                  }
+                  $b64 = ($env:API_KEY_B64 -replace '\s', '')
+                  [IO.File]::WriteAllBytes("$PWD/AuthKey.p8", [Convert]::FromBase64String($b64))
+                  Write-Host "App Store Connect API key decoded - TestFlight upload enabled"
+                  "upload=true" >> $env:GITHUB_ENV
+
             - name: Create Laravel .env
               shell: pwsh
               run: |
@@ -148,21 +166,38 @@ jobs:
               shell: pwsh
               run: php artisan native:install ios --no-interaction
 
-            - name: Package signed IPA
+            - name: Package signed IPA (+ TestFlight upload when configured)
               shell: pwsh
               env:
                   IOS_DISTRIBUTION_CERTIFICATE_PATH: ${{ github.workspace }}/ios-distribution.p12
                   IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
                   IOS_DISTRIBUTION_PROVISIONING_PROFILE_PATH: ${{ github.workspace }}/ios-profile.mobileprovision
                   IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+                  APP_STORE_API_KEY_PATH: ${{ github.workspace }}/AuthKey.p8
+                  APP_STORE_API_KEY_ID: ${{ secrets.APP_STORE_API_KEY_ID }}
+                  APP_STORE_API_ISSUER_ID: ${{ secrets.APP_STORE_API_ISSUER_ID }}
               run: |
                   $method = "${{ inputs.export_method }}"
                   if ([string]::IsNullOrWhiteSpace($method)) { $method = "app-store" }
-                  php artisan native:package ios `
-                    --export-method=$method `
-                    --build-type=release `
-                    --no-tty `
-                    --no-interaction
+
+                  # An ad-hoc/development IPA cannot go to App Store Connect —
+                  # only an app-store build can reach TestFlight.
+                  $canUpload = ($env:UPLOAD -eq 'true') -and ($method -eq 'app-store')
+                  if (($env:UPLOAD -eq 'true') -and ($method -ne 'app-store')) {
+                    Write-Host "Skipping TestFlight upload: export method '$method' cannot be uploaded (use app-store)."
+                  }
+
+                  $pkgArgs = @(
+                    "native:package", "ios",
+                    "--export-method=$method",
+                    "--build-type=release",
+                    "--no-tty",
+                    "--no-interaction"
+                  )
+                  if ($canUpload) {
+                    $pkgArgs += "--upload-to-app-store"
+                  }
+                  & php @pkgArgs
 
             - name: Collect IPA artifact
               id: ipa
