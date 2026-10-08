@@ -1,0 +1,185 @@
+name: Build IPA
+
+on:
+    workflow_dispatch:
+        inputs:
+            export_method:
+                description: 'iOS export method (app-store = TestFlight, ad-hoc/development = registered devices)'
+                type: choice
+                options: [app-store, ad-hoc, development]
+                default: app-store
+                required: false
+    push:
+        tags: ['v*']
+
+concurrency:
+    group: build-ipa-${{ github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+
+env:
+    NATIVEPHP_APP_ID: com.mgs.ordermanager
+    NATIVEPHP_APP_VERSION: '1.0.0'
+    NATIVEPHP_APP_VERSION_CODE: '60'
+    NATIVEPHP_START_URL: /
+
+jobs:
+    build:
+        name: Release IPA
+        runs-on: macos-latest
+        timeout-minutes: 90
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Validate signing secrets
+              shell: pwsh
+              env:
+                  CERT_B64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+                  CERT_PASS: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+                  PROFILE_B64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+                  TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+              run: |
+                  $missing = @()
+                  if ([string]::IsNullOrWhiteSpace($env:CERT_B64)) { $missing += "IOS_CERTIFICATE_P12_BASE64" }
+                  if ([string]::IsNullOrWhiteSpace($env:CERT_PASS)) { $missing += "IOS_CERTIFICATE_PASSWORD" }
+                  if ([string]::IsNullOrWhiteSpace($env:PROFILE_B64)) { $missing += "IOS_PROVISIONING_PROFILE_BASE64" }
+                  if ([string]::IsNullOrWhiteSpace($env:TEAM_ID)) { $missing += "IOS_TEAM_ID" }
+                  if ($missing.Count -gt 0) {
+                    throw "Missing GitHub Actions secrets: $($missing -join ', '). Add them under Settings → Secrets and variables → Actions. The provisioning profile must cover the bundle id ${{ env.NATIVEPHP_APP_ID }} (and include the target device UDID for ad-hoc/development)."
+                  }
+
+            - name: Setup PHP 8.3
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.3'
+                  extensions: zip, openssl, mbstring, dom, fileinfo, curl, bcmath, gd, sqlite3, pdo_sqlite
+                  tools: composer:v2
+                  coverage: none
+
+            - name: Setup Node 22
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '22'
+                  cache: npm
+
+            - name: Decode signing certificate and profile
+              shell: pwsh
+              env:
+                  CERT_B64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+                  PROFILE_B64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+              run: |
+                  $b64 = ($env:CERT_B64 -replace '\s', '')
+                  [IO.File]::WriteAllBytes("$PWD/ios-distribution.p12", [Convert]::FromBase64String($b64))
+                  $pb64 = ($env:PROFILE_B64 -replace '\s', '')
+                  [IO.File]::WriteAllBytes("$PWD/ios-profile.mobileprovision", [Convert]::FromBase64String($pb64))
+                  Write-Host "Certificate + provisioning profile decoded"
+
+            - name: Create Laravel .env
+              shell: pwsh
+              run: |
+                  Copy-Item .env.example .env
+                  $required = @{
+                    APP_NAME = "MGS"
+                    APP_ENV = "production"
+                    APP_DEBUG = "false"
+                    APP_URL = "http://localhost"
+                    DB_CONNECTION = "sqlite"
+                    NATIVEPHP_APP_ID = $env:NATIVEPHP_APP_ID
+                    NATIVEPHP_APP_VERSION = $env:NATIVEPHP_APP_VERSION
+                    NATIVEPHP_APP_VERSION_CODE = $env:NATIVEPHP_APP_VERSION_CODE
+                    NATIVEPHP_START_URL = $env:NATIVEPHP_START_URL
+                  }
+                  $lines = Get-Content .env
+                  foreach ($key in $required.Keys) {
+                    $value = $required[$key]
+                    $pattern = "^$key=.*$"
+                    if ($lines | Select-String -Pattern $pattern -Quiet) {
+                      $lines = $lines | ForEach-Object {
+                        if ($_ -match $pattern) { "$key=$value" } else { $_ }
+                      }
+                    } else {
+                      $lines += "$key=$value"
+                    }
+                  }
+                  Set-Content -Path .env -Value $lines
+
+            - name: Ensure Laravel runtime directories
+              shell: pwsh
+              run: |
+                  $dirs = @(
+                    "storage/framework/cache",
+                    "storage/framework/sessions",
+                    "storage/framework/views",
+                    "storage/framework/testing",
+                    "storage/logs",
+                    "bootstrap/cache",
+                    "database"
+                  )
+                  foreach ($d in $dirs) { New-Item -ItemType Directory -Force -Path $d | Out-Null }
+                  if (-not (Test-Path "database/database.sqlite")) {
+                    New-Item -ItemType File -Path "database/database.sqlite" | Out-Null
+                  }
+
+            - name: Generate APP_KEY
+              shell: pwsh
+              run: php artisan key:generate --force --no-interaction
+
+            - name: Install Composer dependencies
+              shell: pwsh
+              run: composer install --no-interaction --prefer-dist --no-progress
+
+            - name: Build frontend assets
+              shell: pwsh
+              run: |
+                  npm ci
+                  npm run build
+
+            - name: Cache NativePHP iOS PHP binaries
+              uses: actions/cache@v4
+              with:
+                  path: nativephp/binaries
+                  key: nativephp-ios-binaries-${{ hashFiles('nativephp.lock') }}
+
+            - name: Install NativePHP iOS project
+              shell: pwsh
+              run: php artisan native:install ios --no-interaction
+
+            - name: Package signed IPA
+              shell: pwsh
+              env:
+                  IOS_DISTRIBUTION_CERTIFICATE_PATH: ${{ github.workspace }}/ios-distribution.p12
+                  IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+                  IOS_DISTRIBUTION_PROVISIONING_PROFILE_PATH: ${{ github.workspace }}/ios-profile.mobileprovision
+                  IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+              run: |
+                  $method = "${{ inputs.export_method }}"
+                  if ([string]::IsNullOrWhiteSpace($method)) { $method = "app-store" }
+                  php artisan native:package ios `
+                    --export-method=$method `
+                    --build-type=release `
+                    --no-tty `
+                    --no-interaction
+
+            - name: Collect IPA artifact
+              id: ipa
+              shell: pwsh
+              run: |
+                  $src = "nativephp/ios/build/export/NativePHP.ipa"
+                  if (-not (Test-Path $src)) { throw "IPA not found at $src" }
+                  Copy-Item $src "MGS-release.ipa" -Force
+                  $item = Get-Item "MGS-release.ipa"
+                  Write-Host "IPA: $($item.FullName) ($([math]::Round($item.Length / 1MB, 1)) MB)"
+                  "path=$($item.FullName)" >> $env:GITHUB_OUTPUT
+                  "size=$($item.Length)" >> $env:GITHUB_OUTPUT
+
+            - name: Upload IPA
+              uses: actions/upload-artifact@v4
+              with:
+                  name: MGS-release-ipa
+                  path: MGS-release.ipa
+                  if-no-files-found: error
+                  retention-days: 14
