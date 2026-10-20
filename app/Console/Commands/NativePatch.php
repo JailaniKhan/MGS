@@ -19,6 +19,11 @@ class NativePatch extends Command
 
     protected array $files = [
         'app/src/main/java/com/nativephp/mobile/network/WebViewManager.kt',
+        // Version-identity convergence: after extracting the bundle, rewrite
+        // the extracted .env's NATIVEPHP_APP_VERSION[_CODE] to the embedded
+        // bundle_meta values. Without this, a build that ships meta and .env
+        // out of step re-extracts the entire bundle on every cold start.
+        'app/src/main/java/com/nativephp/mobile/bridge/LaravelEnvironment.kt',
         'app/src/main/java/com/nativephp/mobile/bridge/PHPBridge.kt',
         'app/src/main/java/com/nativephp/mobile/bridge/BridgeFunctionRegistration.kt',
         'app/src/main/java/com/nativephp/mobile/bridge/functions/PrintFunctions.kt',
@@ -70,8 +75,83 @@ class NativePatch extends Command
             $this->line("  ✓ {$relative}");
         }
 
-        $this->info('Native patches applied ('.count($this->files).' files).');
+        if (! $this->patchVendorVersionIncrement()) {
+            return self::FAILURE;
+        }
+
+        $this->info('Native patches applied ('.count($this->files).' files + vendor version sync).');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * nativephp/mobile's PackageCommand bumps NATIVEPHP_APP_VERSION_CODE in
+     * .env *after* config is loaded, so gradle's versionCode and
+     * bundle_meta.json keep the pre-bump value while the bundled .env carries
+     * the post-bump one. On-device that mismatch never converges and
+     * LaravelEnvironment re-extracts the whole bundle on every cold start
+     * (the 2026-10-08 APK shipped meta=72 / env=73 and did exactly this).
+     *
+     * Keep the in-memory config in step with the .env write so all three
+     * sources (gradle, bundle_meta.json, bundled .env) agree. Idempotent;
+     * fails loudly if the vendor code moves and the anchor disappears, so a
+     * future package bump cannot silently reintroduce the every-boot loop.
+     */
+    protected function patchVendorVersionIncrement(): bool
+    {
+        $path = base_path('vendor/nativephp/mobile/src/Traits/RunsAndroid.php');
+
+        if (! is_file($path)) {
+            $this->error("Vendor patch target missing: {$path}");
+
+            return false;
+        }
+
+        $original = file_get_contents($path);
+        $patched = self::applyVersionSyncPatch($original);
+
+        if ($patched === null) {
+            $this->error('Vendor version-sync anchor not found in RunsAndroid.php — nativephp/mobile changed; re-check incrementBuildNumber().');
+
+            return false;
+        }
+
+        if ($patched === $original) {
+            $this->line('  ✓ vendor version sync already applied');
+
+            return true;
+        }
+
+        file_put_contents($path, $patched);
+        $this->line('  ✓ vendor version sync patched into RunsAndroid.php');
+
+        return true;
+    }
+
+    /**
+     * Pure transform of the vendor RunsAndroid.php contents. Returns the
+     * patched source, the input unchanged when the patch is already applied
+     * (idempotency), or null when the anchor is missing and the patch cannot
+     * be applied safely.
+     */
+    public static function applyVersionSyncPatch(string $contents): ?string
+    {
+        $syncLine = "config(['nativephp.version_code' => \$currentBuildNumber]);";
+
+        if (str_contains($contents, $syncLine)) {
+            return $contents;
+        }
+
+        $needle = "\$this->updateEnvFile('NATIVEPHP_APP_VERSION_CODE', \$currentBuildNumber);";
+
+        if (substr_count($contents, $needle) !== 2) {
+            return null;
+        }
+
+        return str_replace(
+            $needle,
+            $needle."\n            ".$syncLine,
+            $contents,
+        );
     }
 }
